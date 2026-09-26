@@ -9,6 +9,7 @@ import type {
   Holiday,
   AttendanceMode,
   AuthSession,
+  BreakEvent,
 } from './types/attendance';
 import { useAuth } from './contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
@@ -64,14 +65,49 @@ function toEmployee(row: any): Employee {
   };
 }
 
-function toAttendanceRecord(row: any, employeeName?: string, employeeEmpId?: string, department?: string): AttendanceRecord {
+function toAttendanceRecord(
+  row: any,
+  employeeName?: string,
+  employeeEmpId?: string,
+  department?: string,
+  breakRows: any[] = [],
+): AttendanceRecord {
   const checkIn = row.check_in_at ? new Date(row.check_in_at) : null;
   const checkOut = row.check_out_at ? new Date(row.check_out_at) : null;
   const elapsedSeconds = checkIn
     ? Math.max(0, Math.floor(((checkOut ?? new Date()).getTime() - checkIn.getTime()) / 1000))
     : 0;
-  const breakSeconds = Number(row.total_break_seconds ?? 0);
-  const workingSeconds = Number(row.working_seconds ?? Math.max(0, elapsedSeconds - breakSeconds));
+
+  const breaks: BreakEvent[] = breakRows
+    .filter((breakRow) => breakRow.attendance_id === row.id)
+    .map((breakRow) => ({
+      id: breakRow.id,
+      attendanceId: breakRow.attendance_id,
+      employeeId: breakRow.employee_id,
+      breakStart: breakRow.break_start,
+      breakEnd: breakRow.break_end,
+      durationSeconds: Number(breakRow.duration_seconds ?? 0),
+    }));
+
+  const openBreak = breaks.find((breakEvent) => !breakEvent.breakEnd);
+  const completedBreakSeconds = breaks.reduce(
+    (sum, breakEvent) => sum + (breakEvent.breakEnd ? Number(breakEvent.durationSeconds ?? 0) : 0),
+    0,
+  );
+  const activeBreakSeconds = openBreak
+    ? Math.max(0, Math.floor((Date.now() - new Date(openBreak.breakStart).getTime()) / 1000))
+    : 0;
+  const storedBreakSeconds = Number(row.total_break_seconds ?? 0);
+  const breakSeconds = Math.max(storedBreakSeconds, completedBreakSeconds + activeBreakSeconds);
+  const workingSeconds = Number(
+    row.working_seconds ?? Math.max(0, elapsedSeconds - breakSeconds),
+  );
+  const isCompleted = Boolean(row.check_out_at);
+  const attendanceState = isCompleted
+    ? 'completed'
+    : openBreak
+      ? 'on_break'
+      : 'working';
 
   return {
     id: row.id,
@@ -90,11 +126,11 @@ function toAttendanceRecord(row: any, employeeName?: string, employeeEmpId?: str
     workingSeconds,
     breakSeconds,
     elapsedSeconds,
-    currentBreakSeconds: 0,
+    currentBreakSeconds: activeBreakSeconds,
     status: row.status,
-    attendanceState: row.current_state ?? (row.check_out_at ? 'completed' : row.check_in_at ? 'working' : 'not_checked_in'),
-    activeBreakStartIso: null,
-    breaks: [],
+    attendanceState,
+    activeBreakStartIso: openBreak?.breakStart ?? null,
+    breaks,
     notes: row.notes ?? undefined,
   };
 }
@@ -240,7 +276,26 @@ export default function App() {
       ]);
 
       if (attendanceResult.data) {
-        const history = attendanceResult.data.map((row: any) => toAttendanceRecord(row, currentUser.name, currentUser.empId, currentUser.department));
+        const attendanceIds = attendanceResult.data.map((row: any) => row.id);
+        let breakRows: any[] = [];
+
+        if (attendanceIds.length > 0) {
+          const { data, error } = await db
+            .from('break_events')
+            .select('id, attendance_id, employee_id, break_start, break_end, duration_seconds')
+            .in('attendance_id', attendanceIds)
+            .order('break_start', { ascending: true });
+
+          if (error) {
+            console.error('[Employee] Break history load failed:', error);
+          } else {
+            breakRows = data ?? [];
+          }
+        }
+
+        const history = attendanceResult.data.map((row: any) =>
+          toAttendanceRecord(row, currentUser.name, currentUser.empId, currentUser.department, breakRows)
+        );
         setAttendanceHistory(history);
         setTodayAttendance(history.filter((record: AttendanceRecord) => record.date === today));
       }
