@@ -75,13 +75,19 @@ export async function fetchAttendanceData(filters: ExportFilters): Promise<Expor
     query = query.gte('date', start).lte('date', endDate);
   }
 
-  const { data, error } = await query;
-  if (error) {
-    console.error('[Export] Query failed:', error);
-    throw new Error('Failed to load real attendance records for export.');
+  const pageSize = 1000;
+  const allRows: any[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data: page, error } = await query.range(from, from + pageSize - 1);
+    if (error) {
+      console.error('[Export] Query failed:', error);
+      throw new Error('Failed to load real attendance records for export.');
+    }
+    allRows.push(...(page ?? []));
+    if (!page || page.length < pageSize) break;
   }
 
-  return (data ?? []).map((row: any) => ({
+  return allRows.map((row: any) => ({
     'Employee Name': row.employees?.name ?? 'Employee',
     Date: formatDate(row.date),
     Day: dayOfWeek(row.date),
