@@ -21,7 +21,7 @@ export interface AuthUser {
 }
 
 type LoginPortal = 'employee' | 'admin';
-const ADMIN_LOGIN_ID = 'APEXADMIN';
+const ADMIN_LOGIN_IDS = new Set(['IRA', 'APEXADMIN']);
 const ADMIN_AUTH_EMAIL = 'ira.admin@ira-presence.local';
 
 interface AuthContextValue {
@@ -174,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         email = resolvedEmail;
       } else {
-        if (value.toUpperCase() !== ADMIN_LOGIN_ID) {
+        if (!ADMIN_LOGIN_IDS.has(value.toUpperCase())) {
           return { error: 'Admin ID or password is incorrect.' };
         }
         email = ADMIN_AUTH_EMAIL;
