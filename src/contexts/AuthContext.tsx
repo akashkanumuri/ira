@@ -46,30 +46,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const db = supabase as any;
 
-      // Read the authenticated user's own profile first. This deliberately avoids
-      // depending on a custom RPC/schema cache during login.
-      const { data: profile, error: profileError } = await db
-        .from('profiles')
-        .select('id, role, emp_id')
-        .eq('id', supabaseUser.id)
+      // Use the security-definer RPC created in Supabase to load the
+      // authenticated user's complete account context. This avoids
+      // RLS/relationship-query failures during login.
+      const { data, error } = await db
+        .rpc('get_current_user_context')
         .maybeSingle();
 
-      if (profileError) {
-        console.error('[Auth] Profile load failed:', profileError);
+      if (error) {
+        console.error('[Auth] User context RPC failed:', error);
         return null;
       }
 
-      if (!profile?.role) {
-        console.error('[Auth] No profile record found for authenticated user:', supabaseUser.id);
+      if (!data?.role) {
+        console.error('[Auth] No user context found for authenticated user:', supabaseUser.id);
         return null;
       }
 
-      const role = profile.role as UserRole;
+      const role = data.role as UserRole;
 
       if (role === 'admin') {
         return {
           id: supabaseUser.id,
-          email: supabaseUser.email ?? '',
+          email: supabaseUser.email ?? data.email ?? '',
           role,
           empId: null,
           employeeDbId: null,
@@ -77,39 +76,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           avatar: null,
           department: null,
           designation: null,
+          phone: undefined,
+          shift: data.shift_start ?? undefined,
+          manager: undefined,
           status: 'active',
         };
       }
 
-      const { data: employee, error: employeeError } = await db
-        .from('employees')
-        .select('id, emp_id, name, email, avatar_url, designation, phone, shift_start, status, wfh_balance, leave_balance')
-        .eq('profile_id', supabaseUser.id)
-        .maybeSingle();
-
-      if (employeeError) {
-        console.error('[Auth] Employee record load failed:', employeeError);
-        return null;
-      }
-
-      if (!employee) {
+      if (!data.employee_id) {
         console.error('[Auth] Employee record is missing for authenticated user:', supabaseUser.id);
         return null;
       }
 
       return {
         id: supabaseUser.id,
-        email: supabaseUser.email ?? employee.email ?? '',
+        email: supabaseUser.email ?? data.email ?? '',
         role,
-        empId: employee.emp_id ?? profile.emp_id ?? null,
-        employeeDbId: employee.id,
-        name: employee.name ?? supabaseUser.user_metadata?.name ?? 'User',
-        avatar: employee.avatar_url ?? null,
+        empId: data.emp_id ?? data.profile_emp_id ?? null,
+        employeeDbId: data.employee_id,
+        name: data.name ?? supabaseUser.user_metadata?.name ?? 'User',
+        avatar: data.avatar_url ?? null,
         department: null,
-        designation: employee.designation ?? null,
-        phone: employee.phone ?? undefined,
-        shift: employee.shift_start ?? undefined,
-        status: employee.status ?? 'active',
+        designation: data.designation ?? null,
+        phone: data.phone ?? undefined,
+        shift: data.shift_start ?? undefined,
+        manager: undefined,
+        status: data.status ?? 'active',
       };
     } catch (error) {
       console.error('[Auth] loadUserProfile error:', error);
