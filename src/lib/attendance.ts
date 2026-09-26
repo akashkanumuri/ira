@@ -120,7 +120,9 @@ export async function performCheckIn(params: CheckInParams): Promise<OperationRe
       success: false,
       error: insertError.code === '23505'
         ? 'You have already checked in for today.'
-        : 'Failed to record check-in. Please try again.',
+        : insertError.message?.includes('WFH is not approved') || insertError.message?.includes('Sunday') || insertError.message?.includes('company holiday') || insertError.message?.includes('Approved leave')
+          ? insertError.message
+          : 'Failed to record check-in. Please try again.',
     };
   }
 
