@@ -155,8 +155,8 @@ export default function App() {
     shift: user?.shift ?? '',
     joinDate: '',
     status: user?.status ?? 'active',
-    wfhBalance: 0,
-    leaveBalance: 0,
+    wfhBalance: user?.wfhBalance ?? 0,
+    leaveBalance: user?.leaveBalance ?? 0,
   }), [user, activeRole]);
 
   const currentTodayRecord = useMemo(() => {
