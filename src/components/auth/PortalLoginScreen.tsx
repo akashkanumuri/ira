@@ -58,15 +58,13 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
         <div className="lg:col-span-5 bg-slate-950 text-white p-5 sm:p-7 lg:p-10 flex flex-row lg:flex-col items-center lg:items-start justify-between relative overflow-hidden min-h-[128px] sm:min-h-[150px] lg:min-h-[620px] gap-5">
           <div className="absolute inset-0 opacity-50 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px]" />
 
-          <div className="relative z-10 flex flex-col items-start min-w-0">
-            <div className="w-[190px] sm:w-[250px] lg:w-[360px] h-[112px] sm:h-[145px] lg:h-[190px] overflow-hidden">
-              <img
-                src="/ira-hospitality-logo.png"
-                alt="IRA Hospitality"
-                className="w-full h-auto object-contain object-left object-top"
-              />
-            </div>
-            <div className="-mt-1 sm:-mt-1.5 lg:-mt-2 text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-[0.22em] font-semibold text-slate-300 pl-0.5">
+          <div className="relative z-10 flex flex-col items-start gap-2 min-w-0">
+            <img
+              src="/ira-hospitality-logo.png"
+              alt="IRA Hospitality"
+              className="w-[118px] sm:w-[155px] lg:w-[230px] h-auto object-contain object-left shrink-0"
+            />
+            <div className="text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-[0.22em] font-semibold text-slate-300 pl-0.5">
               Attendance
             </div>
           </div>
