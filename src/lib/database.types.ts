@@ -10,11 +10,6 @@ export interface Database {
         Insert: { id: string; role?: 'employee' | 'admin'; emp_id?: string | null; created_at?: string; updated_at?: string };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
       };
-      departments: {
-        Row: { id: string; name: string; description: string | null; created_at: string };
-        Insert: { id?: string; name: string; description?: string | null; created_at?: string };
-        Update: Partial<Database['public']['Tables']['departments']['Insert']>;
-      };
       employees: {
         Row: {
           id: string; profile_id: string | null; emp_id: string; name: string; email: string; avatar_url: string | null;
@@ -70,6 +65,24 @@ export interface Database {
     Functions: {
       get_my_role: { Args: Record<string, never>; Returns: string };
       get_my_employee_id: { Args: Record<string, never>; Returns: string };
+      get_current_user_context: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          role: 'employee' | 'admin';
+          profile_emp_id: string | null;
+          employee_id: string | null;
+          emp_id: string | null;
+          name: string | null;
+          email: string | null;
+          avatar_url: string | null;
+          designation: string | null;
+          phone: string | null;
+          shift_start: string | null;
+          status: 'active' | 'inactive' | null;
+          wfh_balance: number | null;
+          leave_balance: number | null;
+        }> ;
+      };
       get_employee_login_email: { Args: { p_name: string }; Returns: string | null };
     };
     Enums: {};

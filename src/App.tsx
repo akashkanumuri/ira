@@ -51,7 +51,7 @@ function toEmployee(row: any): Employee {
     name: row.name ?? 'Employee',
     email: row.email ?? '',
     avatar: row.avatar_url ?? '',
-    department: row.departments?.name ?? row.department ?? '',
+    department: row.department ?? '',
     designation: row.designation ?? '',
     role: row.role ?? 'employee',
     phone: row.phone ?? '',
@@ -78,7 +78,7 @@ function toAttendanceRecord(row: any, employeeName?: string, employeeEmpId?: str
     employeeId: row.employee_id,
     employeeName: employeeName ?? row.employees?.name ?? 'Employee',
     employeeEmpId: employeeEmpId ?? row.employees?.emp_id ?? row.employee_emp_id ?? '',
-    department: department ?? row.employees?.departments?.name ?? row.department ?? '',
+    department: department ?? row.department ?? '',
     date: row.date,
     mode: row.mode ?? 'office',
     checkIn: checkIn ? checkIn.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }) : undefined,
@@ -171,8 +171,8 @@ export default function App() {
 
     if (activeRole === 'admin') {
       const [employeeResult, attendanceResult, wfhResult, leaveResult, correctionResult, holidayResult] = await Promise.all([
-        db.from('employees').select('*, departments(name)').order('name', { ascending: true }),
-        db.from('attendance').select('*, employees(name, emp_id, departments(name))').order('date', { ascending: false }).order('check_in_at', { ascending: true }).limit(2000),
+        db.from('employees').select('*').order('name', { ascending: true }),
+        db.from('attendance').select('*, employees(name, emp_id)').order('date', { ascending: false }).order('check_in_at', { ascending: true }).limit(2000),
         db.from('wfh_requests').select('*, employees(name)').order('created_at', { ascending: false }),
         db.from('leave_requests').select('*, employees(name)').order('created_at', { ascending: false }),
         db.from('regularization_requests').select('*, employees(name)').order('created_at', { ascending: false }),

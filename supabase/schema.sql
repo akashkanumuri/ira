@@ -7,13 +7,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================
 -- DEPARTMENTS
 -- ============================================================
-CREATE TABLE departments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL UNIQUE,
-  description TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- ============================================================
 -- PROFILES — one per Supabase Auth user
 -- ============================================================
@@ -35,7 +28,7 @@ CREATE TABLE employees (
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
   avatar_url TEXT,
-  department_id UUID REFERENCES departments(id),
+  department_id UUID,
   designation TEXT,
   phone TEXT,
   manager_id UUID REFERENCES employees(id),
@@ -265,11 +258,50 @@ RETURNS UUID AS $$
   SELECT id FROM employees WHERE profile_id = auth.uid();
 $$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
 
+-- Single security-definer account-context RPC used by the client after Supabase Auth.
+-- This avoids RLS/relationship-query ambiguity during login.
+CREATE OR REPLACE FUNCTION get_current_user_context()
+RETURNS TABLE (
+  role TEXT,
+  profile_emp_id TEXT,
+  employee_id UUID,
+  emp_id TEXT,
+  name TEXT,
+  email TEXT,
+  avatar_url TEXT,
+  designation TEXT,
+  phone TEXT,
+  shift_start TIME,
+  status TEXT,
+  wfh_balance INTEGER,
+  leave_balance INTEGER
+) AS $$
+  SELECT
+    p.role,
+    p.emp_id AS profile_emp_id,
+    e.id AS employee_id,
+    e.emp_id,
+    e.name,
+    e.email,
+    e.avatar_url,
+    e.designation,
+    e.phone,
+    e.shift_start,
+    e.status,
+    e.wfh_balance,
+    e.leave_balance
+  FROM profiles p
+  LEFT JOIN employees e
+    ON e.profile_id = p.id
+  WHERE p.id = auth.uid();
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
+
+GRANT EXECUTE ON FUNCTION get_current_user_context() TO authenticated;
+
 -- ============================================================
 -- RLS
 -- ============================================================
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE holidays ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wfh_requests ENABLE ROW LEVEL SECURITY;
@@ -285,12 +317,6 @@ CREATE POLICY "profiles_select_own_or_admin" ON profiles
   FOR SELECT USING (id = auth.uid() OR get_my_role() = 'admin');
 CREATE POLICY "profiles_update_own" ON profiles
   FOR UPDATE USING (id = auth.uid());
-
--- Departments
-CREATE POLICY "departments_select_authenticated" ON departments
-  FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "departments_admin_all" ON departments
-  FOR ALL USING (get_my_role() = 'admin') WITH CHECK (get_my_role() = 'admin');
 
 -- Employees
 CREATE POLICY "employees_select_own_or_admin" ON employees

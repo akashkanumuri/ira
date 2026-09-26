@@ -45,40 +45,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const db = supabase as any;
+
+      // Read the authenticated user's own profile first. This deliberately avoids
+      // depending on a custom RPC/schema cache during login.
       const { data: profile, error: profileError } = await db
         .from('profiles')
-        .select('role, emp_id')
+        .select('id, role, emp_id')
         .eq('id', supabaseUser.id)
-        .single();
+        .maybeSingle();
 
-      if (profileError || !profile) {
-        console.error('[Auth] Failed to load profile:', profileError);
+      if (profileError) {
+        console.error('[Auth] Profile load failed:', profileError);
         return null;
+      }
+
+      if (!profile?.role) {
+        console.error('[Auth] No profile record found for authenticated user:', supabaseUser.id);
+        return null;
+      }
+
+      const role = profile.role as UserRole;
+
+      if (role === 'admin') {
+        return {
+          id: supabaseUser.id,
+          email: supabaseUser.email ?? '',
+          role,
+          empId: null,
+          employeeDbId: null,
+          name: 'IRA',
+          avatar: null,
+          department: null,
+          designation: null,
+          status: 'active',
+        };
       }
 
       const { data: employee, error: employeeError } = await db
         .from('employees')
-        .select('id, emp_id, name, email, avatar_url, designation, phone, shift_start, status, departments(name)')
+        .select('id, emp_id, name, email, avatar_url, designation, phone, shift_start, status, wfh_balance, leave_balance')
         .eq('profile_id', supabaseUser.id)
         .maybeSingle();
 
-      if (employeeError && employeeError.code !== 'PGRST116') {
-        console.error('[Auth] Failed to load employee record:', employeeError);
+      if (employeeError) {
+        console.error('[Auth] Employee record load failed:', employeeError);
+        return null;
+      }
+
+      if (!employee) {
+        console.error('[Auth] Employee record is missing for authenticated user:', supabaseUser.id);
+        return null;
       }
 
       return {
         id: supabaseUser.id,
-        email: supabaseUser.email ?? employee?.email ?? '',
-        role: profile.role as UserRole,
-        empId: profile.emp_id ?? employee?.emp_id ?? null,
-        employeeDbId: employee?.id ?? null,
-        name: employee?.name ?? supabaseUser.user_metadata?.name ?? 'User',
-        avatar: employee?.avatar_url ?? null,
-        department: employee?.departments?.name ?? null,
-        designation: employee?.designation ?? null,
-        phone: employee?.phone ?? undefined,
-        shift: employee?.shift_start ?? undefined,
-        status: employee?.status ?? 'active',
+        email: supabaseUser.email ?? employee.email ?? '',
+        role,
+        empId: employee.emp_id ?? profile.emp_id ?? null,
+        employeeDbId: employee.id,
+        name: employee.name ?? supabaseUser.user_metadata?.name ?? 'User',
+        avatar: employee.avatar_url ?? null,
+        department: null,
+        designation: employee.designation ?? null,
+        phone: employee.phone ?? undefined,
+        shift: employee.shift_start ?? undefined,
+        status: employee.status ?? 'active',
       };
     } catch (error) {
       console.error('[Auth] loadUserProfile error:', error);
