@@ -18,6 +18,8 @@ export interface AuthUser {
   shift?: string;
   manager?: string;
   status?: 'active' | 'inactive';
+  wfhBalance?: number;
+  leaveBalance?: number;
 }
 
 type LoginPortal = 'employee' | 'admin';
@@ -80,6 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           shift: data.shift_start ?? undefined,
           manager: undefined,
           status: 'active',
+          wfhBalance: 0,
+          leaveBalance: 0,
         };
       }
 
@@ -102,6 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         shift: data.shift_start ?? undefined,
         manager: undefined,
         status: data.status ?? 'active',
+        wfhBalance: Number(data.wfh_balance ?? 0),
+        leaveBalance: Number(data.leave_balance ?? 0),
       };
     } catch (error) {
       console.error('[Auth] loadUserProfile error:', error);
