@@ -86,42 +86,24 @@ export async function performCheckIn(params: CheckInParams): Promise<OperationRe
   const nowFormattedTime = formatKolkataTime(now);
   const db = supabase as any;
 
-  const { data: existing, error: lookupError } = await db
-    .from('attendance')
-    .select('id, check_in_at, check_out_at, current_state')
-    .eq('employee_id', params.employeeId)
-    .eq('date', today)
-    .maybeSingle();
-
-  if (lookupError) {
-    console.error('[CheckIn] Lookup failed:', lookupError);
-    return { success: false, error: 'Unable to check today\'s attendance. Please try again.' };
-  }
-
-  if (existing?.check_in_at) {
-    return { success: false, error: 'You have already checked in for today.' };
-  }
-
-  const { data: employeeRow, error: employeeError } = await db
-    .from('employees')
-    .select('shift_start')
-    .eq('id', params.employeeId)
-    .single();
-
-  if (employeeError || !employeeRow) {
-    return { success: false, error: 'Your employee account is not fully configured.' };
-  }
-
-  const shiftStart: string = employeeRow.shift_start ?? '09:00';
+  // The attendance table has a unique (employee_id, date) constraint.
+  // Use that constraint as the authoritative duplicate guard instead of a
+  // read-before-write, which can fail under a restrictive RLS SELECT policy.
+  const shiftStart: string = params.shiftStart ?? '09:00';
   const [hours, minutes] = shiftStart.split(':').map(Number);
   const graceMinutes = 15;
   const shiftCutoff = new Date(now);
-  shiftCutoff.setHours(hours, minutes + graceMinutes, 0, 0);
+  shiftCutoff.setHours(Number.isFinite(hours) ? hours : 9, Number.isFinite(minutes) ? minutes + graceMinutes : 15, 0, 0);
   const status = now > shiftCutoff ? 'late' : 'present';
 
-  const { data: inserted, error: insertError } = await db
+  const attendanceId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  const { error: insertError } = await db
     .from('attendance')
     .insert({
+      id: attendanceId,
       employee_id: params.employeeId,
       date: today,
       mode: params.mode,
@@ -130,31 +112,31 @@ export async function performCheckIn(params: CheckInParams): Promise<OperationRe
       current_state: 'working',
       total_break_seconds: 0,
       working_seconds: 0,
-    })
-    .select('id, employee_id, date, mode, status, check_in_at, check_out_at, working_seconds, total_break_seconds, current_state')
-    .single();
+    });
 
-  if (insertError || !inserted) {
+  if (insertError) {
     console.error('[CheckIn] Insert failed:', insertError);
     return {
       success: false,
-      error: insertError?.code === '23505' ? 'You have already checked in for today.' : 'Failed to record check-in. Please try again.',
+      error: insertError.code === '23505'
+        ? 'You have already checked in for today.'
+        : 'Failed to record check-in. Please try again.',
     };
   }
 
   const record = buildWorkingRecord(
     params,
-    inserted.id,
+    attendanceId,
     today,
-    inserted.check_in_at ?? nowIso,
-    formatKolkataTime(new Date(inserted.check_in_at ?? nowIso)),
+    nowIso,
+    nowFormattedTime,
     status
   );
 
   const { error: eventError } = await db.from('attendance_events').insert({
-    attendance_id: inserted.id,
+    attendance_id: attendanceId,
     event_type: 'check_in',
-    event_at: inserted.check_in_at ?? nowIso,
+    event_at: nowIso,
     user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
   });
 
