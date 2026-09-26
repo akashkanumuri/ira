@@ -157,14 +157,14 @@ export const MyAttendanceCalendar: React.FC<MyAttendanceCalendarProps> = ({
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
             <div>
               <h3 className="text-sm font-bold text-slate-900">Attendance Calendar</h3>
               <p className="text-xs text-slate-500 mt-0.5">Monday-Saturday working days, Sunday weekly off, database holidays override.</p>
             </div>
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 text-xs font-semibold">
+            <div className="self-stretch sm:self-auto flex items-center justify-between sm:justify-start bg-slate-50 border border-slate-200 rounded-xl p-1 text-xs font-semibold">
               <button onClick={handlePrevMonth} className="p-1.5 hover:bg-white rounded-lg text-slate-600" title="Previous Month"><ChevronLeft className="w-4 h-4" /></button>
-              <span className="px-3 min-w-[130px] text-center font-bold text-slate-900">{monthName}</span>
+              <span className="px-2 sm:px-3 min-w-0 sm:min-w-[130px] flex-1 sm:flex-none text-center font-bold text-slate-900">{monthName}</span>
               <button onClick={handleNextMonth} className="p-1.5 hover:bg-white rounded-lg text-slate-600" title="Next Month"><ChevronRight className="w-4 h-4" /></button>
             </div>
           </div>
@@ -176,8 +176,8 @@ export const MyAttendanceCalendar: React.FC<MyAttendanceCalendarProps> = ({
             <Metric label="Holidays" value={`${monthlyMetrics.holidayCount} Days`} tone="indigo" />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6">
-            <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center pb-3 border-b border-slate-100">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-6">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center pb-2.5 sm:pb-3 border-b border-slate-100">
               {weekHeaders.map((day, idx) => (
                 <div key={day} className={`text-[11px] font-bold tracking-wider ${idx === 6 ? 'text-purple-600' : idx === 5 ? 'text-emerald-700' : 'text-slate-500'}`}>
                   {day}
@@ -187,8 +187,8 @@ export const MyAttendanceCalendar: React.FC<MyAttendanceCalendarProps> = ({
               ))}
             </div>
 
-            <div className="grid grid-cols-7 gap-1.5 sm:gap-2 pt-3">
-              {Array.from({ length: startDayOffset }).map((_, i) => <div key={`empty-${i}`} className="h-20 sm:h-24 rounded-xl bg-slate-50/50" />)}
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 pt-2.5 sm:pt-3">
+              {Array.from({ length: startDayOffset }).map((_, i) => <div key={`empty-${i}`} className="h-[72px] sm:h-24 rounded-xl bg-slate-50/50" />)}
               {calendarDays.map((d) => {
                 const isSunday = d.classification.type === 'sunday_off';
                 const isHoliday = d.classification.type === 'holiday';
@@ -214,13 +214,18 @@ export const MyAttendanceCalendar: React.FC<MyAttendanceCalendarProps> = ({
                 }
 
                 return (
-                  <button key={d.dateStr} onClick={() => setSelectedRecord(d)} className={`h-20 sm:h-24 p-2 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${isToday ? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20' : isSunday ? 'border-purple-100 bg-purple-50/30 hover:border-purple-300' : isHoliday ? 'border-indigo-100 bg-indigo-50/30 hover:border-indigo-300' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'}`}>
+                  <button key={d.dateStr} onClick={() => setSelectedRecord(d)} className={`h-[72px] sm:h-24 p-1.5 sm:p-2 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${isToday ? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20' : isSunday ? 'border-purple-100 bg-purple-50/30 hover:border-purple-300' : isHoliday ? 'border-indigo-100 bg-indigo-50/30 hover:border-indigo-300' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'}`}>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs font-bold font-mono ${isToday ? 'text-blue-600' : isSunday ? 'text-purple-600' : isHoliday ? 'text-indigo-600' : 'text-slate-800'}`}>{d.dayNum}</span>
-                      {isToday && <span className="text-[9px] font-bold px-1 rounded bg-blue-600 text-white">Today</span>}
+                      {isToday && (
+  <>
+    <span className="sm:hidden w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" aria-label="Today" />
+    <span className="hidden sm:inline-flex text-[9px] font-bold px-1 rounded bg-blue-600 text-white">Today</span>
+  </>
+)}
                     </div>
                     <div className="truncate">
-                      {badgeText && <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeBg} truncate max-w-full`}>{badgeText}</span>}
+                      {badgeText && <span className={`inline-block text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded ${badgeBg} truncate max-w-full`}>{badgeText}</span>}
                       {d.record?.workingHours && <span className="block text-[10px] font-mono text-slate-500 mt-0.5">{d.record.workingHours}</span>}
                     </div>
                   </button>
