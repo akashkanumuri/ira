@@ -338,6 +338,7 @@ export default function App() {
       department: currentUser.department,
       employeeRole: activeRole,
       mode,
+      shiftStart: currentUser.shift,
     });
     if (result.success && result.attendanceRecord) replaceTodayRecord(result.attendanceRecord);
     return result;
