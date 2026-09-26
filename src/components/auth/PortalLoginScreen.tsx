@@ -54,17 +54,17 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-3 sm:p-5">
-      <div className="w-full max-w-5xl bg-white rounded-[26px] sm:rounded-[28px] border border-slate-200 shadow-[0_28px_80px_rgba(15,23,42,0.16)] overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-0 lg:min-h-[620px]">
-        <div className="lg:col-span-5 bg-slate-950 text-white p-5 sm:p-7 lg:p-10 flex flex-row lg:flex-col items-center lg:items-start justify-between relative overflow-hidden min-h-[128px] sm:min-h-[150px] lg:min-h-[620px] gap-5">
+      <div className="w-full max-w-5xl bg-white rounded-[26px] sm:rounded-[28px] border border-slate-200 shadow-[0_28px_80px_rgba(15,23,42,0.16)] overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[620px]">
+        <div className="md:col-span-5 bg-slate-950 text-white p-5 sm:p-7 md:p-8 flex flex-row md:flex-col items-center md:items-start justify-between relative overflow-hidden min-h-[150px] md:min-h-[620px] gap-5">
           <div className="absolute inset-0 opacity-50 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px]" />
 
           <div className="relative z-10 flex flex-col items-start gap-2 min-w-0">
             <img
               src="/ira-hospitality-logo.png"
               alt="IRA Hospitality"
-              className="w-[118px] sm:w-[155px] lg:w-[230px] h-auto object-contain object-left shrink-0"
+              className="w-[118px] sm:w-[155px] md:w-[205px] h-auto object-contain object-left shrink-0"
             />
-            <div className="text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-[0.22em] font-semibold text-slate-300 pl-0.5">
+            <div className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-[0.22em] font-semibold text-slate-300 pl-0.5">
               Attendance
             </div>
           </div>
@@ -77,7 +77,7 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
           </div>
         </div>
 
-        <div className="lg:col-span-7 p-5 sm:p-8 lg:p-10 flex items-center">
+        <div className="md:col-span-7 p-5 sm:p-8 md:p-10 flex items-center">
           <div className="w-full max-w-md mx-auto">
             <div className="flex items-start justify-between gap-4 mb-7 sm:mb-8">
               <div>
