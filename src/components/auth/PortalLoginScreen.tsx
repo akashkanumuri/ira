@@ -8,7 +8,6 @@ interface PortalLoginScreenProps {
   portal?: Portal;
 }
 
-
 export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = 'employee' }) => {
   const { signIn } = useAuth();
   const [activePortal, setActivePortal] = useState<Portal>(portal);
@@ -56,15 +55,17 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-3 sm:p-5">
       <div className="w-full max-w-5xl bg-white rounded-[26px] sm:rounded-[28px] border border-slate-200 shadow-[0_28px_80px_rgba(15,23,42,0.16)] overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-0 lg:min-h-[620px]">
-        {/* IRA Hospitality brand panel */}
         <div className="lg:col-span-5 bg-slate-950 text-white p-5 sm:p-7 lg:p-10 flex flex-row lg:flex-col items-center lg:items-start justify-between relative overflow-hidden min-h-[128px] sm:min-h-[150px] lg:min-h-[620px] gap-5">
           <div className="absolute inset-0 opacity-50 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px]" />
 
-          <div className="relative z-10 flex items-center gap-3 min-w-0">
-            <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="w-[118px] sm:w-[155px] lg:w-[230px] h-auto object-contain object-left shrink-0" />
-            <div className="hidden sm:block lg:hidden xl:block text-left">
-              <div className="text-sm font-bold tracking-tight">IRA Presence</div>
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400 mt-1">Attendance</div>
+          <div className="relative z-10 flex flex-col items-start gap-2 min-w-0">
+            <img
+              src="/ira-hospitality-logo.png"
+              alt="IRA Hospitality"
+              className="w-[118px] sm:w-[155px] lg:w-[230px] h-auto object-contain object-left shrink-0"
+            />
+            <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.22em] font-semibold text-slate-300 pl-0.5">
+              Attendance
             </div>
           </div>
 
@@ -74,7 +75,6 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
               {isEmployee ? 'Employee Portal' : 'Admin Portal'}
             </div>
           </div>
-
         </div>
 
         <div className="lg:col-span-7 p-5 sm:p-8 lg:p-10 flex items-center">
@@ -85,7 +85,9 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
                   {isEmployee ? 'Employee sign in' : 'Admin sign in'}
                 </p>
                 <h2 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Welcome back</h2>
-                <p className="mt-2 text-sm sm:text-base text-slate-500 max-w-sm">{isEmployee ? 'Enter your employee name and password.' : 'Enter the administrator credentials.'}</p>
+                <p className="mt-2 text-sm sm:text-base text-slate-500 max-w-sm">
+                  {isEmployee ? 'Enter your employee name and password.' : 'Enter the administrator credentials.'}
+                </p>
               </div>
 
               <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-1 flex items-center gap-1" aria-label="Switch login portal">
@@ -111,7 +113,7 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
             </div>
 
             {error && (
-              <div className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <div className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
                 {error}
               </div>
             )}
@@ -125,7 +127,7 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
                   <UserRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                   <input
                     value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
+                    onChange={(e) => { setIdentifier(e.target.value); if (error) setError(null); }}
                     type="text"
                     autoComplete="username"
                     placeholder={isEmployee ? 'Enter your full name' : 'Enter admin ID'}
@@ -140,7 +142,7 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); if (error) setError(null); }}
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     placeholder="Enter your password"
