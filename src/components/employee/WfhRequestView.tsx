@@ -7,7 +7,7 @@ import { getKolkataDateString } from '../../lib/workingDays';
 interface WfhRequestViewProps {
   currentUser: Employee;
   wfhRequests: WfhRequest[];
-  onSubmitWfhRequest: (newReq: Omit<WfhRequest, 'id' | 'requestedOn' | 'status'>) => void;
+  onSubmitWfhRequest: (newReq: Omit<WfhRequest, 'id' | 'requestedOn' | 'status'>) => Promise<void>;
 }
 
 export const WfhRequestView: React.FC<WfhRequestViewProps> = ({
@@ -20,14 +20,19 @@ export const WfhRequestView: React.FC<WfhRequestViewProps> = ({
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [submittedToast, setSubmittedToast] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const myRequests = wfhRequests.filter((r) => r.employeeId === currentUser.id || r.employeeName === currentUser.name);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason.trim()) return;
+    if (!reason.trim() || submitting) return;
+    setSubmitError(null);
+    setSubmitting(true);
 
-    onSubmitWfhRequest({
+    try {
+      await onSubmitWfhRequest({
       employeeId: currentUser.id,
       employeeName: currentUser.name,
       department: currentUser.department,
@@ -35,7 +40,13 @@ export const WfhRequestView: React.FC<WfhRequestViewProps> = ({
       duration,
       reason,
       note
-    });
+      });
+    } catch (error: any) {
+      setSubmitError(error?.message ?? 'Unable to submit WFH request. Please try again.');
+      return;
+    } finally {
+      setSubmitting(false);
+    }
 
     setReason('');
     setNote('');
@@ -50,6 +61,10 @@ export const WfhRequestView: React.FC<WfhRequestViewProps> = ({
         <h2 className="text-xl font-bold text-slate-900">Work From Home</h2>
         <p className="text-xs text-slate-500">Request WFH authorization and view request history.</p>
       </div>
+
+      {submitError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs font-semibold">{submitError}</div>
+      )}
 
       {submittedToast && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold flex items-center gap-2">
@@ -135,10 +150,11 @@ export const WfhRequestView: React.FC<WfhRequestViewProps> = ({
           <div className="flex justify-end pt-2">
             <button
               type="submit"
+              disabled={submitting}
               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-2"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Send Request</span>
+              <span>{submitting ? 'Submitting…' : 'Send Request'}</span>
             </button>
           </div>
         </form>
