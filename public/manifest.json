@@ -1,7 +1,7 @@
 {
-  "name": "IRA Presence",
-  "short_name": "IRA Presence",
-  "description": "Real-time employee attendance management",
+  "name": "IRA Attendance",
+  "short_name": "IRA Attendance",
+  "description": "IRA Hospitality employee attendance portal",
   "start_url": "/login",
   "display": "standalone",
   "background_color": "#f8fafc",
