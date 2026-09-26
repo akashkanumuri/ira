@@ -7,7 +7,7 @@ import { getKolkataDateString } from '../../lib/workingDays';
 interface CorrectionsViewProps {
   currentUser: Employee;
   correctionRequests: CorrectionRequest[];
-  onSubmitCorrection: (newReq: Omit<CorrectionRequest, 'id' | 'requestedOn' | 'status'>) => void;
+  onSubmitCorrection: (newReq: Omit<CorrectionRequest, 'id' | 'requestedOn' | 'status'>) => Promise<void>;
 }
 
 export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
@@ -22,16 +22,19 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   const [reqCheckOut, setReqCheckOut] = useState('');
   const [reason, setReason] = useState('');
   const [submittedToast, setSubmittedToast] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const myRequests = correctionRequests.filter(
     (r) => r.employeeId === currentUser.id || r.employeeName === currentUser.name
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) return;
 
-    onSubmitCorrection({
+    try {
+      await onSubmitCorrection({
       employeeId: currentUser.id,
       employeeName: currentUser.name,
       department: currentUser.department,
@@ -41,7 +44,13 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
       requestedCheckIn: reqCheckIn,
       requestedCheckOut: reqCheckOut,
       reason
-    });
+      });
+    } catch (error: any) {
+      setSubmitError(error?.message ?? 'Unable to submit correction request. Please try again.');
+      return;
+    } finally {
+      setSubmitting(false);
+    }
 
     setReason('');
     setSubmittedToast(true);
@@ -57,6 +66,10 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           Request regularization if you forgot to check in/out or experienced device issues.
         </p>
       </div>
+
+      {submitError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs font-semibold">{submitError}</div>
+      )}
 
       {submittedToast && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold flex items-center gap-2">
@@ -125,10 +138,11 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           <div className="flex justify-end pt-2">
             <button
               type="submit"
+              disabled={submitting}
               className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-2"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Submit Correction Request</span>
+              <span>{submitting ? 'Submitting…' : 'Submit Correction Request'}</span>
             </button>
           </div>
         </form>
