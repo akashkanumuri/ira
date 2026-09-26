@@ -7,7 +7,7 @@ import { getKolkataDateString } from '../../lib/workingDays';
 interface LeaveRequestViewProps {
   currentUser: Employee;
   leaveRequests: LeaveRequest[];
-  onSubmitLeaveRequest: (newReq: Omit<LeaveRequest, 'id' | 'requestedOn' | 'status'>) => void;
+  onSubmitLeaveRequest: (newReq: Omit<LeaveRequest, 'id' | 'requestedOn' | 'status'>) => Promise<void>;
 }
 
 export const LeaveRequestView: React.FC<LeaveRequestViewProps> = ({
@@ -21,14 +21,19 @@ export const LeaveRequestView: React.FC<LeaveRequestViewProps> = ({
   const [endDate, setEndDate] = useState(today);
   const [reason, setReason] = useState('');
   const [submittedToast, setSubmittedToast] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const myRequests = leaveRequests.filter((r) => r.employeeId === currentUser.id || r.employeeName === currentUser.name);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason.trim()) return;
+    if (!reason.trim() || submitting) return;
+    setSubmitError(null);
+    setSubmitting(true);
 
-    onSubmitLeaveRequest({
+    try {
+      await onSubmitLeaveRequest({
       employeeId: currentUser.id,
       employeeName: currentUser.name,
       department: currentUser.department,
@@ -37,7 +42,13 @@ export const LeaveRequestView: React.FC<LeaveRequestViewProps> = ({
       endDate,
       days: Math.max(1, Math.floor((new Date(`${endDate}T12:00:00`).getTime() - new Date(`${startDate}T12:00:00`).getTime()) / 86400000) + 1),
       reason
-    });
+      });
+    } catch (error: any) {
+      setSubmitError(error?.message ?? 'Unable to submit leave request. Please try again.');
+      return;
+    } finally {
+      setSubmitting(false);
+    }
 
     setReason('');
     setSubmittedToast(true);
@@ -60,6 +71,10 @@ export const LeaveRequestView: React.FC<LeaveRequestViewProps> = ({
           <p className="text-[11px] text-slate-400 mt-1">Live employee record</p>
         </div>
       </div>
+
+      {submitError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs font-semibold">{submitError}</div>
+      )}
 
       {submittedToast && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-semibold flex items-center gap-2">
@@ -129,10 +144,11 @@ export const LeaveRequestView: React.FC<LeaveRequestViewProps> = ({
           <div className="flex justify-end pt-2">
             <button
               type="submit"
+              disabled={submitting}
               className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-2"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Submit Leave Request</span>
+              <span>{submitting ? 'Submitting…' : 'Submit Leave Request'}</span>
             </button>
           </div>
         </form>
