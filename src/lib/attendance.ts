@@ -20,6 +20,7 @@ interface CheckInParams {
   department?: string;
   employeeRole: string;
   mode: AttendanceMode;
+  shiftStart?: string;
 }
 
 interface OperationResult {
