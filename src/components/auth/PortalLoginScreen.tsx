@@ -58,18 +58,21 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
         <div className="md:col-span-5 bg-slate-950 text-white p-5 sm:p-7 md:p-8 flex flex-row md:flex-col items-center md:items-start justify-between relative overflow-hidden min-h-[150px] md:min-h-[620px] gap-5">
           <div className="absolute inset-0 opacity-50 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px]" />
 
-          <div className="relative z-10 flex flex-col items-start gap-2 min-w-0">
-            <img
-              src="/ira-hospitality-logo.png"
-              alt="IRA Hospitality"
-              className="w-[118px] sm:w-[155px] md:w-[205px] h-auto object-contain object-left shrink-0"
-            />
-            <div className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-[0.22em] font-semibold text-slate-300 pl-0.5">
-              Attendance
+          <div className="relative z-10 flex flex-col items-start min-w-0">
+            <div className="ml-[58px] sm:ml-[58px] md:ml-[58px] flex flex-col items-start">
+              <img
+                src="/ira-hospitality-logo.png"
+                alt="IRA Hospitality"
+                className="-ml-[58px] w-[118px] sm:w-[155px] md:w-[205px] h-auto object-contain object-left shrink-0"
+              />
+              <div className="mt-8 w-full border-t border-slate-100/90" />
+              <div className="mt-24 text-[10px] sm:text-[11px] md:text-xs uppercase tracking-[0.22em] font-semibold text-slate-300">
+                Attendance
+              </div>
             </div>
           </div>
 
-          <div className="relative z-10 shrink-0">
+          <div className="relative z-10 shrink-0 ml-[58px] sm:ml-[58px] md:ml-[58px]">
             <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-[11px] font-semibold uppercase tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               {isEmployee ? 'Employee Portal' : 'Admin Portal'}
