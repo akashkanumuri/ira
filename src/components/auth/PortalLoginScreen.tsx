@@ -55,10 +55,10 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-3 sm:p-5">
       <div className="w-full max-w-5xl bg-white rounded-[26px] sm:rounded-[28px] border border-slate-200 shadow-[0_28px_80px_rgba(15,23,42,0.16)] overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[620px]">
-        <div className="md:col-span-5 bg-slate-950 text-white p-5 sm:p-7 md:p-8 flex flex-row md:flex-col items-center md:items-start justify-between relative overflow-hidden min-h-[150px] md:min-h-[620px] gap-5">
+        <div className="md:col-span-5 bg-slate-950 text-white p-5 sm:p-7 md:p-8 flex flex-col justify-between relative overflow-hidden min-h-[300px] md:min-h-[620px]">
           <div className="absolute inset-0 opacity-50 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:18px_18px]" />
 
-          <div className="relative z-10 flex flex-col items-start min-w-0 ml-[70px] md:ml-[58px]">
+          <div className="relative z-10 ml-[70px] md:ml-[58px] flex flex-col justify-between h-full min-h-[260px] md:min-h-0">
             <div className="flex flex-col items-start">
               <img
                 src="/ira-hospitality-logo.png"
@@ -69,12 +69,12 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
                 Attendance
               </div>
             </div>
-          </div>
 
-          <div className="relative z-10 shrink-0 ml-[70px] md:ml-[58px]">
-            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-[11px] font-semibold uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              {isEmployee ? 'Employee Portal' : 'Admin Portal'}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-[11px] font-semibold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                {isEmployee ? 'Employee Portal' : 'Admin Portal'}
+              </div>
             </div>
           </div>
         </div>
