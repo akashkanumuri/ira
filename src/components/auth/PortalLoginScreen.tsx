@@ -63,7 +63,7 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
               <img
                 src="/ira-hospitality-logo.png"
                 alt="IRA Hospitality"
-                className="-ml-[9px] w-[118px] sm:w-[155px] md:w-[205px] h-auto object-contain object-left shrink-0"
+                className="-ml-[13px] w-[118px] sm:w-[155px] md:w-[205px] h-auto object-contain object-left shrink-0"
               />
               <div className="mt-0 text-[10px] sm:text-[11px] md:text-xs uppercase tracking-[0.22em] font-semibold text-slate-300">
                 Attendance
