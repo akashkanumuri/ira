@@ -70,7 +70,6 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({ portal = '
               Attendance
             </div>
 
-            <div className="mt-4 h-px w-14 bg-slate-700/70 md:w-20" />
           </div>
 
           <div className="relative z-10 flex justify-center md:justify-start pt-8">
