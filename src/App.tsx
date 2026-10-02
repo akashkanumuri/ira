@@ -674,51 +674,60 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   const [message, setMessage] = useState('');
   const myId = user.employeeDbId!;
   const canAssign = Boolean(user.designationId && (designations as Designation[]).some((d:Designation)=>d.id===user.designationId && d.canAssignTasks));
-  const visible = tasks.filter((t:Task)=>t.assignedTo===myId || t.assignedBy===myId);
-  const targets = (employees as Employee[]).filter((e)=>e.status==='active' && e.id!==myId && (rules as AssignmentRule[]).some(r=>r.assignerDesignationId===user.designationId && (r.assigneeDesignationId==null || r.assigneeDesignationId===e.designationId) && (r.scope==='any' || e.managerId===myId)));
+  const visible = tasks.filter((t:Task)=>t.assignedTo===myId || t.assignedBy===myId).sort((a:Task,b:Task)=>a.status===b.status?a.dueDate.localeCompare(b.dueDate):a.status==='completed'?1:-1);
+  const targets = (employees as Employee[]).filter((e)=>e.status==='active' && e.id!==myId && (rules as AssignmentRule[]).some(r=>r.assignerDesignationId===user.designationId && (r.assigneeDesignationId==null || r.assigneeDesignationId===e.designationId) && (r.scope==='any' || (r.scope==='direct_reports' && e.managerId===myId))));
 
   async function submitTask() {
     setMessage('');
-    if (!link.trim() || !/^https?:\/\//i.test(link.trim())) { setMessage('Paste a valid http(s) work link.'); return; }
-    const { error } = await (supabase as any).from('tasks').update({ status:'completed', submitted_link:link.trim(), submitted_at:new Date().toISOString() }).eq('id',submitId).eq('assigned_to',myId);
-    if(error) setMessage(error.message); else { setSubmitId(''); setLink(''); await onRefresh(); }
+    if (!submitId) return;
+    const cleanLink=link.trim();
+    if (!/^https?:\/\//i.test(cleanLink)) { setMessage('Paste a valid http(s) work link.'); return; }
+    const { error } = await (supabase as any).rpc('submit_task',{p_task_id:submitId,p_submitted_link:cleanLink});
+    if(error){setMessage(error.message);return;}
+    notify('Work submitted successfully.','success');
+    setSubmitId('');setLink('');await onRefresh();
   }
 
-  async function assignTask(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault(); setMessage('');
+  async function assignTask(e:React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();setMessage('');
     const fd=new FormData(e.currentTarget);
-    const title=String(fd.get('title')??'').trim(), to=String(fd.get('assignedTo')??''), start=String(fd.get('startDate')??''), due=String(fd.get('dueDate')??'');
+    const title=String(fd.get('title')??'').trim(),to=String(fd.get('assignedTo')??''),start=String(fd.get('startDate')??''),due=String(fd.get('dueDate')??'');
     if(!title||!to||!start||!due){setMessage('Complete all required task fields.');return;}
-    if(due < start){setMessage('Due date cannot be before the start date.');return;}
-    const {error}=await (supabase as any).from('tasks').insert({title,description:clean(fd.get('description')),assigned_to:to,assigned_by:myId,start_date:start,due_date:due,priority:String(fd.get('priority')??'medium')});
-    if(error)setMessage(error.message); else {e.currentTarget.reset();setAssignOpen(false);await onRefresh();}
+    if(due<start){setMessage('Due date cannot be before the start date.');return;}
+    const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:clean(fd.get('description')),p_assigned_to:to,p_start_date:start,p_due_date:due,p_priority:String(fd.get('priority')??'medium')});
+    if(error){setMessage(error.message);return;}
+    notify('Task assigned successfully.','success');
+    e.currentTarget.reset();setAssignOpen(false);await onRefresh();
   }
 
-  return (
-    <PageShell title="Work & Assignments" subtitle="Assign, work, submit and keep task history.">
-      {message && <Notice type="error" text={message} />}
-      <div className="flex flex-col sm:flex-row gap-2 justify-between mb-4">
-        <div className="text-xs text-slate-500">{visible.length} task(s) visible</div>
-        {canAssign && <button onClick={()=>setAssignOpen(v=>!v)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950 text-white text-xs font-bold"><Plus className="w-4 h-4"/>Assign task</button>}
-      </div>
-      {assignOpen && <TaskAssignForm targets={targets} onSubmit={assignTask} onClose={()=>setAssignOpen(false)} />}
-      <TaskTable tasks={visible} employeeId={myId} onSubmit={(id)=>{setSubmitId(id);setLink('')}} onRefresh={onRefresh} />
-      {submitId && <Modal title="Submit completed work" onClose={()=>setSubmitId('')}><div className="space-y-4"><p className="text-sm text-slate-600">Paste the final work link. This will mark the task completed.</p><input value={link} onChange={e=>setLink(e.target.value)} placeholder="https://…" className="input"/><div className="flex justify-end gap-2"><button onClick={()=>setSubmitId('')} className="btn-secondary">Cancel</button><button onClick={()=>void submitTask()} className="btn-primary">Submit</button></div></div></Modal>}
-    </PageShell>
-  );
+  return <PageShell title="Work & Assignments" subtitle="Assignments, progress and completed work.">
+    {message&&<Notice type="error" text={message}/>}
+    <div className="flex flex-col sm:flex-row gap-3 justify-between mb-4">
+      <div className="flex items-center gap-2"><div className="text-xs text-slate-500">{visible.length} task(s)</div>{canAssign&&<span className="text-[10px] rounded-full bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1">You can assign</span>}</div>
+      {canAssign&&<button onClick={()=>setAssignOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>{assignOpen?'Close':'Assign task'}</button>}
+    </div>
+    {assignOpen&&<TaskAssignForm targets={targets} onSubmit={assignTask} onClose={()=>setAssignOpen(false)}/>}
+    <TaskTable tasks={visible} employeeId={myId} onSubmit={(id)=>{setSubmitId(id);setLink('')}} onRefresh={onRefresh}/>
+    {submitId&&<Modal title="Submit completed work" onClose={()=>setSubmitId('')}><div className="space-y-4"><div className="rounded-2xl bg-slate-50 border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">Paste the final work link</p><p className="text-xs text-slate-500 mt-1">Submitting the link marks the assignment completed and makes the result visible to the person who assigned it.</p></div><input autoFocus value={link} onChange={e=>setLink(e.target.value)} placeholder="https://your-work-link.com" className="input"/><div className="flex justify-end gap-2"><button onClick={()=>setSubmitId('')} className="btn-secondary">Cancel</button><button onClick={()=>void submitTask()} className="btn-primary"><CheckCircle2 className="w-4 h-4"/>Submit work</button></div></div></Modal>}
+  </PageShell>;
 }
 
 function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
-  const [from,setFrom]=useState(today()); const [to,setTo]=useState(today()); const [employee,setEmployee]=useState('all'); const [designation,setDesignation]=useState('all'); const [status,setStatus]=useState('all'); const [priority,setPriority]=useState('all'); const [assignOpen,setAssignOpen]=useState(false);
+  const [from,setFrom]=useState(today());const [to,setTo]=useState(today());const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');
   const activeEmployees=(employees as Employee[]).filter(e=>e.status==='active');
-  const filtered=(tasks as Task[]).filter(t=>(!from||t.startDate>=from)&&(!to||t.startDate<=to)&&(employee==='all'||t.assignedTo===employee)&&(designation==='all'||t.assignedToDesignation===designation)&&(status==='all'||t.status===status)&&(priority==='all'||t.priority===priority));
-  const currentAdminCanAssign=true;
+  const filtered=(tasks as Task[]).filter(t=>(!from||t.startDate>=from)&&(!to||t.startDate<=to)&&(employee==='all'||t.assignedTo===employee)&&(designation==='all'||t.assignedToDesignation===designation)&&(status==='all'||t.status===status)&&(priority==='all'||t.priority===priority)).sort((a:Task,b:Task)=>b.updatedAt.localeCompare(a.updatedAt));
   async function assignTask(e:React.FormEvent<HTMLFormElement>){
-    e.preventDefault();const fd=new FormData(e.currentTarget);const toId=String(fd.get('assignedTo')||'');if(!toId)return;
-    const {error}=await (supabase as any).from('tasks').insert({title:String(fd.get('title')||''),description:clean(fd.get('description')),assigned_to:toId,assigned_by:null,start_date:String(fd.get('startDate')||today()),due_date:String(fd.get('dueDate')||today()),priority:String(fd.get('priority')||'medium')});
-    if(!error){e.currentTarget.reset();setAssignOpen(false);await onRefresh();}
+    e.preventDefault();setMessage('');
+    const fd=new FormData(e.currentTarget);
+    const title=String(fd.get('title')||'').trim(),toId=String(fd.get('assignedTo')||''),start=String(fd.get('startDate')||today()),due=String(fd.get('dueDate')||today()),priorityValue=String(fd.get('priority')||'medium');
+    if(!title||!toId){setMessage('Task title and employee are required.');return;}
+    if(due<start){setMessage('Due date cannot be before the start date.');return;}
+    const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:clean(fd.get('description')),p_assigned_to:toId,p_start_date:start,p_due_date:due,p_priority:priorityValue});
+    if(error){setMessage(error.message);return;}
+    notify('Task assigned successfully.','success');e.currentTarget.reset();setAssignOpen(false);await onRefresh();
   }
-  return <PageShell title="Work & Assignments" subtitle="Admin view of the complete task history.">
+  return <PageShell title="Work & Assignments" subtitle="Admin view of assignments, submissions and completion history.">
+    {message&&<Notice type="error" text={message}/>}
     <div className="bg-white rounded-2xl border border-slate-200 p-4 grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
       <FilterInput label="From date"><input type="date" value={from} onChange={e=>setFrom(e.target.value)} className="input"/></FilterInput>
       <FilterInput label="To date"><input type="date" value={to} onChange={e=>setTo(e.target.value)} className="input"/></FilterInput>
@@ -727,9 +736,9 @@ function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
       <FilterInput label="Status"><select value={status} onChange={e=>setStatus(e.target.value)} className="input"><option value="all">All</option><option value="assigned">Assigned</option><option value="completed">Completed</option></select></FilterInput>
       <FilterInput label="Priority"><select value={priority} onChange={e=>setPriority(e.target.value)} className="input"><option value="all">All</option>{['low','medium','high','urgent'].map(x=><option key={x}>{x}</option>)}</select></FilterInput>
     </div>
-    <div className="flex justify-between items-center mt-4"><p className="text-xs text-slate-500">{filtered.length} task(s)</p>{currentAdminCanAssign&&<button onClick={()=>setAssignOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Assign task</button>}</div>
-    {assignOpen&&<TaskAssignForm targets={activeEmployees} onSubmit={assignTask} onClose={()=>setAssignOpen(false)} />}
-    <TaskTable tasks={filtered} employeeId="" onSubmit={()=>{}} onRefresh={onRefresh} admin />
+    <div className="flex justify-between items-center mt-4"><p className="text-xs text-slate-500">{filtered.length} task(s)</p><button onClick={()=>setAssignOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>{assignOpen?'Close':'Assign task'}</button></div>
+    {assignOpen&&<TaskAssignForm targets={activeEmployees} onSubmit={assignTask} onClose={()=>setAssignOpen(false)}/>}
+    <TaskTable tasks={filtered} employeeId="" onSubmit={()=>{}} onRefresh={onRefresh} admin/>
   </PageShell>;
 }
 
