@@ -85,7 +85,40 @@ function validateLoginId(loginId: string) {
 }
 
 function validatePassword(password: string) {
-  return password.length >= 8
+  return password.length >= 12
+    && /[A-Z]/.test(password)
+    && /[a-z]/.test(password)
+    && /\d/.test(password)
+    && /[^A-Za-z0-9]/.test(password)
+}
+
+async function isLeakedPassword(password: string): Promise<boolean> {
+  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(password));
+  const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const prefix = hash.slice(0, 5);
+  const suffix = hash.slice(5);
+  const response = await fetch('https://api.pwnedpasswords.com/range/' + prefix, {
+    headers: {
+      'User-Agent': 'IRA-Hospitality-Password-Protection/1.0',
+      'Add-Padding': 'true',
+    },
+  });
+  if (!response.ok) throw new Error('Password security verification is temporarily unavailable. Please try again.');
+  const body = await response.text();
+  return body.split(/\r?\n/).some(line => line.split(':', 1)[0].trim().toUpperCase() === suffix);
+}
+
+async function assertPasswordSafe(password: string) {
+  if (!validatePassword(password)) {
+    throw new Error('Password must be at least 12 characters and include uppercase, lowercase, number and symbol.');
+  }
+  if (await isLeakedPassword(password)) {
+    throw new Error('Choose a different password. This password has appeared in known data breaches.');
+  }
+}
+
+function generateTemporaryPassword() {
+  return 'IRA@' + crypto.randomUUID().replace(/-/g, '').slice(0, 14) + '9a';
 }
 
 async function requireAdmin(req: Request, admin: ReturnType<typeof createClient>) {
@@ -159,7 +192,7 @@ async function ensureEmployeeLedgers(
 async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<typeof createClient>, actorId: string) {
   const loginId = normalizeLoginId(input.loginId)
   if (!validateLoginId(loginId)) throw new Error('Login ID must be 3-32 characters using letters, numbers, dot, underscore or hyphen.')
-  if (!validatePassword(input.password)) throw new Error('Password must be at least 8 characters.')
+  await assertPasswordSafe(input.password)
   if (!input.name.trim()) throw new Error('Employee name is required.')
   if (!input.designationId) throw new Error('Designation is required.')
   if (!input.joinDate) throw new Error('Join date is required.')
@@ -336,7 +369,11 @@ async function resetPassword(input: ResetPasswordInput, admin: ReturnType<typeof
     .maybeSingle()
   if (error || !employee) throw new Error('Employee not found.')
 
-  const temporaryPassword = `IRA@${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
+  let temporaryPassword = generateTemporaryPassword();
+  for (let attempt = 0; attempt < 3 && await isLeakedPassword(temporaryPassword); attempt += 1) {
+    temporaryPassword = generateTemporaryPassword();
+  }
+  await assertPasswordSafe(temporaryPassword);
   const { error: authError } = await admin.auth.admin.updateUserById(employee.profile_id, {
     password: temporaryPassword,
   })
