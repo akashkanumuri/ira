@@ -110,6 +110,52 @@ function cleanText(value?: string | null) {
   return v ? v : null
 }
 
+async function ensureEmployeeLedgers(
+  admin: ReturnType<typeof createClient>,
+  employeeId: string,
+  joinDate: string,
+  asOfDate: string,
+) {
+  const { data: settings } = await admin
+    .from('payroll_settings')
+    .select('monthly_leave_accrual')
+    .eq('id', true)
+    .maybeSingle()
+
+  const accrual = Number(settings?.monthly_leave_accrual ?? 1.5)
+  const start = new Date(`${joinDate.slice(0, 7)}-01T00:00:00Z`)
+  const end = new Date(`${asOfDate.slice(0, 7)}-01T00:00:00Z`)
+  let opening = 0
+
+  for (let cursor = new Date(start); cursor <= end; cursor.setUTCMonth(cursor.getUTCMonth() + 1)) {
+    const periodStart = cursor.toISOString().slice(0, 10)
+    const { data: existing } = await admin
+      .from('leave_ledger')
+      .select('closing_balance')
+      .eq('employee_id', employeeId)
+      .eq('period_start', periodStart)
+      .maybeSingle()
+
+    if (existing) {
+      opening = Number(existing.closing_balance ?? opening)
+      continue
+    }
+
+    const { error } = await admin.from('leave_ledger').insert({
+      employee_id: employeeId,
+      period_start: periodStart,
+      opening_balance: opening,
+      accrual,
+      adjustment: 0,
+      paid_used: 0,
+      unpaid_used: 0,
+      closing_balance: opening + accrual,
+    })
+    if (error && error.code !== '23505') throw error
+    opening += accrual
+  }
+}
+
 async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<typeof createClient>, actorId: string) {
   const loginId = normalizeLoginId(input.loginId)
   if (!validateLoginId(loginId)) throw new Error('Login ID must be 3-32 characters using letters, numbers, dot, underscore or hyphen.')
@@ -156,7 +202,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
   try {
     const { data: seq, error: seqError } = await admin.rpc('next_employee_id')
-    if (seqError) throw seqError
+    if (seqError || !seq) throw seqError ?? new Error('Unable to allocate employee ID.')
     const empId = String(seq)
 
     const { data: employee, error: employeeError } = await admin
@@ -199,7 +245,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
     if (salaryError) throw salaryError
 
-    await admin.rpc('ensure_leave_ledgers_admin', { p_employee_id: employee.id, p_as_of: input.joinDate })
+    await ensureEmployeeLedgers(admin, employee.id, input.joinDate, new Date().toISOString().slice(0, 10))
 
     return { employeeId: employee.id, empId, loginId }
   } catch (error) {
@@ -264,7 +310,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     if (salaryError) throw salaryError
   }
 
-  await admin.rpc('ensure_leave_ledgers_admin', { p_employee_id: input.employeeId, p_as_of: new Date().toISOString().slice(0,10) })
+  await ensureEmployeeLedgers(admin, input.employeeId, current.join_date, new Date().toISOString().slice(0, 10))
   return { employeeId: input.employeeId }
 }
 
