@@ -4,6 +4,8 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { useAuth, type AuthUser, loginIdToAuthEmail } from './contexts/AuthContext';
 import { AdminLoginScreen, EmployeeLoginScreen } from './components/auth/PortalLoginScreen';
 import { Sidebar } from './components/common/Sidebar';
+import { ToastHost } from './components/common/ToastHost';
+import { notify } from './lib/toast';
 import {
   Activity, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight,
   Clock3, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
@@ -82,6 +84,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
   const [rules, setRules] = useState<AssignmentRule[]>([]);
   const [loginSessions, setLoginSessions] = useState<any[]>([]);
+  const lastRealtimeEvent = useRef<string>('');
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
   const reloadTimer = useRef<number | null>(null);
@@ -255,9 +258,34 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     for (const [table, filter] of subscriptions) {
       const options:any = { event: '*', schema: 'public', table };
       if (filter) options.filter = filter;
-      channel.on('postgres_changes', options, () => {
+      channel.on('postgres_changes', options, (payload:any) => {
+        const eventKey = `${table}:${payload.eventType}:${payload.new?.id ?? payload.old?.id ?? ''}`;
+        if (lastRealtimeEvent.current !== eventKey) {
+          lastRealtimeEvent.current = eventKey;
+          const now = Date.now();
+          window.setTimeout(() => { if (lastRealtimeEvent.current === eventKey && Date.now() - now > 800) lastRealtimeEvent.current = ''; }, 900);
+
+          if (table === 'task_events' && payload.eventType === 'INSERT') {
+            const actor = payload.new?.actor_employee_id ?? null;
+            if (user.role === 'employee' && actor !== user.employeeDbId) {
+              notify(payload.new?.event_type === 'completed' ? 'A task was completed and is ready for your review.' : 'A new task has been assigned.', 'info');
+            }
+          } else if ((table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') && user.role === 'employee') {
+            if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
+              const label = table === 'leave_requests' ? 'Leave request' : table === 'wfh_requests' ? 'WFH request' : 'Correction request';
+              notify(`${label} ${payload.new?.status ?? 'updated'}.`, payload.new?.status === 'approved' ? 'success' : payload.new?.status === 'rejected' ? 'error' : 'info');
+            }
+          } else if (table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') {
+            if (user.role === 'admin' && payload.eventType === 'INSERT') notify('New employee request needs review.', 'info');
+          } else if (table === 'holidays' && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+            notify('Holiday calendar updated.', 'info');
+          } else if (table === 'payroll_records' && user.role === 'employee' && payload.eventType === 'UPDATE' && payload.new?.finalized_at) {
+            notify('Your payroll has been finalized.', 'success');
+          }
+        }
+
         if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
-        reloadTimer.current = window.setTimeout(() => void reload(), 250);
+        reloadTimer.current = window.setTimeout(() => void reload(), 180);
       });
     }
     channel.subscribe();
@@ -307,7 +335,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       />;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex">
+    <div className="min-h-screen text-slate-900 flex ira-app-bg">
       <Sidebar
         activeRole={user.role} activeTab={activeTab} onSelectTab={navigate} currentUser={user}
         onLogout={onLogout} pendingWfhCount={user.role === 'admin' ? wfhRequests.filter(x => x.status === 'pending').length : undefined}
@@ -315,7 +343,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         pendingCorrectionCount={user.role === 'admin' ? corrections.filter(x => x.status === 'pending').length : undefined}
       />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-20 flex items-center px-4 sm:px-6 gap-3">
+        <header className="ira-topbar h-16 sticky top-0 z-20 flex items-center px-4 sm:px-6 gap-3">
           <button className="lg:hidden p-2 rounded-xl hover:bg-slate-100" onClick={() => setMobileOpen(v => !v)}><Menu className="w-5 h-5" /></button>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold">{user.role === 'admin' ? 'IRA Workforce Management' : 'IRA Employee Workspace'}</p>
@@ -324,7 +352,13 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500" /> Live
           </div>
-          <button onClick={() => void onLogout()} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500" title="Sign out"><LogOut className="w-4 h-4" /></button>
+          <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200/70">
+            <div className="w-8 h-8 rounded-full bg-slate-950 text-white flex items-center justify-center text-[11px] font-bold">{(user.name || 'U').charAt(0).toUpperCase()}</div>
+            <div className="hidden md:block">
+              <p className="text-xs font-semibold text-slate-900 leading-none">{user.name || 'User'}</p>
+              <p className="text-[10px] text-slate-500 mt-1">{user.role === 'admin' ? 'Administrator' : (user.designation || 'Employee')}</p>
+            </div>
+          </div>
         </header>
 
         {mobileOpen && (
@@ -346,7 +380,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 overflow-y-auto ira-main">
           {loadingData ? <LoadingScreen label="Loading workspace…" /> : selectedComponent}
         </main>
 
@@ -357,6 +391,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         </nav>
         <div className="hidden">{pendingCount}</div>
       </div>
+      <ToastHost />
     </div>
   );
 }
@@ -980,7 +1015,7 @@ function SettingsAdmin({designations,departments,rules,onRefresh}:any){
   return <PageShell title="Settings" subtitle="Configure designations, assignment rules, departments and the payroll divisor policy."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['rules','Assignment rules'],['designations','Designations'],['departments','Departments'],['payroll','Payroll policy']].map(([id,l])=><button key={id} onClick={()=>setTab(id)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab===id?'bg-white shadow-sm text-slate-900':'text-slate-500'}`}>{l}</button>)}</div>{tab==='rules'&&<section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add assignment rule</h3><div className="space-y-4 mt-4"><Field label="Assigner designation"><select value={assigner} onChange={e=>setAssigner(e.target.value)} className="input"><option value="">Select</option>{designations.map((d:Designation)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Assignee designation"><select value={assignee} onChange={e=>setAssignee(e.target.value)} className="input"><option value="">Any designation</option>{designations.map((d:Designation)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Scope"><select value={scope} onChange={e=>setScope(e.target.value as any)} className="input"><option value="direct_reports">Direct reports</option><option value="any">Any employee</option></select></Field><button onClick={()=>void addRule()} className="btn-primary">Add rule</button></div></div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-5 border-b border-slate-100"><h3 className="font-bold text-sm">Current rules</h3></div>{rules.map((r:AssignmentRule)=><div key={r.id} className="p-4 border-b border-slate-100 flex items-center justify-between gap-3"><p className="text-xs"><b>{r.assignerDesignation}</b> → {r.assigneeDesignation} <span className="text-slate-400">· {r.scope}</span></p><button onClick={()=>void deleteRule(r.id)} className="icon-btn text-rose-500"><Trash2 className="w-4 h-4"/></button></div>)}{!rules.length&&<EmptyCard text="No assignment rules."/>}</div></section>}{tab==='designations'&&<section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add designation</h3><div className="space-y-4 mt-4"><Field label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="input"/></Field><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={canAssign} onChange={e=>setCanAssign(e.target.checked)}/>Can assign tasks</label><button onClick={()=>void addDesignation()} className="btn-primary">Add designation</button></div></div><div className="bg-white rounded-2xl border border-slate-200 p-5">{designations.map((d:Designation)=><div key={d.id} className="flex justify-between p-3 border-b border-slate-100 last:border-0 text-xs"><b>{d.name}</b><span className="text-slate-500">{d.canAssignTasks?'Assigns tasks':'Receives tasks'}</span></div>)}</div></section>}{tab==='departments'&&<section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add department</h3><div className="flex gap-2 mt-4"><input value={name} onChange={e=>setName(e.target.value)} className="input"/><button onClick={()=>void addDepartment()} className="btn-primary">Add</button></div></div><div className="bg-white rounded-2xl border border-slate-200 p-5">{departments.map((d:Department)=><div key={d.id} className="p-3 border-b border-slate-100 last:border-0 text-xs font-bold">{d.name}</div>)}</div></section>}{tab==='payroll'&&<section className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 max-w-xl"><p className="text-sm font-bold">Payroll divisor</p><p className="text-xs text-slate-500 mt-1">Keep this configurable until the company confirms the final payroll policy.</p><select id="payroll-divisor" value={payrollDivisor} onChange={e=>setPayrollDivisor(e.target.value as 'calendar_days'|'working_days')} className="input mt-4"><option value="calendar_days">Calendar days</option><option value="working_days">Working days</option></select><button onClick={()=>void savePayroll()} className="btn-primary mt-4">Save policy</button><p className="text-[11px] text-slate-400 mt-3">Paid leave accrual remains 1.5 days per month and carries forward.</p></section>}</PageShell>;
 }
 
-function PageShell({title,subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){return <div className="max-w-[1440px] mx-auto"><div className="mb-5"><h2 className="text-xl sm:text-2xl font-bold tracking-tight">{title}</h2>{subtitle&&<p className="text-xs sm:text-sm text-slate-500 mt-1">{subtitle}</p>}</div>{children}</div>}
+function PageShell({title,subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){return <div className="ira-page max-w-[1440px] mx-auto"><div className="mb-6 sm:mb-7"><div className="flex items-end justify-between gap-4"><div><h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-950">{title}</h2>{subtitle&&<p className="text-xs sm:text-sm text-slate-500 mt-1.5 max-w-3xl">{subtitle}</p>}</div><span className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/65 px-3 py-1.5 text-[10px] font-semibold text-slate-500 backdrop-blur-xl"><span className="ira-live-dot"/>Live data</span></div></div>{children}</div>}
 
 function LoadingScreen({label='Loading IRA…'}:{label?:string}){return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin"/>{label}</div></div>}
 
