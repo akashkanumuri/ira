@@ -728,12 +728,56 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
 function EmployeeModal({mode,employee,departments,designations,employees,onClose,onSaved}:{mode:'create'|'edit';employee:Employee|null;departments:Department[];designations:Designation[];employees:Employee[];onClose:()=>void;onSaved:()=>Promise<void>}) {
   const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [success,setSuccess]=useState<{loginId:string;password?:string}|null>(null);
   const [docs,setDocs]=useState<{type:string;file:File|null}[]>(ALL_DOCUMENT_TYPES.map(type=>({type,file:null})));
+  const [liveDesignations,setLiveDesignations]=useState<Designation[]>(designations);
+  const [liveDepartments,setLiveDepartments]=useState<Department[]>(departments);
+  const [refsLoading,setRefsLoading]=useState(true);
   const [form,setForm]=useState({
     name:employee?.name??'',workEmail:employee?.workEmail??'',phone:employee?.phone??'',loginId:employee?.loginId??'',
-    password:'',confirmPassword:'',workMode:employee?.workMode??'office',designationId:employee?.designationId??designations[0]?.id??'',
+    password:'',confirmPassword:'',workMode:employee?.workMode??'office',designationId:employee?.designationId??'',
     departmentId:employee?.departmentId??'',managerId:employee?.managerId??'',joinDate:employee?.joinDate??today(),shiftStart:employee?.shift??'09:00',shiftEnd:employee?.shiftEnd??'18:00',monthlySalary:String(employee?.currentSalary??0)
   });
   const [employeeDocs,setEmployeeDocs]=useState<EmployeeDocument[]>([]);
+  useEffect(()=>{ 
+    let mounted=true;
+    void (async()=>{
+      setRefsLoading(true);
+      const db=supabase as any;
+      const [{data:desData,error:desError},{data:depData,error:depError}]=await Promise.all([
+        db.from('designations').select('*').order('name'),
+        db.from('departments').select('*').order('name'),
+      ]);
+      if(!mounted)return;
+      if(desError||depError){
+        setError(desError?.message||depError?.message||'Unable to load employee reference data.');
+        setRefsLoading(false);
+        return;
+      }
+      const nextDesignations=(desData??[]).map((r:any)=>({id:r.id,name:r.name,canAssignTasks:Boolean(r.can_assign_tasks)}));
+      const nextDepartments=(depData??[]).map((r:any)=>({id:r.id,name:r.name}));
+      setLiveDesignations(nextDesignations);
+      setLiveDepartments(nextDepartments);
+
+      setForm(prev=>{
+        const existingDesignation=nextDesignations.find((d:Designation)=>d.id===prev.designationId);
+        const oldDesignationName=designations.find((d:Designation)=>d.id===prev.designationId)?.name;
+        const matchedDesignation=existingDesignation ?? (oldDesignationName
+          ? nextDesignations.find((d:Designation)=>d.name.trim().toLowerCase()===oldDesignationName.trim().toLowerCase())
+          : null);
+        const existingDepartment=nextDepartments.find((d:Department)=>d.id===prev.departmentId);
+        const oldDepartmentName=departments.find((d:Department)=>d.id===prev.departmentId)?.name;
+        const matchedDepartment=existingDepartment ?? (oldDepartmentName
+          ? nextDepartments.find((d:Department)=>d.name.trim().toLowerCase()===oldDepartmentName.trim().toLowerCase())
+          : null);
+        return {
+          ...prev,
+          designationId:matchedDesignation?.id ?? nextDesignations[0]?.id ?? '',
+          departmentId:prev.departmentId ? (matchedDepartment?.id ?? '') : '',
+        };
+      });
+      setRefsLoading(false);
+    })();
+    return()=>{mounted=false};
+  },[employee?.id]);
   useEffect(()=>{ if(mode==='edit'&&employee){void (async()=>{const {data}=await (supabase as any).from('employee_documents').select('*').eq('employee_id',employee.id).order('created_at',{ascending:false});if(data)setEmployeeDocs(data.map((r:any)=>({id:r.id,employeeId:r.employee_id,documentType:r.document_type,fileName:r.file_name,storagePath:r.storage_path,mimeType:r.mime_type,sizeBytes:r.size_bytes,createdAt:r.created_at})));})();}},[mode,employee]);
   const set=(key:string,value:string)=>setForm(f=>({...f,[key]:value}));
   const save=async(e:React.FormEvent)=>{e.preventDefault();setError('');setBusy(true);
@@ -741,26 +785,12 @@ function EmployeeModal({mode,employee,departments,designations,employees,onClose
       const salary=Number(form.monthlySalary); if(!Number.isFinite(salary)||salary<0)throw new Error('Enter a valid monthly salary.');
       // Resolve designation/department against the current database before saving.
       // This heals stale IDs held by an already-open browser tab after reference data changes.
-      const db = supabase as any;
-      const [{ data: liveDesignations, error: liveDesignationError }, { data: liveDepartments, error: liveDepartmentError }] = await Promise.all([
-        db.from('designations').select('id,name').order('name'),
-        db.from('departments').select('id,name').order('name'),
-      ]);
-      if (liveDesignationError) throw liveDesignationError;
-      if (liveDepartmentError) throw liveDepartmentError;
+      if(refsLoading) throw new Error('Employee reference data is still loading. Please wait a moment and try again.');
+      const currentDesignation = liveDesignations.find((d:Designation)=>d.id===form.designationId);
+      if (!currentDesignation) throw new Error('Selected designation is no longer available. Please select it again.');
 
-      const selectedDesignationName = designations.find((d:Designation)=>d.id===form.designationId)?.name ?? '';
-      const currentDesignation = (liveDesignations ?? []).find((d:any)=>d.id===form.designationId)
-        ?? (selectedDesignationName ? (liveDesignations ?? []).find((d:any)=>d.name.trim().toLowerCase()===selectedDesignationName.trim().toLowerCase()) : null);
-      if (!currentDesignation) throw new Error('Selected designation is no longer available. Please reopen the form and select a current designation.');
-
-      const selectedDepartmentName = departments.find((d:Department)=>d.id===form.departmentId)?.name ?? '';
-      const currentDepartment = form.departmentId
-        ? ((liveDepartments ?? []).find((d:any)=>d.id===form.departmentId)
-          ?? (selectedDepartmentName ? (liveDepartments ?? []).find((d:any)=>d.name.trim().toLowerCase()===selectedDepartmentName.trim().toLowerCase()) : null))
-        : null;
-
-      if(form.departmentId && !currentDepartment) throw new Error('Selected department is no longer available. Please reopen the form and select a current department.');
+      const currentDepartment = form.departmentId ? liveDepartments.find((d:Department)=>d.id===form.departmentId) : null;
+      if(form.departmentId && !currentDepartment) throw new Error('Selected department is no longer available. Please select it again.');
 
       if(mode==='create'){
         if(form.password!==form.confirmPassword)throw new Error('Passwords do not match.');
@@ -781,7 +811,7 @@ function EmployeeModal({mode,employee,departments,designations,employees,onClose
     {error&&<Notice type="error" text={error}/>}
     <form onSubmit={save} className="space-y-6">
       <FormSection title="Personal details" icon={<UserRound className="w-4 h-4"/>}><div className="grid md:grid-cols-2 gap-4"><Field label="Full name"><input value={form.name} onChange={e=>set('name',e.target.value)} className="input" required/></Field><Field label="Work email"><input type="email" value={form.workEmail} onChange={e=>set('workEmail',e.target.value)} className="input"/></Field><Field label="Phone"><input value={form.phone} onChange={e=>set('phone',e.target.value)} className="input"/></Field><Field label="Join date"><input type="date" value={form.joinDate} onChange={e=>set('joinDate',e.target.value)} className="input" required/></Field></div></FormSection>
-      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4"/>}><div className="grid md:grid-cols-2 gap-4"><Field label="Designation"><select value={form.designationId} onChange={e=>set('designationId',e.target.value)} className="input" required>{designations.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Department"><select value={form.departmentId} onChange={e=>set('departmentId',e.target.value)} className="input"><option value="">No department</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e=>set('managerId',e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e:Employee)=>e.status==='active'&&e.id!==employee?.id).map((e:Employee)=><option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field><Field label="Work mode"><select value={form.workMode} onChange={e=>set('workMode',e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e=>set('shiftStart',e.target.value)} className="input" required/></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e=>set('shiftEnd',e.target.value)} className="input" required/></Field><Field label="Monthly salary"><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e=>set('monthlySalary',e.target.value)} className="input" required/></Field></div></FormSection>
+      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4"/>}><div className="grid md:grid-cols-2 gap-4"><Field label="Designation"><select disabled={refsLoading} value={form.designationId} onChange={e=>set('designationId',e.target.value)} className="input" required>{liveDesignations.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Department"><select disabled={refsLoading} value={form.departmentId} onChange={e=>set('departmentId',e.target.value)} className="input"><option value="">No department</option>{liveDepartments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e=>set('managerId',e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e:Employee)=>e.status==='active'&&e.id!==employee?.id).map((e:Employee)=><option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field><Field label="Work mode"><select value={form.workMode} onChange={e=>set('workMode',e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e=>set('shiftStart',e.target.value)} className="input" required/></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e=>set('shiftEnd',e.target.value)} className="input" required/></Field><Field label="Monthly salary"><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e=>set('monthlySalary',e.target.value)} className="input" required/></Field></div></FormSection>
       {mode==='create'&&<FormSection title="Login" icon={<KeyRound className="w-4 h-4"/>}><div className="grid md:grid-cols-3 gap-4"><Field label="Login ID" hint="3–32 characters"><input value={form.loginId} onChange={e=>set('loginId',e.target.value)} className="input" autoComplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}"/></Field><Field label="Password"><input type="password" value={form.password} onChange={e=>set('password',e.target.value)} className="input" autoComplete="new-password" minLength={12} required/></Field><Field label="Confirm password"><input type="password" value={form.confirmPassword} onChange={e=>set('confirmPassword',e.target.value)} className="input" autoComplete="new-password" minLength={12} required/></Field></div></FormSection>}
       {mode==='create'&&<FormSection title="HR onboarding documents" icon={<Upload className="w-4 h-4"/>}><div className="grid md:grid-cols-2 gap-3">{docs.map((d,i)=><div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold text-slate-700">{d.type}</p><input type="file" onChange={e=>setDocs(prev=>prev.map((x,idx)=>idx===i?{...x,file:e.target.files?.[0]??null}:x))} className="mt-2 block w-full text-[11px]"/></div>)}</div></FormSection>}
       {mode==='edit'&&<FormSection title="HR documents" icon={<FileText className="w-4 h-4"/>}><div className="space-y-2">{employeeDocs.map(d=><button type="button" key={d.id} onClick={()=>void viewDoc(d)} className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-left"><span><span className="block text-xs font-bold">{d.documentType}</span><span className="block text-[10px] text-slate-500">{d.fileName}</span></span><Eye className="w-4 h-4 text-slate-400"/></button>)}{!employeeDocs.length&&<p className="text-xs text-slate-500">No documents uploaded yet.</p>}</div><div className="grid md:grid-cols-2 gap-3">{docs.map((d,i)=><div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold">{d.type}</p><input type="file" onChange={e=>setDocs(prev=>prev.map((x,idx)=>idx===i?{...x,file:e.target.files?.[0]??null}:x))} className="mt-2 block w-full text-[11px]"/></div>)}</div></FormSection>}
