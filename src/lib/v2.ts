@@ -41,7 +41,19 @@ export function dateLabel(date: string, options?: Intl.DateTimeFormatOptions) {
 
 export async function invokeEmployeeAdmin(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('employee-admin', { body });
-  if (error) throw new Error(error.message || 'Employee action failed.');
+  if (error) {
+    let message = error.message || 'Employee action failed.';
+    try {
+      const response = (error as any).context as Response | undefined;
+      if (response) {
+        const payload = await response.clone().json().catch(() => null);
+        if (payload?.error) message = String(payload.error);
+      }
+    } catch {
+      // Keep the SDK message when the response body cannot be read.
+    }
+    throw new Error(message);
+  }
   if (data?.error) throw new Error(String(data.error));
   return data;
 }
