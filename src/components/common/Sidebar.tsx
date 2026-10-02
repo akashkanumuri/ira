@@ -20,6 +20,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
     ['emp-tasks', 'Work & Assignments', BriefcaseBusiness],
     ['emp-leave', 'Leave', CalendarDays, pendingLeaveCount],
     ['emp-wfh', 'WFH', Home, pendingWfhCount],
+    ['emp-corrections', 'Corrections', FileClock, pendingCorrectionCount],
     ['emp-holidays', 'Holidays', CalendarDays],
     ['emp-profile', 'Profile', UserRound],
   ] as const;
