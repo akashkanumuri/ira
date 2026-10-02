@@ -32,7 +32,7 @@ function buildRecord(row: any, employeeName: string, empId: string, department: 
     ? Math.max(0, Math.floor((Date.now() - new Date(openBreak.breakStart).getTime()) / 1000))
     : 0;
   const completedBreak = breaks.reduce((sum, b) => sum + (b.breakEnd ? Number(b.durationSeconds ?? 0) : 0), 0);
-  const totalBreak = Math.max(storedBreak, completedBreak + openBreakSeconds);
+  const totalBreak = Math.max(storedBreak, completedBreak);
   const elapsed = checkIn
     ? Math.max(0, Math.floor(((checkOut ?? new Date()).getTime() - checkIn.getTime()) / 1000))
     : 0;
