@@ -712,6 +712,8 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   const [link, setLink] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
   const [message, setMessage] = useState('');
+  const [assignBusy, setAssignBusy] = useState(false);
+  const assignRequestRef = useRef<string | null>(null);
   const myId = user.employeeDbId!;
   const canAssign = Boolean(user.designationId && (designations as Designation[]).some((d:Designation)=>d.id===user.designationId && d.canAssignTasks));
   const visible = tasks.filter((t:Task)=>t.assignedTo===myId || t.assignedBy===myId).sort((a:Task,b:Task)=>a.status===b.status?a.dueDate.localeCompare(b.dueDate):a.status==='completed'?1:-1);
@@ -730,14 +732,19 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
 
   async function assignTask(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault();setMessage('');
+    if(assignBusy)return;
     const fd=new FormData(e.currentTarget);
     const title=String(fd.get('title')??'').trim(),to=String(fd.get('assignedTo')??''),start=String(fd.get('startDate')??''),due=String(fd.get('dueDate')??'');
     if(!title||!to||!start||!due){setMessage('Complete all required task fields.');return;}
     if(due<start){setMessage('Due date cannot be before the start date.');return;}
-    const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:clean(fd.get('description')),p_assigned_to:to,p_start_date:start,p_due_date:due,p_priority:String(fd.get('priority')??'medium')});
-    if(error){setMessage(error.message);return;}
-    notify('Task assigned successfully.','success');
-    e.currentTarget.reset();setAssignOpen(false);await onRefresh();
+    assignRequestRef.current=crypto.randomUUID();setAssignBusy(true);
+    try{
+      const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:clean(fd.get('description')),p_assigned_to:to,p_start_date:start,p_due_date:due,p_priority:String(fd.get('priority')??'medium'),p_client_request_id:assignRequestRef.current});
+      if(error)throw error;
+      notify('Task assigned successfully.','success');
+      e.currentTarget.reset();setAssignOpen(false);await onRefresh();
+    }catch(error){setMessage(error instanceof Error?error.message:'Unable to assign task.');notify(error instanceof Error?error.message:'Unable to assign task.','error');}
+    finally{assignRequestRef.current=null;setAssignBusy(false);}
   }
 
   return <PageShell title="Work & Assignments" subtitle="Assignments, progress and completed work.">
@@ -746,25 +753,30 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
       <div className="flex items-center gap-2"><div className="text-xs text-slate-500">{visible.length} task(s)</div>{canAssign&&<span className="text-[10px] rounded-full bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1">You can assign</span>}</div>
       {canAssign&&<button onClick={()=>setAssignOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>{assignOpen?'Close':'Assign task'}</button>}
     </div>
-    {assignOpen&&<TaskAssignForm targets={targets} onSubmit={assignTask} onClose={()=>setAssignOpen(false)}/>}
+    {assignOpen&&<TaskAssignForm targets={targets} onSubmit={assignTask} onClose={()=>setAssignOpen(false)} busy={assignBusy}/>}
     <TaskTable tasks={visible} employeeId={myId} onSubmit={(id)=>{setSubmitId(id);setLink('')}} onRefresh={onRefresh}/>
-    {submitId&&<Modal title="Submit completed work" onClose={()=>setSubmitId('')}><div className="space-y-4"><div className="rounded-2xl bg-slate-50 border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">Paste the final work link</p><p className="text-xs text-slate-500 mt-1">Submitting the link marks the assignment completed and makes the result visible to the person who assigned it.</p></div><input autoFocus value={link} onChange={e=>setLink(e.target.value)} placeholder="https://your-work-link.com" className="input"/><div className="flex justify-end gap-2"><button onClick={()=>setSubmitId('')} className="btn-secondary">Cancel</button><button onClick={()=>void submitTask()} className="btn-primary"><CheckCircle2 className="w-4 h-4"/>Submit work</button></div></div></Modal>}
+    {submitId&&<Modal title="Submit completed work" onClose={()=>setSubmitId('')}><div className="space-y-4"><div className="rounded-2xl bg-slate-50 border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">Paste the final work link</p><p className="text-xs text-slate-500 mt-1">Submitting the link marks the assignment completed and makes the result visible to the person who assigned it.</p></div><input autoFocus value={link} onChange={e=>setLink(e.target.value)} placeholder="https://your-work-link.com" className="input"/><div className="flex justify-end gap-2"><button onClick={()=>setSubmitId('')} className="btn-secondary">Cancel</button><button disabled={!link.trim()} onClick={()=>void submitTask()} className="btn-primary"><CheckCircle2 className="w-4 h-4"/>Submit work</button></div></div></Modal>}
   </PageShell>;
 }
 
 function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
-  const [from,setFrom]=useState(today());const [to,setTo]=useState(today());const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');
+  const [from,setFrom]=useState(today());const [to,setTo]=useState(today());const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');const [assignBusy,setAssignBusy]=useState(false);const assignRequestRef=useRef<string|null>(null);
   const activeEmployees=(employees as Employee[]).filter(e=>e.status==='active');
   const filtered=(tasks as Task[]).filter(t=>(!from||t.startDate>=from)&&(!to||t.startDate<=to)&&(employee==='all'||t.assignedTo===employee)&&(designation==='all'||t.assignedToDesignation===designation)&&(status==='all'||t.status===status)&&(priority==='all'||t.priority===priority)).sort((a:Task,b:Task)=>b.updatedAt.localeCompare(a.updatedAt));
   async function assignTask(e:React.FormEvent<HTMLFormElement>){
     e.preventDefault();setMessage('');
+    if(assignBusy)return;
     const fd=new FormData(e.currentTarget);
     const title=String(fd.get('title')||'').trim(),toId=String(fd.get('assignedTo')||''),start=String(fd.get('startDate')||today()),due=String(fd.get('dueDate')||today()),priorityValue=String(fd.get('priority')||'medium');
     if(!title||!toId){setMessage('Task title and employee are required.');return;}
     if(due<start){setMessage('Due date cannot be before the start date.');return;}
-    const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:clean(fd.get('description')),p_assigned_to:toId,p_start_date:start,p_due_date:due,p_priority:priorityValue});
-    if(error){setMessage(error.message);return;}
-    notify('Task assigned successfully.','success');e.currentTarget.reset();setAssignOpen(false);await onRefresh();
+    assignRequestRef.current=crypto.randomUUID();setAssignBusy(true);
+    try{
+      const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:clean(fd.get('description')),p_assigned_to:toId,p_start_date:start,p_due_date:due,p_priority:priorityValue,p_client_request_id:assignRequestRef.current});
+      if(error)throw error;
+      notify('Task assigned successfully.','success');e.currentTarget.reset();setAssignOpen(false);await onRefresh();
+    }catch(error){setMessage(error instanceof Error?error.message:'Unable to assign task.');notify(error instanceof Error?error.message:'Unable to assign task.','error');}
+    finally{assignRequestRef.current=null;setAssignBusy(false);}
   }
   return <PageShell title="Work & Assignments" subtitle="Admin view of assignments, submissions and completion history.">
     {message&&<Notice type="error" text={message}/>}
@@ -777,12 +789,12 @@ function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
       <FilterInput label="Priority"><select value={priority} onChange={e=>setPriority(e.target.value)} className="input"><option value="all">All</option>{['low','medium','high','urgent'].map(x=><option key={x}>{x}</option>)}</select></FilterInput>
     </div>
     <div className="flex justify-between items-center mt-4"><p className="text-xs text-slate-500">{filtered.length} task(s)</p><button onClick={()=>setAssignOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>{assignOpen?'Close':'Assign task'}</button></div>
-    {assignOpen&&<TaskAssignForm targets={activeEmployees} onSubmit={assignTask} onClose={()=>setAssignOpen(false)}/>}
+    {assignOpen&&<TaskAssignForm targets={activeEmployees} onSubmit={assignTask} onClose={()=>setAssignOpen(false)} busy={assignBusy}/>}
     <TaskTable tasks={filtered} employeeId="" onSubmit={()=>{}} onRefresh={onRefresh} admin/>
   </PageShell>;
 }
 
-function TaskAssignForm({targets,onSubmit,onClose}:{targets:Employee[];onSubmit:(e:React.FormEvent<HTMLFormElement>)=>void;onClose:()=>void}) {
+function TaskAssignForm({targets,onSubmit,onClose,busy=false}:{targets:Employee[];onSubmit:(e:React.FormEvent<HTMLFormElement>)=>void;onClose:()=>void;busy?:boolean}) {
   return <form onSubmit={onSubmit} className="bg-white border border-slate-200 rounded-2xl p-5 mt-4 grid md:grid-cols-2 gap-4">
     <label className="md:col-span-2"><span className="label">Task</span><input name="title" className="input" required/></label>
     <label className="md:col-span-2"><span className="label">Description</span><textarea name="description" className="input min-h-20"/></label>
@@ -790,7 +802,7 @@ function TaskAssignForm({targets,onSubmit,onClose}:{targets:Employee[];onSubmit:
     <label><span className="label">Priority</span><select name="priority" defaultValue="medium" className="input"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="urgent">urgent</option></select></label>
     <label><span className="label">Start Date</span><input type="date" name="startDate" defaultValue={today()} className="input" required/></label>
     <label><span className="label">Due Date</span><input type="date" name="dueDate" defaultValue={today()} className="input" required/></label>
-    <div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={onClose} className="btn-secondary">Cancel</button><button className="btn-primary">Assign</button></div>
+    <div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={onClose} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Assigning…':'Assign'}</button></div>
   </form>;
 }
 
