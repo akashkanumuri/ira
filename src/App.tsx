@@ -99,7 +99,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           db.from('employees').select('*').order('name'),
           db.from('departments').select('*').order('name'),
           db.from('designations').select('*').order('name'),
-          db.from('salary_history').select('employee_id,monthly_salary,effective_from').order('effective_from', { ascending: false }),
+          db.from('salary_history').select('employee_id,monthly_salary,effective_from').lte('effective_from', today()).order('effective_from', { ascending: false }),
           db.from('attendance_effective').select('*').order('date', { ascending: false }).limit(1500),
           db.from('break_events').select('id,attendance_id,employee_id,break_start,break_end,duration_seconds').order('break_start'),
           db.from('tasks').select('*').order('start_date', { ascending: false }).limit(1500),
@@ -171,7 +171,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           db.from('payroll_periods').select('*').order('month_start', { ascending: false }).limit(24),
           db.from('payroll_records').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(24),
           db.from('auth_sessions').select('*').eq('user_id', user.id).order('login_at', { ascending: false }).limit(100),
-          db.from('salary_history').select('*').eq('employee_id', employeeId).order('effective_from', { ascending: false }).limit(24),
+          db.from('salary_history').select('*').eq('employee_id', employeeId).lte('effective_from', today()).order('effective_from', { ascending: false }).limit(24),
           db.from('task_assignment_rules').select('*').order('created_at'),
         ]);
         const errors = [visibleEmpR, desR, attR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, sessR, salaryR, ruleR].filter((r: any) => r.error);
@@ -181,7 +181,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         const desMap = new Map((desR.data ?? []).map((d: any) => [d.id, d.name]));
         const visibleRaw = visibleEmpR.data ?? [];
         const visibleSalary = new Map<string, number>();
-        for (const s of salaryR.data ?? []) visibleSalary.set(s.employee_id, Number(s.monthly_salary));
+        for (const s of salaryR.data ?? []) if (!visibleSalary.has(s.employee_id)) visibleSalary.set(s.employee_id, Number(s.monthly_salary));
         const managerNames = new Map(visibleRaw.map((e: any) => [e.id, e.name]));
         const employeeMap = new Map<string, Employee>();
         for (const row of visibleRaw) employeeMap.set(row.id, mapEmployee(row, { designations: desMap, managers: managerNames, salary: visibleSalary }));
