@@ -505,9 +505,18 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
   const currentWorking = todayRecord ? Math.max(0, elapsed - Number(todayRecord.breakSeconds ?? 0) - currentBreak) : 0;
   const currentLedger = ledgers.find((l: LeaveLedger) => l.periodStart === `${today().slice(0,7)}-01`);
   const employeeMaster = (employees as Employee[] | undefined)?.find((e) => e.id === user.employeeDbId);
-  const latestFinal = payrollRecords.find((p: PayrollRecord) => p.finalizedAt);
-  const monthlySalary = latestFinal?.salarySnapshot ?? employeeMaster?.currentSalary ?? user.currentSalary ?? 0;
-  const dueTasks = tasks.filter((t: Task) => t.status !== 'completed').slice(0,4);
+  const latestFinal = [...(payrollRecords as PayrollRecord[])]
+    .filter((p)=>Boolean(p.finalizedAt))
+    .sort((a,b)=>{
+      const aPeriod=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===a.periodId)?.monthStart ?? '';
+      const bPeriod=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===b.periodId)?.monthStart ?? '';
+      return bPeriod.localeCompare(aPeriod) || (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? '');
+    })[0];
+  const monthlySalary = employeeMaster?.currentSalary ?? user.currentSalary ?? latestFinal?.salarySnapshot ?? 0;
+  const dueTasks = [...(tasks as Task[])]
+    .filter((t)=>t.status!=='completed')
+    .sort((a,b)=>a.dueDate.localeCompare(b.dueDate) || a.priority.localeCompare(b.priority))
+    .slice(0,4);
 
   return (
     <PageShell title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]}`} subtitle={new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}>
@@ -524,7 +533,7 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
             <DarkMetric label="Check-out" value={todayRecord?.checkOut ?? '—'} />
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
-            {!todayRecord && <button onClick={() => {}} className="px-4 py-2 rounded-xl bg-white text-slate-950 text-xs font-bold">Use Attendance section to check in</button>}
+            {!todayRecord && <button onClick={() => document.getElementById('emp-attendance-nav')?.click()} className="btn-secondary !bg-white !text-slate-950">Go to attendance <ArrowRight className="w-4 h-4"/></button>}
             {todayRecord && state !== 'completed' && <span className="text-xs text-slate-400">Attendance actions are available in the Attendance section.</span>}
           </div>
         </section>
@@ -533,7 +542,7 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
           <h3 className="text-lg font-bold mt-2">{money(monthlySalary)}</h3>
           <p className="text-xs text-slate-500 mt-1">Monthly salary</p>
           <div className="mt-5 pt-4 border-t border-slate-100 flex items-end justify-between">
-            <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Latest finalized pay</p><p className="text-xl font-bold mt-1">{latestFinal ? money(latestFinal.finalPay) : 'Awaiting payroll'}</p></div>
+            <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Latest finalized pay</p><p className="text-xl font-bold mt-1">{latestFinal ? money(latestFinal.finalPay) : 'Awaiting payroll'}</p>{latestFinal&&<p className="text-[10px] text-slate-400 mt-1">{payrollPeriods.find((p:PayrollPeriod)=>p.id===latestFinal.periodId)?.monthStart?.slice(0,7) ?? ''}</p>}</div>
             <WalletCards className="w-5 h-5 text-blue-600" />
           </div>
           {latestFinal && <p className="text-[11px] text-slate-500 mt-3">Unpaid leave: {latestFinal.unpaidLeaveDays} day(s) · Deduction {money(latestFinal.leaveDeduction)}</p>}
