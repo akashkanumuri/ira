@@ -9,8 +9,10 @@ type CreateEmployeeInput = {
   loginId: string
   password: string
   workMode: 'office' | 'remote'
-  designationId: string
+  designationId?: string
+  designationName?: string | null
   departmentId?: string | null
+  departmentName?: string | null
   managerId?: string | null
   joinDate: string
   shiftStart: string
@@ -25,8 +27,10 @@ type UpdateEmployeeInput = {
   workEmail?: string | null
   phone?: string | null
   workMode: 'office' | 'remote'
-  designationId: string
+  designationId?: string
+  designationName?: string | null
   departmentId?: string | null
+  departmentName?: string | null
   managerId?: string | null
   joinDate: string
   shiftStart: string
@@ -177,11 +181,22 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
   if (existing) throw new Error('This Login ID is already in use.')
 
-  const { data: designation } = await admin.from('designations').select('id').eq('id', input.designationId).maybeSingle()
+  let designation = input.designationId
+    ? (await admin.from('designations').select('id,name').eq('id', input.designationId).maybeSingle()).data
+    : null
+  if (!designation && input.designationName) {
+    designation = (await admin.from('designations').select('id,name').ilike('name', input.designationName.trim()).maybeSingle()).data
+  }
   if (!designation) throw new Error('Selected designation was not found.')
 
-  if (input.departmentId) {
-    const { data: department } = await admin.from('departments').select('id').eq('id', input.departmentId).maybeSingle()
+  let department = null
+  if (input.departmentId || input.departmentName) {
+    if (input.departmentId) {
+      department = (await admin.from('departments').select('id,name').eq('id', input.departmentId).maybeSingle()).data
+    }
+    if (!department && input.departmentName) {
+      department = (await admin.from('departments').select('id,name').ilike('name', input.departmentName.trim()).maybeSingle()).data
+    }
     if (!department) throw new Error('Selected department was not found.')
   }
 
@@ -223,8 +238,8 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
         shift_start: input.shiftStart,
         shift_end: input.shiftEnd,
         join_date: input.joinDate,
-        department_id: input.departmentId || null,
-        designation_id: input.designationId,
+        department_id: department?.id || null,
+        designation_id: designation.id,
         manager_id: input.managerId || null,
       })
       .select('id, emp_id, login_id')
@@ -268,8 +283,27 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
   if (currentError || !current) throw new Error('Employee not found.')
 
   if (!input.name.trim()) throw new Error('Employee name is required.')
-  if (!input.designationId) throw new Error('Designation is required.')
+  if (!input.designationId && !input.designationName) throw new Error('Designation is required.')
   if (!Number.isFinite(input.monthlySalary) || input.monthlySalary < 0) throw new Error('Monthly salary is invalid.')
+
+  let designation = input.designationId
+    ? (await admin.from('designations').select('id').eq('id', input.designationId).maybeSingle()).data
+    : null
+  if (!designation && input.designationName) {
+    designation = (await admin.from('designations').select('id').ilike('name', input.designationName.trim()).maybeSingle()).data
+  }
+  if (!designation) throw new Error('Selected designation was not found.')
+
+  let department = null
+  if (input.departmentId || input.departmentName) {
+    if (input.departmentId) {
+      department = (await admin.from('departments').select('id').eq('id', input.departmentId).maybeSingle()).data
+    }
+    if (!department && input.departmentName) {
+      department = (await admin.from('departments').select('id').ilike('name', input.departmentName.trim()).maybeSingle()).data
+    }
+    if (!department) throw new Error('Selected department was not found.')
+  }
 
   const { error: employeeError } = await admin
     .from('employees')
@@ -278,8 +312,8 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
       work_email: cleanText(input.workEmail),
       phone: cleanText(input.phone),
       work_mode: input.workMode,
-      designation_id: input.designationId,
-      department_id: input.departmentId || null,
+      designation_id: designation.id,
+      department_id: department?.id || null,
       manager_id: input.managerId || null,
       join_date: input.joinDate,
       shift_start: input.shiftStart,
