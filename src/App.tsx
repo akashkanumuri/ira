@@ -896,20 +896,96 @@ function RequestTable({type,rows,onReview}:{type:'leave'|'wfh'|'corrections';row
 }
 
 function PayrollAdmin({employees,payrollPeriods,payrollRecords,onRefresh}:any){
-  const [month,setMonth]=useState(today().slice(0,7)); const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');
-  const period=payrollPeriods.find((p:PayrollPeriod)=>p.monthStart.startsWith(month)); const records=payrollRecords.filter((r:PayrollRecord)=>period&&r.periodId===period.id);
+  const [month,setMonth]=useState(today().slice(0,7));
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState('');
   const [settings,setSettings]=useState<{monthly:number;divisor:'calendar_days'|'working_days'}>({monthly:1.5,divisor:'calendar_days'});
-  useEffect(()=>{(async()=>{const {data}=await (supabase as any).from('payroll_settings').select('monthly_leave_accrual,divisor_mode').eq('id',true).maybeSingle();if(data)setSettings({monthly:Number(data.monthly_leave_accrual),divisor:data.divisor_mode});})();},[month]);
-  async function generate(){setBusy(true);setMessage('');const {error}=await (supabase as any).rpc('generate_payroll',{p_month:`${month}-01`});if(error)setMessage(error.message);else{setMessage('Payroll generated. Review the draft before finalizing.');await onRefresh();}setBusy(false);}
-  async function finalize(){if(!period)return; if(!confirm('Finalize this payroll period? Employees will see the saved payroll snapshot.'))return;setBusy(true);const {error}=await(supabase as any).rpc('finalize_payroll',{p_period_id:period.id});if(error)setMessage(error.message);else{setMessage('Payroll finalized.');await onRefresh();}setBusy(false);}
-  return <PageShell title="Payroll" subtitle="Monthly salary snapshots + leave deductions."><div className="grid lg:grid-cols-3 gap-4"><section className="bg-white rounded-2xl border border-slate-200 p-5"><p className="label">Payroll month</p><input type="month" value={month} onChange={e=>setMonth(e.target.value)} className="input"/><div className="mt-4 text-xs text-slate-500 space-y-2"><div className="flex justify-between"><span>Monthly paid-leave accrual</span><b className="text-slate-900">{settings.monthly}</b></div><div className="flex justify-between"><span>Divisor policy</span><b className="text-slate-900">{settings.divisor==='calendar_days'?'Calendar days':'Working days'}</b></div>{period&&<div className="flex justify-between"><span>Divisor used</span><b className="text-slate-900">{period.dayDivisor}</b></div>}</div><div className="flex gap-2 mt-5"><button disabled={busy} onClick={()=>void generate()} className="btn-primary flex-1">{busy?'Working…':'Generate'}</button>{period&&period.status==='draft'&&<button disabled={busy} onClick={()=>void finalize()} className="btn-secondary">Finalize</button>}</div>{message&&<p className="text-xs mt-3 text-blue-700">{message}</p>}</section><section className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100 flex items-center justify-between"><div><h3 className="font-bold text-sm">Payroll records</h3><p className="text-xs text-slate-500 mt-1">{period?period.status:'No payroll period generated'}</p></div></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Salary Snapshot</Th><Th>Paid Leave</Th><Th>Unpaid Leave</Th><Th>Deduction</Th><Th>Final Pay</Th></tr></thead><tbody className="divide-y divide-slate-100">{records.map((r:PayrollRecord)=><tr key={r.id}><Td strong>{r.employeeName}</Td><Td>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td>{money(r.leaveDeduction)}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}{!records.length&&<EmptyRow colSpan={6} text="Generate payroll for the selected month."/>}</tbody></table></div></section></div></PageShell>;
+  const period=[...(payrollPeriods as PayrollPeriod[])].find(p=>p.monthStart.startsWith(month));
+  const records=(payrollRecords as PayrollRecord[])
+    .filter(r=>period&&r.periodId===period.id)
+    .sort((a,b)=>a.employeeName.localeCompare(b.employeeName));
+
+  useEffect(()=>{
+    let mounted=true;
+    void (async()=>{
+      const {data,error}=await(supabase as any).from('payroll_settings').select('monthly_leave_accrual,divisor_mode').eq('id',true).maybeSingle();
+      if(!mounted)return;
+      if(!error&&data)setSettings({monthly:Number(data.monthly_leave_accrual),divisor:data.divisor_mode});
+    })();
+    return()=>{mounted=false};
+  },[]);
+
+  async function generate(){
+    if(busy)return;
+    setBusy(true);setMessage('');
+    try{
+      const {error}=await(supabase as any).rpc('generate_payroll',{p_month:month+'-01'});
+      if(error)throw error;
+      notify(`Payroll generated for ${month}.`,'success');
+      setMessage('Draft generated. Review the records before finalizing.');
+      await onRefresh();
+    }catch(error){
+      setMessage(error instanceof Error?error.message:'Unable to generate payroll.');
+      notify(error instanceof Error?error.message:'Unable to generate payroll.','error');
+    }finally{setBusy(false);}
+  }
+
+  async function finalize(){
+    if(!period||period.status!=='draft'||busy)return;
+    if(!confirm('Finalize this payroll period? Employees will see the saved payroll snapshot.'))return;
+    setBusy(true);setMessage('');
+    try{
+      const {error}=await(supabase as any).rpc('finalize_payroll',{p_period_id:period.id});
+      if(error)throw error;
+      notify(`Payroll for ${month} finalized.`,'success');
+      setMessage('Payroll finalized and locked.');
+      await onRefresh();
+    }catch(error){
+      setMessage(error instanceof Error?error.message:'Unable to finalize payroll.');
+      notify(error instanceof Error?error.message:'Unable to finalize payroll.','error');
+    }finally{setBusy(false);}
+  }
+
+  return <PageShell title="Payroll" subtitle="Monthly salary snapshots with a review-before-finalize workflow.">
+    <div className="grid lg:grid-cols-3 gap-4">
+      <section className="bg-white rounded-2xl border border-slate-200 p-5">
+        <p className="label">Payroll month</p>
+        <input type="month" value={month} onChange={e=>{setMonth(e.target.value);setMessage('')}} className="input"/>
+        <div className="mt-4 text-xs text-slate-500 space-y-2">
+          <div className="flex justify-between"><span>Paid-leave accrual</span><b className="text-slate-900">{settings.monthly}</b></div>
+          <div className="flex justify-between"><span>Divisor</span><b className="text-slate-900">{settings.divisor==='calendar_days'?'Calendar days':'Working days'}</b></div>
+          {period&&<div className="flex justify-between"><span>Days in divisor</span><b className="text-slate-900">{period.dayDivisor}</b></div>}
+          {period&&<div className="flex justify-between"><span>Status</span><StatusBadge label={period.status}/></div>}
+        </div>
+        <div className="flex gap-2 mt-5">
+          <button disabled={busy} onClick={()=>void generate()} className="btn-primary flex-1">{busy?'Generating…':period?.status==='finalized'?'Regenerate locked':'Generate draft'}</button>
+          {period&&period.status==='draft'&&<button disabled={busy} onClick={()=>void finalize()} className="btn-secondary">Finalize</button>}
+        </div>
+        {message&&<p className="text-xs mt-3 text-slate-600">{message}</p>}
+      </section>
+      <section className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div><h3 className="font-bold text-sm">Payroll records</h3><p className="text-xs text-slate-500 mt-1">{period?period.status:'No payroll period generated'} · {records.length} employee record(s)</p></div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Salary Snapshot</Th><Th>Paid Leave</Th><Th>Unpaid Leave</Th><Th>Deduction</Th><Th>Final Pay</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {records.map((r:PayrollRecord)=><tr key={r.id}><Td strong>{r.employeeName}</Td><Td>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td>{money(r.leaveDeduction)}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
+              {!records.length&&<EmptyRow colSpan={6} text={period?'No records for this period. Generate the payroll draft.':'Select a month and generate the payroll draft.'}/>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </PageShell>;
 }
 
 function HolidaysAdmin({holidays,onRefresh}:any){
   const [open,setOpen]=useState(false);const [busy,setBusy]=useState(false);
   async function add(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);try{const {data:auth}=await supabase.auth.getUser();const fd=new FormData(e.currentTarget);const date=String(fd.get('date')||'');if(!date)throw new Error('Choose a holiday date.');const {error}=await(supabase as any).from('holidays').insert({name:String(fd.get('name')||'').trim(),date,description:clean(fd.get('description')),created_by:auth.user?.id??null,holiday_type:'company'});if(error)throw error;notify('Company holiday added.','success');e.currentTarget.reset();setOpen(false);await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to add holiday.','error')}finally{setBusy(false);}}
   async function del(id:string){const item=(holidays as Holiday[]).find((h:Holiday)=>h.id===id);if(item?.holidayType==='public'){notify('Public calendar holidays are protected.','info');return;}if(!confirm('Delete this company holiday?'))return;try{const {error}=await(supabase as any).from('holidays').delete().eq('id',id);if(error)throw error;notify('Company holiday removed.','success');await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to remove holiday.','error')}}
-  return <PageShell title="Holidays" subtitle="All admin-added holidays are paid company non-working days."><div className="flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Add holiday</button></div>{open&&<form onSubmit={add} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-3 gap-4"><Field label="Holiday name"><input name="name" className="input" required/></Field><Field label="Date"><input name="date" type="date" className="input" required/></Field><Field label="Description"><input name="description" className="input"/></Field><div className="md:col-span-3 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Saving…':'Add holiday'}</button></div></form>}<div className="mt-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">{holidays.map((h:Holiday)=><div key={h.id} className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase font-bold tracking-wider text-indigo-600">{dateLabel(h.date,{weekday:'long'})}</p><h3 className="font-bold mt-1">{h.name}</h3><p className="text-xs text-slate-500 mt-1">{h.description||'Company holiday'}</p></div><button onClick={()=>void del(h.id)} className="icon-btn text-rose-500"><Trash2 className="w-4 h-4"/></button></div></div>)}{!holidays.length&&<EmptyCard text="No company holidays added yet."/>}</div></PageShell>;
+  return <PageShell title="Holidays" subtitle="All admin-added holidays are paid company non-working days."><div className="flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Add holiday</button></div>{open&&<form onSubmit={add} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-3 gap-4"><Field label="Holiday name"><input name="name" className="input" required/></Field><Field label="Date"><input name="date" type="date" className="input" required/></Field><Field label="Description"><input name="description" className="input"/></Field><div className="md:col-span-3 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Saving…':'Add holiday'}</button></div></form>}<div className="mt-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">{holidays.map((h:Holiday)=><div key={h.id} className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase font-bold tracking-wider text-indigo-600">{dateLabel(h.date,{weekday:'long'})}</p><div className="flex items-center gap-2 mt-1"><h3 className="font-bold">{h.name}</h3>{h.holidayType==='public'&&<span className="text-[9px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 font-bold">Public</span>}</div><p className="text-xs text-slate-500 mt-1">{h.description||'Company holiday'}</p></div>{h.holidayType!=='public'&&<button onClick={()=>void del(h.id)} className="icon-btn text-rose-500" title="Delete company holiday"><Trash2 className="w-4 h-4"/></button>}</div></div>)}{!holidays.length&&<EmptyCard text="No company holidays added yet."/>}</div></PageShell>;
 }
 
 function HolidaysEmployee({holidays}:any){
@@ -1020,7 +1096,7 @@ function ProfileEmployee({user,onRefresh}:any){
 
 function ExportsAdmin({employees}:any){
   const [busy,setBusy]=useState<string|null>(null);
-  const download=async(name:string,buildRows:()=>Promise<any[]>)=>{setBusy(name);try{const rows=await buildRows();const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${today()}.xlsx`)}catch(e){alert(e instanceof Error?e.message:'Unable to export data.')}finally{setBusy(null)}};
+  const download=async(name:string,buildRows:()=>Promise<any[]>)=>{setBusy(name);try{const rows=await buildRows();const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${today()}.xlsx`);notify(`${rows.length} ${name} record(s) exported.`,'success')}catch(e){notify(e instanceof Error?e.message:'Unable to export data.','error')}finally{setBusy(null)}};
   async function fetchAll(table:string,orderBy:string){const rows:any[]=[];let from=0;const size=1000;for(;;){let q=(supabase as any).from(table).select('*').range(from,from+size-1);if(orderBy)q=q.order(orderBy,{ascending:false});const {data,error}=await q;if(error)throw error;const page=data??[];rows.push(...page);if(page.length<size)break;from+=size}return rows}
   const employeeMap=new Map((employees as Employee[]).map(e=>[e.id,e]));
   return <PageShell title="Reports / Excel" subtitle="Download complete operational datasets without replacing source records."><div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3"><ExportCard title={busy==='employees'?'Exporting…':'Employees'} icon={<Users className="w-5 h-5"/>} onClick={()=>void download('employees',async()=>(employees as Employee[]).map(e=>({EmployeeID:e.empId,LoginID:e.loginId,Name:e.name,Designation:e.designation,Department:e.department,WorkMode:e.workMode,Salary:e.currentSalary,Status:e.status})))} /><ExportCard title={busy==='attendance'?'Exporting…':'Attendance'} icon={<Clock3 className="w-5 h-5"/>} onClick={()=>void download('attendance',async()=>{const [raw,breaks]=await Promise.all([fetchAll('attendance_effective','date'),fetchAll('break_events','break_start')]);const breaksBy=new Map<string,any[]>();for(const b of breaks){const list=breaksBy.get(b.attendance_id)??[];list.push(b);breaksBy.set(b.attendance_id,list)}return raw.map(r=>{const m=mapAttendance(r,employeeMap,breaksBy);return {Date:m.date,Employee:m.employeeName,EmployeeID:m.employeeEmpId,Mode:m.mode,CheckIn:m.checkIn??'',CheckOut:m.checkOut??'',Break:m.breakDuration??'',Working:m.workingHours??'',Status:m.status}})})} /><ExportCard title={busy==='tasks'?'Exporting…':'Tasks'} icon={<BriefcaseBusiness className="w-5 h-5"/>} onClick={()=>void download('tasks',async()=>{const rows=await fetchAll('tasks','start_date');return rows.map(r=>{const t=mapTask(r,employeeMap);return {Task:t.title,Employee:t.assignedToName,Start:t.startDate,Due:t.dueDate,Priority:t.priority,Status:t.status,SubmittedLink:t.submittedLink??''}})})} /><ExportCard title={busy==='payroll'?'Exporting…':'Payroll'} icon={<WalletCards className="w-5 h-5"/>} onClick={()=>void download('payroll',async()=>{const rows=await fetchAll('payroll_records','created_at');return rows.map(r=>{const p=mapPayrollRecord(r,employeeMap);return {Employee:p.employeeName,Salary:p.salarySnapshot,PaidLeave:p.paidLeaveDays,UnpaidLeave:p.unpaidLeaveDays,Deduction:p.leaveDeduction,FinalPay:p.finalPay}})})} /></div></PageShell>;
