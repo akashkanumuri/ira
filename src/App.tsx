@@ -448,7 +448,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-corrections') return <CorrectionEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysEmployee {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
-  return <EmployeeDashboard {...props} />;
+  return <EmployeeDashboard {...props} onSelectTab={props.onSelectTab} />;
 }
 
 function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, corrections, holidays, payrollPeriods, payrollRecords, onSelectTab }: any) {
