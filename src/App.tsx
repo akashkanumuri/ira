@@ -294,7 +294,11 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         reloadTimer.current = window.setTimeout(() => void reload(), 180);
       });
     }
-    channel.subscribe();
+    channel.subscribe((status:string) => {
+      if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        notify('Live updates are temporarily unavailable. The workspace will retry automatically.', 'error');
+      }
+    });
     return () => {
       if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
       (supabase as any).removeChannel(channel);
@@ -359,12 +363,16 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             <span className="ira-live-dot" />
             <span>{headerNow.toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}</span>
           </div>
-          <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200/70">
+          <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200/70">
             <div className="w-8 h-8 rounded-full bg-slate-950 text-white flex items-center justify-center text-[11px] font-bold">{(user.name || 'U').charAt(0).toUpperCase()}</div>
             <div className="hidden md:block">
               <p className="text-xs font-semibold text-slate-900 leading-none">{user.name || 'User'}</p>
               <p className="text-[10px] text-slate-500 mt-1">{user.role === 'admin' ? 'Administrator' : (user.designation || 'Employee')}</p>
             </div>
+            <button type="button" onClick={()=>void onLogout()} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all" title="Sign out" aria-label="Sign out">
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
         </header>
 
@@ -377,7 +385,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
                   <button key={id} onClick={() => navigate(id)} className={`w-full text-left px-3 py-3 rounded-2xl flex items-center gap-3 text-sm transition-all ${activeTab === id ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_12px_30px_rgba(37,99,235,.20)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className="w-4 h-4" />{label}</button>
                 ))}
               </nav>
-              <div className="mt-auto p-3 border-t border-white/10"><button onClick={()=>void onLogout()} className="w-full flex items-center justify-center gap-2 rounded-2xl bg-white/10 text-white px-4 py-3 text-sm font-semibold hover:bg-white/15 transition-all"><LogOut className="w-4 h-4"/>Sign out</button></div>
             </div>
           </div>
         )}
@@ -560,6 +567,23 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
             <WalletCards className="w-5 h-5 text-blue-600" />
           </div>
           {latestFinal && <p className="text-[11px] text-slate-500 mt-3">Unpaid leave: {latestFinal.unpaidLeaveDays} day(s) · Deduction {money(latestFinal.leaveDeduction)}</p>}
+          {latestFinal && <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Recent finalized payments</p><span className="text-[10px] text-slate-400">History</span></div>
+            <div className="space-y-1.5">
+              {[...(payrollRecords as PayrollRecord[])]
+                .filter(p=>Boolean(p.finalizedAt))
+                .sort((a,b)=>{
+                  const am=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===a.periodId)?.monthStart ?? '';
+                  const bm=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===b.periodId)?.monthStart ?? '';
+                  return bm.localeCompare(am) || (b.finalizedAt??'').localeCompare(a.finalizedAt??'');
+                })
+                .slice(0,4)
+                .map(p=><div key={p.id} className="flex items-center justify-between rounded-xl bg-slate-50/80 border border-slate-100 px-3 py-2.5">
+                  <span className="text-[11px] font-semibold text-slate-600">{payrollPeriods.find((pp:PayrollPeriod)=>pp.id===p.periodId)?.monthStart?.slice(0,7) ?? '—'}</span>
+                  <span className="text-xs font-bold text-slate-950">{money(p.finalPay)}</span>
+                </div>)}
+            </div>
+          </div>}
         </section>
       </div>
 
