@@ -168,7 +168,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
   const { data: existing } = await admin
     .from('employees')
     .select('id')
-    .eq('login_id', loginId)
+    .ilike('login_id', loginId)
     .maybeSingle()
 
   if (existing) throw new Error('This Login ID is already in use.')
@@ -260,6 +260,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     .select('*')
     .eq('id', input.employeeId)
     .maybeSingle()
+  if (input.managerId === input.employeeId) throw new Error('An employee cannot be their own manager.')
   if (currentError || !current) throw new Error('Employee not found.')
 
   if (!input.name.trim()) throw new Error('Employee name is required.')
