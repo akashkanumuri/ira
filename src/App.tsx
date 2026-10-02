@@ -193,7 +193,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         setLedgers((ledgerR.data ?? []).map(mapLedger));
         setPayrollPeriods((ppR.data ?? []).map(mapPayrollPeriod));
         setPayrollRecords((prR.data ?? []).map((r: any) => mapPayrollRecord(r, employeeMap)));
-        setLoginSessions((sessR.data ?? []).map((r: any) => ({
+        const taskRulesResult = await db.from('task_assignment_rules').select('*').order('created_at');\n        setRules((taskRulesResult.data ?? []).map((r:any)=>mapRule(r, desMap)));\n        setLoginSessions((sessR.data ?? []).map((r: any) => ({
           id: r.id, loginTime: r.login_at, logoutTime: r.logout_at, duration: r.session_duration_seconds,
           status: r.status, userAgent: r.user_agent,
         })));
@@ -263,7 +263,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     : <EmployeeContent
         user={user} activeTab={activeTab} attendance={attendance} tasks={tasks} leaveRequests={leaveRequests} wfhRequests={wfhRequests}
         corrections={corrections} holidays={holidays} ledgers={ledgers} payrollPeriods={payrollPeriods}
-        payrollRecords={payrollRecords} loginSessions={loginSessions} onRefresh={reload}
+        payrollRecords={payrollRecords} loginSessions={loginSessions} employees={employees} designations={designations} rules={rules} onRefresh={reload}
       />;
 
   return (
