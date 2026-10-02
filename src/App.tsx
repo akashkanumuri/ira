@@ -247,6 +247,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     ['emp-tasks', 'Work & Assignments', BriefcaseBusiness],
     ['emp-leave', 'Leave', CalendarDays],
     ['emp-wfh', 'WFH', Home],
+    ['emp-corrections', 'Corrections', FileClock],
     ['emp-holidays', 'Holidays', CalendarDays],
     ['emp-profile', 'Profile', UserRound],
   ] as const;
@@ -350,6 +351,7 @@ function getPageTitle(tab: string) {
     'emp-tasks': 'Work & Assignments',
     'emp-leave': 'Leave',
     'emp-wfh': 'WFH',
+    'emp-corrections': 'Corrections',
     'emp-holidays': 'Holidays',
     'emp-profile': 'Profile',
   } as Record<string,string>)[tab] ?? 'Dashboard';
@@ -374,6 +376,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
   if (activeTab === 'emp-leave') return <LeaveEmployee {...props} />;
   if (activeTab === 'emp-wfh') return <WfhEmployee {...props} />;
+  if (activeTab === 'emp-corrections') return <CorrectionEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysEmployee {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
   return <EmployeeDashboard {...props} />;
@@ -429,7 +432,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
   );
 }
 
-function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPeriods, payrollRecords, tasks }: any) {
+function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPeriods, payrollRecords, tasks, employees }: any) {
   const [live, setLive] = useState(new Date());
   const emp = authEmployee(user);
   const todayRecord = attendance.find((x: AttendanceRecord) => x.date === today());
@@ -440,7 +443,9 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
   const currentBreak = state === 'on_break' ? Math.max(0, Math.floor((live.getTime() - new Date(todayRecord?.activeBreakStartIso ?? live).getTime()) / 1000)) : 0;
   const currentWorking = todayRecord ? Math.max(0, elapsed - Number(todayRecord.breakSeconds ?? 0) - currentBreak) : 0;
   const currentLedger = ledgers.find((l: LeaveLedger) => l.periodStart === `${today().slice(0,7)}-01`);
+  const employeeMaster = (employees as Employee[] | undefined)?.find((e) => e.id === user.employeeDbId);
   const latestFinal = payrollRecords.find((p: PayrollRecord) => p.finalizedAt);
+  const monthlySalary = latestFinal?.salarySnapshot ?? employeeMaster?.currentSalary ?? user.currentSalary ?? 0;
   const dueTasks = tasks.filter((t: Task) => t.status !== 'completed').slice(0,4);
   const canAssign = user.designationId && propsHasAssignableDesignation(props?.designations, user.designationId);
   void canAssign;
@@ -466,7 +471,7 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
         </section>
         <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6">
           <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 font-bold">Payroll</p>
-          <h3 className="text-lg font-bold mt-2">{money(latestFinal?.salarySnapshot ?? user.currentSalary ?? 0)}</h3>
+          <h3 className="text-lg font-bold mt-2">{money(monthlySalary)}</h3>
           <p className="text-xs text-slate-500 mt-1">Monthly salary</p>
           <div className="mt-5 pt-4 border-t border-slate-100 flex items-end justify-between">
             <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Latest finalized pay</p><p className="text-xl font-bold mt-1">{latestFinal ? money(latestFinal.finalPay) : 'Awaiting payroll'}</p></div>
@@ -769,6 +774,72 @@ function LeaveEmployee({user,leaveRequests,ledgers,holidays,onRefresh}:any){
   const current=ledgers.find((l:LeaveLedger)=>l.periodStart===`${today().slice(0,7)}-01`);
   async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setError('');setBusy(true);const fd=new FormData(e.currentTarget);const {error:err}=await(supabase as any).from('leave_requests').insert({employee_id:user.employeeDbId,leave_type:String(fd.get('leaveType')),start_date:String(fd.get('startDate')),end_date:String(fd.get('endDate')),duration:String(fd.get('duration')),reason:String(fd.get('reason')||'')});if(err)setError(err.message);else{e.currentTarget.reset();setOpen(false);await onRefresh();}setBusy(false);}
   return <PageShell title="Leave" subtitle="Paid leave accrues at 1.5 days/month and unused balance carries forward.">{error&&<Notice type="error" text={error}/>}<div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Summary label="Available" value={current?.closingBalance??'—'}/><Summary label="Carry forward" value={current?.openingBalance??'—'}/><Summary label="Added" value={current?.accrual??1.5}/><Summary label="Unpaid used" value={current?.unpaidUsed??0}/></div><div className="mt-4 flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Apply leave</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Leave type"><select name="leaveType" className="input"><option value="casual">Casual</option><option value="sick">Sick</option><option value="earned">Earned</option><option value="unpaid">Unpaid</option></select></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Start date"><input name="startDate" type="date" min={today()} className="input" required/></Field><Field label="End date"><input name="endDate" type="date" min={today()} className="input" required/></Field><Field label="Reason"><input name="reason" className="input md:col-span-2" required/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Dates</Th><Th>Type</Th><Th>Days</Th><Th>Paid / Unpaid</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{leaveRequests.map((r:LeaveRequest)=><tr key={r.id}><Td>{dateLabel(r.startDate)} → {dateLabel(r.endDate)}</Td><Td>{r.leaveType}</Td><Td>{r.days}</Td><Td>{r.paidDays??0} / {r.unpaidDays??0}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!leaveRequests.length&&<EmptyRow colSpan={6} text="No leave requests yet."/>}</tbody></table></div></div></PageShell>;
+}
+
+function CorrectionEmployee({user,corrections,onRefresh}:any){
+  const [open,setOpen]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const myCorrections=(corrections as CorrectionRequest[]).filter(r=>r.employeeId===user.employeeDbId);
+
+  async function submit(e:React.FormEvent<HTMLFormElement>){
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    const fd=new FormData(e.currentTarget);
+    const date=String(fd.get('date')||'');
+    const requestedCheckIn=String(fd.get('requestedCheckIn')||'');
+    const requestedCheckOut=String(fd.get('requestedCheckOut')||'');
+    const reason=String(fd.get('reason')||'').trim();
+
+    if(!date||!requestedCheckIn||!requestedCheckOut||!reason){
+      setError('Complete all required fields.');
+      setBusy(false);
+      return;
+    }
+    const {error:err}=await (supabase as any).from('regularization_requests').insert({
+      employee_id:user.employeeDbId,
+      date,
+      requested_check_in:requestedCheckIn,
+      requested_check_out:requestedCheckOut,
+      reason,
+    });
+    if(err) setError(err.message);
+    else { e.currentTarget.reset(); setOpen(false); await onRefresh(); }
+    setBusy(false);
+  }
+
+  return <PageShell title="Corrections" subtitle="Request a correction for a missed or incorrect attendance time. Original attendance is preserved.">
+    {error&&<Notice type="error" text={error}/>}
+    <div className="flex justify-end">
+      <button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Request correction</button>
+    </div>
+    {open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4">
+      <Field label="Date"><input name="date" type="date" max={today()} className="input" required/></Field>
+      <Field label="Reason"><input name="reason" className="input" required/></Field>
+      <Field label="Correct check-in"><input name="requestedCheckIn" type="time" className="input" required/></Field>
+      <Field label="Correct check-out"><input name="requestedCheckOut" type="time" className="input" required/></Field>
+      <div className="md:col-span-2 flex justify-end gap-2">
+        <button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button>
+        <button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button>
+      </div>
+    </form>}
+    <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="overflow-x-auto"><table className="w-full text-xs">
+        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Date</Th><Th>Original</Th><Th>Requested</Th><Th>Reason</Th><Th>Status</Th></tr></thead>
+        <tbody className="divide-y divide-slate-100">
+          {myCorrections.map(r=><tr key={r.id}>
+            <Td>{dateLabel(r.date)}</Td>
+            <Td mono>{r.originalCheckIn||'—'} → {r.originalCheckOut||'—'}</Td>
+            <Td mono>{r.requestedCheckIn} → {r.requestedCheckOut}</Td>
+            <Td>{r.reason}</Td>
+            <Td><StatusBadge label={r.status}/></Td>
+          </tr>)}
+          {!myCorrections.length&&<EmptyRow colSpan={5} text="No correction requests yet."/>}
+        </tbody>
+      </table></div>
+    </div>
+  </PageShell>;
 }
 
 function WfhEmployee({user,wfhRequests,onRefresh}:any){
