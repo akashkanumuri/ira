@@ -40,10 +40,10 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
   const items = activeRole === 'admin' ? adminItems : employeeItems;
 
   return (
-    <aside className="hidden lg:flex w-64 bg-slate-950 text-slate-300 flex-col shrink-0 sticky top-0 h-screen border-r border-slate-800">
-      <div className="px-5 py-5 border-b border-slate-800">
+    <aside className="hidden lg:flex w-64 bg-slate-950/92 text-slate-300 flex-col shrink-0 sticky top-0 h-screen border-r border-white/10 shadow-[12px_0_50px_rgba(15,23,42,.12)] backdrop-blur-2xl">
+      <div className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-white text-slate-950 flex items-center justify-center font-black text-sm">IRA</div>
+          <div className="w-9 h-9 rounded-2xl bg-white text-slate-950 flex items-center justify-center font-black text-sm shadow-[0_10px_30px_rgba(255,255,255,.08)]">IRA</div>
           <div>
             <p className="text-sm font-bold text-white">IRA Hospitality</p>
             <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{activeRole === 'admin' ? 'Admin Console' : 'Employee Portal'}</p>
@@ -58,32 +58,32 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
             <button
               key={id}
               onClick={() => onSelectTab(id)}
-              className={`w-full flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-sm transition-colors ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+              className={`w-full flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-sm transition-all duration-200 ${active ? 'bg-gradient-to-r from-blue-600/95 to-indigo-600/95 text-white shadow-[0_12px_30px_rgba(37,99,235,.22)]' : 'text-slate-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'}`}
             >
               <span className="flex items-center gap-3 min-w-0">
                 <Icon className="w-4.5 h-4.5 shrink-0" />
                 <span className="truncate">{label}</span>
               </span>
               {typeof badge === 'number' && badge > 0 && (
-                <span className={`min-w-5 h-5 px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center ${active ? 'bg-white text-blue-700' : 'bg-slate-800 text-slate-200'}`}>{badge > 99 ? '99+' : badge}</span>
+                <span className={`min-w-5 h-5 px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center ${active ? 'bg-white text-blue-700' : 'bg-white/10 text-slate-200'}`}>{badge > 99 ? '99+' : badge}</span>
               )}
             </button>
           );
         })}
       </nav>
 
-      <div className="p-3 border-t border-slate-800">
-        <div className="rounded-xl bg-slate-900 p-3 flex items-center gap-3">
+      <div className="p-3 border-t border-white/10">
+        <div className="rounded-2xl bg-white/[.06] border border-white/10 p-3 flex items-center gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]">
           {currentUser.avatar ? (
             <img src={currentUser.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-slate-800 text-white flex items-center justify-center text-sm font-bold">{currentUser.name.slice(0,1).toUpperCase()}</div>
+            <div className="w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center text-sm font-bold ring-1 ring-white/10">{currentUser.name.slice(0,1).toUpperCase()}</div>
           )}
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-white truncate">{currentUser.name}</p>
             <p className="text-[10px] text-slate-500 truncate">{currentUser.designation ?? (activeRole === 'admin' ? 'Administrator' : currentUser.loginId)}</p>
           </div>
-          <button onClick={onLogout} className="text-slate-500 hover:text-rose-400 p-1.5" aria-label="Sign out"><LogOut className="w-4 h-4" /></button>
+          <button onClick={onLogout} className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-all" aria-label="Sign out"><LogOut className="w-4 h-4" /></button>
         </div>
       </div>
     </aside>
