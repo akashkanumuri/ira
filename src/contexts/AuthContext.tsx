@@ -26,6 +26,7 @@ export interface AuthUser {
   wfhBalance?: number;
   leaveBalance?: number;
   currentSalary?: number;
+  joinDate?: string;
 }
 
 type LoginPortal = 'employee' | 'admin';
@@ -48,7 +49,7 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (identifier: string, password: string, portal: LoginPortal) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  changePassword: (newPassword: string) => Promise<{ error: string | null }>;
+  changePassword: (newPassword: string, currentPassword?: string) => Promise<{ error: string | null }>;
   isConfigured: boolean;
 }
 
@@ -220,7 +221,8 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
   };
 };
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+
+\nexport function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -364,8 +366,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const changePassword = useCallback(async (newPassword: string, currentPassword = '') => {
     if (!isSupabaseConfigured) return { error: 'Unable to change password right now.' };
-    if (newPassword.length < 8) return { error: 'Password must be at least 8 characters.' };
-    const { error } = await (supabase.auth as any).updateUser({ password: newPassword, current_password: currentPassword });
+    if (newPassword.length < 12 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\\d/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+      return { error: 'Password must be at least 12 characters and include uppercase, lowercase, number and symbol.' };
+    }
+    if (!currentPassword) return { error: 'Current password is required.' };
+    const reauthEmail = user?.role === 'admin' ? ADMIN_AUTH_EMAIL : (user?.loginId ? loginIdToAuthEmail(user.loginId) : '');
+    if (!reauthEmail) return { error: 'Unable to determine the account email.' };
+    const { error: reauthError } = await supabase.auth.signInWithPassword({ email: reauthEmail, password: currentPassword });
+    if (reauthError) return { error: 'Current password is incorrect.' };
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     return { error: error?.message ?? null };
   }, []);
 
