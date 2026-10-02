@@ -745,75 +745,46 @@ function EmployeeModal({mode,employee,departments,designations,employees,onClose
     departmentId:employee?.departmentId??'',departmentName:employee?.department??'',managerId:employee?.managerId??'',managerName:employee?.manager??'',joinDate:employee?.joinDate??today(),shiftStart:employee?.shift??'09:00',shiftEnd:employee?.shiftEnd??'18:00',monthlySalary:String(employee?.currentSalary??0)
   });
   const [employeeDocs,setEmployeeDocs]=useState<EmployeeDocument[]>([]);
-  useEffect(()=>{ 
-    let mounted=true;
-    void (async()=>{
-      setRefsLoading(true);
-      const db=supabase as any;
-      const [{data:desData,error:desError},{data:depData,error:depError}]=await Promise.all([
-        db.from('designations').select('*').order('name'),
-        db.from('departments').select('*').order('name'),
-      ]);
-      if(!mounted)return;
-      if(desError||depError){
-        setError(desError?.message||depError?.message||'Unable to load employee reference data.');
-        setRefsLoading(false);
-        return;
-      }
-      const nextDesignations=(desData??[]).map((r:any)=>({id:r.id,name:r.name,canAssignTasks:Boolean(r.can_assign_tasks)}));
-      const nextDepartments=(depData??[]).map((r:any)=>({id:r.id,name:r.name}));
-      setLiveDesignations(nextDesignations);
-      setLiveDepartments(nextDepartments);
+  useEffect(()=>{
+    // The parent already loads these reference rows with the authenticated session.
+    // Do not make a second table request from the modal: that request can fail under
+    // an otherwise valid admin session and is unnecessary for employee creation.
+    setLiveDesignations(designations);
+    setLiveDepartments(departments);
+    setRefsLoading(false);
 
-      setForm(prev=>{
-        const existingDesignation=nextDesignations.find((d:Designation)=>d.id===prev.designationId);
-        const oldDesignationName=designations.find((d:Designation)=>d.id===prev.designationId)?.name;
-        const matchedDesignation=existingDesignation ?? (oldDesignationName
-          ? nextDesignations.find((d:Designation)=>d.name.trim().toLowerCase()===oldDesignationName.trim().toLowerCase())
-          : null);
-        const existingDepartment=nextDepartments.find((d:Department)=>d.id===prev.departmentId);
-        const oldDepartmentName=departments.find((d:Department)=>d.id===prev.departmentId)?.name;
-        const matchedDepartment=existingDepartment ?? (oldDepartmentName
-          ? nextDepartments.find((d:Department)=>d.name.trim().toLowerCase()===oldDepartmentName.trim().toLowerCase())
-          : null);
-        return {
-          ...prev,
-          designationId:matchedDesignation?.id ?? nextDesignations[0]?.id ?? '',
-          designationName:matchedDesignation?.name ?? nextDesignations[0]?.name ?? '',
-          departmentId:prev.departmentId ? (matchedDepartment?.id ?? '') : '',
-          departmentName:matchedDepartment?.name ?? '',
-        };
-      });
-      setRefsLoading(false);
-    })();
-    return()=>{mounted=false};
-  },[employee?.id,designations,departments]);
+    setForm(prev=>{
+      const byName=(designations??[]).find((d:Designation)=>d.name.trim().toLowerCase()===String(prev.designationName||'').trim().toLowerCase());
+      const byId=(designations??[]).find((d:Designation)=>d.id===prev.designationId);
+      const d=byName??byId??designations?.[0];
+      const depByName=(departments??[]).find((x:Department)=>x.name.trim().toLowerCase()===String(prev.departmentName||'').trim().toLowerCase());
+      const depById=(departments??[]).find((x:Department)=>x.id===prev.departmentId);
+      const dep=depByName??depById;
+      return {
+        ...prev,
+        designationId:d?.id??'',
+        designationName:d?.name??'',
+        departmentId:prev.departmentName || prev.departmentId ? (dep?.id??'') : '',
+        departmentName:prev.departmentName || prev.departmentId ? (dep?.name??'') : '',
+      };
+    });
+  },[designations,departments]);
+
   useEffect(()=>{ if(mode==='edit'&&employee){void (async()=>{const {data}=await (supabase as any).from('employee_documents').select('*').eq('employee_id',employee.id).order('created_at',{ascending:false});if(data)setEmployeeDocs(data.map((r:any)=>({id:r.id,employeeId:r.employee_id,documentType:r.document_type,fileName:r.file_name,storagePath:r.storage_path,mimeType:r.mime_type,sizeBytes:r.size_bytes,createdAt:r.created_at})));})();}},[mode,employee]);
   const set=(key:string,value:string)=>setForm(f=>({...f,[key]:value}));
   const save=async(e:React.FormEvent)=>{e.preventDefault();setError('');setBusy(true);
     try{
       const salary=Number(form.monthlySalary); if(!Number.isFinite(salary)||salary<0)throw new Error('Enter a valid monthly salary.');
-      // Resolve designation/department against the current database before saving.
-      // This heals stale IDs held by an already-open browser tab after reference data changes.
       if(refsLoading) throw new Error('Employee reference data is still loading. Please wait a moment and try again.');
-      // Re-read reference data at the moment of save so an already-open modal
-      // cannot submit a stale designation/department id.
-      const [{data:freshDesignations,error:freshDesError},{data:freshDepartments,error:freshDepError}] = await Promise.all([
-        (supabase as any).from('designations').select('id,name,can_assign_tasks').order('name'),
-        (supabase as any).from('departments').select('id,name').order('name'),
-      ]);
-      if(freshDesError||freshDepError) throw new Error(freshDesError?.message||freshDepError?.message||'Unable to refresh employee reference data.');
-      const currentDesignations=(freshDesignations??[]).map((r:any)=>({id:r.id,name:r.name,canAssignTasks:Boolean(r.can_assign_tasks)}));
-      const currentDepartments=(freshDepartments??[]).map((r:any)=>({id:r.id,name:r.name}));
       const currentDesignation =
-        currentDesignations.find((d:Designation)=>d.name.trim().toLowerCase()===String(form.designationName||'').trim().toLowerCase()) ??
-        currentDesignations.find((d:Designation)=>d.id===form.designationId) ??
-        liveDesignations.find((d:Designation)=>d.name.trim().toLowerCase()===String(form.designationName||'').trim().toLowerCase());
-      if (!currentDesignation) throw new Error('Please select a valid designation from the current list.');
-      const currentDepartment =
-        (form.departmentId ? currentDepartments.find((d:Department)=>d.id===form.departmentId) : null) ??
-        (form.departmentId ? liveDepartments.find((d:Department)=>d.id===form.departmentId) : null);
-      if(form.departmentId && !currentDepartment) throw new Error('Please select a valid department from the current list.');
+        liveDesignations.find((d:Designation)=>d.name.trim().toLowerCase()===String(form.designationName||'').trim().toLowerCase()) ??
+        liveDesignations.find((d:Designation)=>d.id===form.designationId);
+      if(!currentDesignation) throw new Error('Please select a valid designation.');
+      const currentDepartment = form.departmentName
+        ? liveDepartments.find((d:Department)=>d.name.trim().toLowerCase()===String(form.departmentName).trim().toLowerCase()) ??
+          liveDepartments.find((d:Department)=>d.id===form.departmentId)
+        : null;
+      if(form.departmentName && !currentDepartment) throw new Error('Please select a valid department.');
 
       if(mode==='create'){
         if(form.password!==form.confirmPassword)throw new Error('Passwords do not match.');
