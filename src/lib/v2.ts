@@ -142,7 +142,7 @@ export function mapAttendance(row: any, employeeMap: Map<string, Employee>, brea
   const open = breaks.find((b: any) => !b.breakEnd);
   const activeBreak = open ? Math.floor((Date.now() - new Date(open.breakStart).getTime()) / 1000) : 0;
   const completedBreak = breaks.reduce((sum: number, b: any) => sum + Number(b.durationSeconds ?? 0), 0);
-  const totalBreak = Math.max(Number(row.total_break_seconds ?? 0), completedBreak + activeBreak);
+  const totalBreak = Math.max(Number(row.total_break_seconds ?? 0), completedBreak);
   const elapsed = checkIn ? Math.max(0, Math.floor(((checkOut ?? new Date()).getTime() - checkIn.getTime()) / 1000)) : 0;
   const working = checkOut
     ? Number(row.working_seconds ?? Math.max(0, elapsed - totalBreak))
