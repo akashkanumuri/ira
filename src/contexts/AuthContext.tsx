@@ -366,7 +366,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
 
   const changePassword = useCallback(async (newPassword: string, currentPassword = '') => {
     if (!isSupabaseConfigured) return { error: 'Unable to change password right now.' };
-    if (newPassword.length < 12 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\\d/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+    if (newPassword.length < 12 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
       return { error: 'Password must be at least 12 characters and include uppercase, lowercase, number and symbol.' };
     }
     if (!currentPassword) return { error: 'Current password is required.' };
@@ -376,7 +376,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
     if (reauthError) return { error: 'Current password is incorrect.' };
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     return { error: error?.message ?? null };
-  }, []);
+  }, [user?.role, user?.loginId]);
 
   return (
     <AuthContext.Provider value={{ user, session, loading, signIn, signOut, changePassword, isConfigured: isSupabaseConfigured }}>
