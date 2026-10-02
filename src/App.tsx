@@ -213,7 +213,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           status: r.status, userAgent: r.user_agent,
         })));
         if (salaryR.data?.[0]) user.currentSalary = Number(salaryR.data[0].monthly_salary);
-      }      }
+      }
       setLoadingData(false);
     } catch (e) {
       console.error('[Portal] load failed', e);
