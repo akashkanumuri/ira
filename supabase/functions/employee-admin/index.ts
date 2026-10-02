@@ -1,3 +1,4 @@
+import { createSupabaseContext } from 'npm:@supabase/server'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 type CreateEmployeeInput = {
@@ -59,19 +60,6 @@ function json(body: unknown, status = 200) {
   })
 }
 
-function secretKey(): string {
-  const raw = Deno.env.get('SUPABASE_SECRET_KEYS')
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw)
-      if (parsed.default) return parsed.default
-    } catch {
-      // fall through to legacy secret
-    }
-  }
-  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-}
-
 function normalizeLoginId(value: string): string {
   return value.trim().toLowerCase()
 }
@@ -119,23 +107,6 @@ async function assertPasswordSafe(password: string) {
 
 function generateTemporaryPassword() {
   return 'IRA@' + crypto.randomUUID().replace(/-/g, '').slice(0, 14) + '9a';
-}
-
-async function requireAdmin(req: Request, admin: ReturnType<typeof createClient>) {
-  const auth = req.headers.get('Authorization') ?? ''
-  if (!auth.startsWith('Bearer ')) throw new Error('Authentication required')
-  const token = auth.slice(7)
-  const { data, error } = await admin.auth.getUser(token)
-  if (error || !data.user) throw new Error('Authentication required')
-
-  const { data: profile, error: profileError } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', data.user.id)
-    .maybeSingle()
-
-  if (profileError || profile?.role !== 'admin') throw new Error('Admin access required')
-  return data.user.id
 }
 
 function cleanText(value?: string | null) {
@@ -426,12 +397,25 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
-  try {
-    const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', secretKey(), {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
+  const { data: ctx, error: authError } = await createSupabaseContext(req, { auth: 'user' })
+  if (authError || !ctx?.userClaims?.id) {
+    return json({ error: 'Authentication required' }, authError?.status ?? 401)
+  }
 
-    const actorId = await requireAdmin(req, admin)
+  try {
+    const admin = ctx.supabaseAdmin
+    const actorId = ctx.userClaims.id
+
+    const { data: profile, error: profileError } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', actorId)
+      .maybeSingle()
+
+    if (profileError || profile?.role !== 'admin') {
+      return json({ error: 'Admin access required' }, 403)
+    }
+
     const input = await req.json() as Input
 
     switch (input.action) {
