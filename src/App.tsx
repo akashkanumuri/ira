@@ -1037,27 +1037,36 @@ function CorrectionEmployee({user,corrections,onRefresh}:any){
     e.preventDefault();
     setError('');
     setBusy(true);
-    const fd=new FormData(e.currentTarget);
-    const date=String(fd.get('date')||'');
-    const requestedCheckIn=String(fd.get('requestedCheckIn')||'');
-    const requestedCheckOut=String(fd.get('requestedCheckOut')||'');
-    const reason=String(fd.get('reason')||'').trim();
+    try {
+      const fd=new FormData(e.currentTarget);
+      const date=String(fd.get('date')||'');
+      const requestedCheckIn=String(fd.get('requestedCheckIn')||'');
+      const requestedCheckOut=String(fd.get('requestedCheckOut')||'');
+      const reason=String(fd.get('reason')||'').trim();
 
-    if(!date||!requestedCheckIn||!requestedCheckOut||!reason){
-      setError('Complete all required fields.');
+      if(!date||!requestedCheckIn||!requestedCheckOut||!reason) throw new Error('Complete all required fields.');
+      if(date>today()) throw new Error('A correction can only be requested for today or an earlier date.');
+      if(requestedCheckOut<=requestedCheckIn) throw new Error('Check-out time must be later than check-in time.');
+
+      const {error:err}=await (supabase as any).from('regularization_requests').insert({
+        employee_id:user.employeeDbId,
+        date,
+        requested_check_in:requestedCheckIn,
+        requested_check_out:requestedCheckOut,
+        reason,
+      });
+      if(err) throw err;
+      notify('Correction request submitted.','success');
+      e.currentTarget.reset();
+      setOpen(false);
+      await onRefresh();
+    } catch(error) {
+      const message=error instanceof Error?error.message:'Unable to submit correction request.';
+      setError(message);
+      notify(message,'error');
+    } finally {
       setBusy(false);
-      return;
     }
-    const {error:err}=await (supabase as any).from('regularization_requests').insert({
-      employee_id:user.employeeDbId,
-      date,
-      requested_check_in:requestedCheckIn,
-      requested_check_out:requestedCheckOut,
-      reason,
-    });
-    if(err) setError(err.message);
-    else { notify('Correction request submitted.','success'); e.currentTarget.reset(); setOpen(false); await onRefresh(); }
-    setBusy(false);
   }
 
   return <PageShell title="Corrections" subtitle="Request a correction for a missed or incorrect attendance time. Original attendance is preserved.">
