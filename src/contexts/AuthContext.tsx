@@ -218,6 +218,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
     wfhBalance: 0,
     leaveBalance: 0,
     currentSalary: salary?.monthly_salary == null ? undefined : Number(salary.monthly_salary),
+    joinDate: employee.join_date,
   };
 };
 
