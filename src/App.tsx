@@ -739,13 +739,36 @@ function EmployeeModal({mode,employee,departments,designations,employees,onClose
   const save=async(e:React.FormEvent)=>{e.preventDefault();setError('');setBusy(true);
     try{
       const salary=Number(form.monthlySalary); if(!Number.isFinite(salary)||salary<0)throw new Error('Enter a valid monthly salary.');
+      // Resolve designation/department against the current database before saving.
+      // This heals stale IDs held by an already-open browser tab after reference data changes.
+      const db = supabase as any;
+      const [{ data: liveDesignations, error: liveDesignationError }, { data: liveDepartments, error: liveDepartmentError }] = await Promise.all([
+        db.from('designations').select('id,name').order('name'),
+        db.from('departments').select('id,name').order('name'),
+      ]);
+      if (liveDesignationError) throw liveDesignationError;
+      if (liveDepartmentError) throw liveDepartmentError;
+
+      const selectedDesignationName = designations.find((d:Designation)=>d.id===form.designationId)?.name ?? '';
+      const currentDesignation = (liveDesignations ?? []).find((d:any)=>d.id===form.designationId)
+        ?? (selectedDesignationName ? (liveDesignations ?? []).find((d:any)=>d.name.trim().toLowerCase()===selectedDesignationName.trim().toLowerCase()) : null);
+      if (!currentDesignation) throw new Error('Selected designation is no longer available. Please reopen the form and select a current designation.');
+
+      const selectedDepartmentName = departments.find((d:Department)=>d.id===form.departmentId)?.name ?? '';
+      const currentDepartment = form.departmentId
+        ? ((liveDepartments ?? []).find((d:any)=>d.id===form.departmentId)
+          ?? (selectedDepartmentName ? (liveDepartments ?? []).find((d:any)=>d.name.trim().toLowerCase()===selectedDepartmentName.trim().toLowerCase()) : null))
+        : null;
+
+      if(form.departmentId && !currentDepartment) throw new Error('Selected department is no longer available. Please reopen the form and select a current department.');
+
       if(mode==='create'){
         if(form.password!==form.confirmPassword)throw new Error('Passwords do not match.');
-        const result=await invokeEmployeeAdmin({action:'create_employee',name:form.name,workEmail:form.workEmail||null,phone:form.phone||null,loginId:form.loginId,password:form.password,workMode:form.workMode,designationId:form.designationId,departmentId:form.departmentId||null,managerId:form.managerId||null,joinDate:form.joinDate,shiftStart:form.shiftStart,shiftEnd:form.shiftEnd,monthlySalary:salary});
+        const result=await invokeEmployeeAdmin({action:'create_employee',name:form.name,workEmail:form.workEmail||null,phone:form.phone||null,loginId:form.loginId,password:form.password,workMode:form.workMode,designationId:currentDesignation.id,designationName:currentDesignation.name,departmentId:currentDepartment?.id||null,departmentName:currentDepartment?.name||null,managerId:form.managerId||null,joinDate:form.joinDate,shiftStart:form.shiftStart,shiftEnd:form.shiftEnd,monthlySalary:salary});
         for(const doc of docs)if(doc.file)await uploadEmployeeDocument(result.employeeId,doc.file,doc.type);
         setSuccess({loginId:result.loginId}); await onSaved();
       }else{
-        await invokeEmployeeAdmin({action:'update_employee',employeeId:employee!.id,name:form.name,workEmail:form.workEmail||null,phone:form.phone||null,workMode:form.workMode,designationId:form.designationId,departmentId:form.departmentId||null,managerId:form.managerId||null,joinDate:form.joinDate,shiftStart:form.shiftStart,shiftEnd:form.shiftEnd,monthlySalary:salary});
+        await invokeEmployeeAdmin({action:'update_employee',employeeId:employee!.id,name:form.name,workEmail:form.workEmail||null,phone:form.phone||null,workMode:form.workMode,designationId:currentDesignation.id,designationName:currentDesignation.name,departmentId:currentDepartment?.id||null,departmentName:currentDepartment?.name||null,managerId:form.managerId||null,joinDate:form.joinDate,shiftStart:form.shiftStart,shiftEnd:form.shiftEnd,monthlySalary:salary});
         for(const doc of docs)if(doc.file)await uploadEmployeeDocument(employee!.id,doc.file,doc.type);
         await onSaved(); onClose();
       }
