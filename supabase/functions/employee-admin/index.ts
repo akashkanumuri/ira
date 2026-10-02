@@ -295,19 +295,32 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
   const newSalary = Number(input.monthlySalary)
   if (!latestSalary || Number(latestSalary.monthly_salary) !== newSalary) {
     const effective = new Date().toISOString().slice(0, 10)
-    await admin
-      .from('salary_history')
-      .update({ effective_to: new Date(Date.parse(effective) - 86400000).toISOString().slice(0, 10) })
-      .eq('employee_id', input.employeeId)
-      .is('effective_to', null)
-    const { error: salaryError } = await admin
-      .from('salary_history')
-      .insert({
-        employee_id: input.employeeId,
-        monthly_salary: newSalary,
-        effective_from: effective,
-      })
-    if (salaryError) throw salaryError
+
+    if (latestSalary?.effective_from === effective) {
+      const { error: salaryError } = await admin
+        .from('salary_history')
+        .update({ monthly_salary: newSalary })
+        .eq('employee_id', input.employeeId)
+        .eq('effective_from', effective)
+      if (salaryError) throw salaryError
+    } else {
+      const previousEffectiveTo = new Date(Date.parse(effective + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10)
+      const { error: closeError } = await admin
+        .from('salary_history')
+        .update({ effective_to: previousEffectiveTo })
+        .eq('employee_id', input.employeeId)
+        .is('effective_to', null)
+      if (closeError) throw closeError
+
+      const { error: salaryError } = await admin
+        .from('salary_history')
+        .insert({
+          employee_id: input.employeeId,
+          monthly_salary: newSalary,
+          effective_from: effective,
+        })
+      if (salaryError) throw salaryError
+    }
   }
 
   await ensureEmployeeLedgers(admin, input.employeeId, current.join_date, new Date().toISOString().slice(0, 10))
