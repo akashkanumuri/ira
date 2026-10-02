@@ -34,8 +34,8 @@ export function getKolkataDayName(dateStr: string): string {
 
 export function classifyDay(dateStr: string, holidays: HolidayItem[] = []) {
   const [y, m, d] = dateStr.split('-').map(Number);
-  const dateObj = new Date(y, m - 1, d);
-  const dayOfWeek = dateObj.getDay();
+  const dateObj = new Date(Date.UTC(y, m - 1, d, 12));
+  const dayOfWeek = dateObj.getUTCDay();
   const holiday = holidays.find((h) => h.date === dateStr);
 
   if (holiday) {
@@ -59,7 +59,7 @@ export function classifyDay(dateStr: string, holidays: HolidayItem[] = []) {
 }
 
 export function getMonthlyWorkingDaysCount(year: number, month: number, holidays: HolidayItem[] = []) {
-  const daysInMonth = new Date(year, month, 0).getDate();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   let workingDays = 0;
   let sundays = 0;
   let holidayCount = 0;
