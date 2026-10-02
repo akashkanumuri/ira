@@ -218,6 +218,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
   if (authError || !authUser.user) throw new Error(authError?.message ?? 'Unable to create the employee login.')
 
   const userId = authUser.user.id
+  let createdEmployeeId: string | null = null
 
   try {
     const { data: seq, error: seqError } = await admin.rpc('next_employee_id')
@@ -246,6 +247,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
       .single()
 
     if (employeeError || !employee) throw employeeError ?? new Error('Unable to create employee record.')
+    createdEmployeeId = employee.id
 
     const { error: profileError } = await admin
       .from('profiles')
@@ -268,7 +270,11 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
     return { employeeId: employee.id, empId, loginId }
   } catch (error) {
-    await admin.auth.admin.deleteUser(userId)
+    try {
+      if (createdEmployeeId) await admin.from('employees').delete().eq('id', createdEmployeeId)
+    } finally {
+      await admin.auth.admin.deleteUser(userId)
+    }
     throw error
   }
 }
