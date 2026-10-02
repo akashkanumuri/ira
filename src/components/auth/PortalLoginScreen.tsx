@@ -83,7 +83,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
                 <span className="text-sm font-semibold text-slate-700">{isEmployee ? 'Login ID' : 'Admin ID'}</span>
                 <div className="relative mt-2">
                   <UserRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input value={identifier} onChange={e => setIdentifier(e.target.value)} autoComplete="username" placeholder={isEmployee ? 'e.g. akash' : 'IRA'} className="w-full rounded-2xl border border-slate-300 bg-white pl-12 pr-4 py-4 text-[15px] outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
+                  <input value={identifier} onChange={e => setIdentifier(e.target.value)} autoComplete="username" placeholder={isEmployee ? 'Enter Login ID' : 'Enter Admin ID'} className="w-full rounded-2xl border border-slate-300 bg-white pl-12 pr-4 py-4 text-[15px] outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
                 </div>
               </label>
 
@@ -98,7 +98,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
                 </div>
               </label>
 
-              <button disabled={loading} className="w-full min-h-14 rounded-2xl bg-slate-950 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold flex items-center justify-center gap-2 shadow-[0_12px_30px_rgba(15,23,42,.14)]">
+              <button disabled={loading} className="btn-login w-full min-h-14 rounded-2xl text-white font-bold flex items-center justify-center gap-2 shadow-[0_12px_30px_rgba(15,23,42,.14)]">
                 {loading ? 'Signing in…' : 'Sign in'} {!loading && <ArrowRight className="w-5 h-5" />}
               </button>
             </form>
