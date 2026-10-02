@@ -223,7 +223,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           id: r.id, loginTime: r.login_at, logoutTime: r.logout_at, duration: r.session_duration_seconds,
           status: r.status, userAgent: r.user_agent,
         })));
-        if (salaryR.data?.[0]) user.currentSalary = Number(salaryR.data[0].monthly_salary);
+        // Salary is derived from the effective salary history in the mapped employee state.
+        // Do not mutate the AuthContext user object from the data loader.
       }
       setLoadingData(false);
     } catch (e) {
