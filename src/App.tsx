@@ -444,7 +444,7 @@ function EmployeeContent(props: any) {
   return <EmployeeDashboard {...props} />;
 }
 
-function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, corrections, holidays, payrollRecords, onSelectTab }: any) {
+function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, corrections, holidays, payrollPeriods, payrollRecords, onSelectTab }: any) {
   const active = employees.filter((e: Employee) => e.status === 'active');
   const todayStr = today();
   const todayClass = classifyDay(todayStr, holidays);
@@ -455,7 +455,13 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
   });
   const present = todayRows.filter((x: any) => x.record?.status === 'present' || x.record?.status === 'late' || x.record?.status === 'wfh').length;
   const pending = [...leaveRequests, ...wfhRequests, ...corrections].filter((r: any) => r.status === 'pending').length;
-  const latestPayroll = [...payrollRecords].sort((a: PayrollRecord,b: PayrollRecord) => (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? ''))[0];
+  const latestPayroll = [...(payrollRecords as PayrollRecord[])]
+    .filter(p=>Boolean(p.finalizedAt))
+    .sort((a,b)=>{
+      const am=payrollPeriods?.find((pp:PayrollPeriod)=>pp.id===a.periodId)?.monthStart ?? '';
+      const bm=payrollPeriods?.find((pp:PayrollPeriod)=>pp.id===b.periodId)?.monthStart ?? '';
+      return bm.localeCompare(am) || (b.finalizedAt??'').localeCompare(a.finalizedAt??'');
+    })[0];
 
   return (
     <PageShell title="Dashboard" subtitle="Live workforce snapshot.">
@@ -494,7 +500,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
   );
 }
 
-function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPeriods, payrollRecords, tasks, employees }: any) {
+function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPeriods, payrollRecords, tasks, employees, onSelectTab }: any) {
   const [live, setLive] = useState(new Date());
   const emp = authEmployee(user);
   const todayRecord = attendance.find((x: AttendanceRecord) => x.date === today());
@@ -534,7 +540,7 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
             <DarkMetric label="Check-out" value={todayRecord?.checkOut ?? '—'} />
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
-            {!todayRecord && <button onClick={() => document.getElementById('emp-attendance-nav')?.click()} className="btn-secondary !bg-white !text-slate-950">Go to attendance <ArrowRight className="w-4 h-4"/></button>}
+            {!todayRecord && <button onClick={() => onSelectTab?.('emp-attendance')} className="btn-secondary !bg-white !text-slate-950">Go to attendance <ArrowRight className="w-4 h-4"/></button>}
             {todayRecord && state !== 'completed' && <span className="text-xs text-slate-400">Attendance actions are available in the Attendance section.</span>}
           </div>
         </section>
