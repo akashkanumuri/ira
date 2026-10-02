@@ -221,8 +221,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
   };
 };
 
-
-\nexport function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
