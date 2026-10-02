@@ -67,11 +67,14 @@ export async function uploadAvatar(employeeId: string, file: File) {
 }
 
 export async function uploadEmployeeDocument(employeeId: string, file: File, documentType: string) {
+  const allowed = new Set(['application/pdf','image/jpeg','image/png','image/webp']);
+  if (!allowed.has(file.type)) throw new Error('HR documents must be PDF, JPEG, PNG or WebP files.');
+  if (file.size > 10 * 1024 * 1024) throw new Error('HR documents must be 10 MB or smaller.');
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path = `${employeeId}/${crypto.randomUUID()}-${safe}`;
   const { error } = await supabase.storage.from('hr-documents').upload(path, file, {
     upsert: false,
-    contentType: file.type || 'application/octet-stream',
+    contentType: file.type,
   });
   if (error) throw new Error(error.message);
 
