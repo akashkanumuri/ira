@@ -572,7 +572,7 @@ function propsHasAssignableDesignation(designations: Designation[] | undefined, 
   return Boolean(designations?.find(d => d.id === id)?.canAssignTasks);
 }
 
-function AttendanceEmployee({ user, attendance, holidays, loginSessions = [], onRefresh }: any) {
+function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], loginSessions = [], onRefresh }: any) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -605,8 +605,9 @@ function AttendanceEmployee({ user, attendance, holidays, loginSessions = [], on
 
   const state = current?.attendanceState ?? 'not_checked_in';
   const isRemote = user.workMode === 'remote';
-  const isHolidayToday = Boolean(holidays.some((h: Holiday) => h.date === today()));
-  const isSunday = new Date(`${today()}T12:00:00`).getDay() === 0;
+  const todayClass = classifyDay(today(), holidays);
+  const isHolidayToday = todayClass.type === 'holiday';
+  const isSunday = todayClass.type === 'sunday_off';
 
   return (
     <PageShell title="My Attendance" subtitle="Check-in, breaks, checkout and your monthly history.">
@@ -640,9 +641,11 @@ function AttendanceEmployee({ user, attendance, holidays, loginSessions = [], on
         <div className="flex items-center justify-between gap-4"><div><h3 className="font-bold text-sm">Monthly calendar</h3><p className="text-xs text-slate-500 mt-1">Sunday is weekly off. Added holidays are paid non-working days.</p></div><div className="flex items-center gap-1"><button onClick={() => setMonthOffset(v=>v-1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button><span className="px-3 text-xs font-bold min-w-28 text-center">{base.toLocaleDateString('en-IN',{month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}</span><button onClick={() => setMonthOffset(v=>v+1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button></div></div>
         <div className="grid grid-cols-7 gap-1 mt-5">{['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d,i)=><div key={d} className={`text-[9px] font-bold text-center py-2 ${i===6?'text-purple-600':'text-slate-400'}`}>{d}</div>)}{Array.from({length:offset}).map((_,i)=><div key={`e${i}`} className="h-20 bg-slate-50 rounded-xl" />)}{Array.from({length:days},(_,i)=>{
           const d=i+1; const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const cl=classifyDay(ds,holidays); const r=attendance.find((a:AttendanceRecord)=>a.date===ds);
-          const label=r?.status==='late'?'Late':r?.mode==='wfh'?'WFH':r?.status==='present'?'Present':cl.type==='holiday'?'Holiday':cl.type==='sunday_off'?'Off':r?.status==='leave'?'Leave': 'Absent';
-          const style=label==='Present'?'text-emerald-700 bg-emerald-50 border-emerald-200':label==='WFH'?'text-sky-700 bg-sky-50 border-sky-200':label==='Late'?'text-amber-700 bg-amber-50 border-amber-200':label==='Leave'?'text-purple-700 bg-purple-50 border-purple-200':label==='Holiday'?'text-indigo-700 bg-indigo-50 border-indigo-200':label==='Off'?'text-purple-600 bg-purple-50 border-purple-100':'text-slate-500 bg-slate-50 border-slate-200';
-          return <div key={ds} className={`h-20 rounded-xl border p-2 flex flex-col justify-between ${ds===today()?'ring-2 ring-blue-500/20':''} `}><span className="text-xs font-bold">{d}</span><span className={`text-[9px] rounded-md px-1.5 py-1 border font-bold truncate ${style}`}>{label}</span></div>;
+          const approvedLeave=(leaveRequests as LeaveRequest[]).find((l)=>l.status==='approved'&&l.startDate<=ds&&l.endDate>=ds);
+          const isFuture=ds>today(); const isBeforeJoin=Boolean(user.joinDate&&ds<user.joinDate);
+          const label=r?.status==='late'?'Late':r?.mode==='wfh'?'WFH':r?.status==='present'?'Present':r?.status==='leave'?'Leave':cl.type==='holiday'?'Holiday':cl.type==='sunday_off'?'Off':isBeforeJoin?'Not joined':approvedLeave?'Leave':isFuture?'Upcoming':ds===today()?'Not checked-in':'Absent';
+          const style=label==='Present'?'text-emerald-700 bg-emerald-50 border-emerald-200':label==='WFH'?'text-sky-700 bg-sky-50 border-sky-200':label==='Late'?'text-amber-700 bg-amber-50 border-amber-200':label==='Leave'?'text-purple-700 bg-purple-50 border-purple-200':label==='Holiday'?'text-indigo-700 bg-indigo-50 border-indigo-200':label==='Off'?'text-purple-600 bg-purple-50 border-purple-100':label==='Upcoming'?'text-slate-400 bg-white border-slate-100':'text-slate-500 bg-slate-50 border-slate-200';
+          return <div key={ds} title={cl.type==='holiday'?cl.label:approvedLeave?'Approved leave':label} className={`h-20 rounded-xl border p-2 flex flex-col justify-between ${ds===today()?'ring-2 ring-blue-500/20':''} `}><span className="text-xs font-bold">{d}</span><span className={`text-[9px] rounded-md px-1.5 py-1 border font-bold truncate ${style}`}>{label}</span></div>;
         })}</div>
       </section>
       <section className="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden">
