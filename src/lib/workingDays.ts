@@ -1,17 +1,8 @@
-/**
- * Working-day helpers for the employee attendance calendar.
- * Timezone: Asia/Kolkata.
- * Monday-Saturday are working days; Sunday is the weekly off.
- * Holidays are supplied by the database and override normal working days.
- */
-
 export interface HolidayItem {
   id: string;
   name: string;
   date: string;
   description?: string;
-  mandatory?: boolean;
-  isWorkingDay?: boolean;
 }
 
 export function getKolkataDateString(date = new Date()): string {
@@ -33,23 +24,23 @@ export function formatKolkataTime(date = new Date(), includeSeconds = false): st
   });
 }
 
-export function classifyDay(
-  dateStr: string,
-  holidays: HolidayItem[] = []
-): {
-  type: 'sunday_off' | 'holiday' | 'saturday_working' | 'weekday_working';
-  label: string;
-  isWorkingDay: boolean;
-  holidayName?: string;
-} {
+export function getKolkataDayName(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'long',
+  });
+}
+
+export function classifyDay(dateStr: string, holidays: HolidayItem[] = []) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const dateObj = new Date(y, m - 1, d);
   const dayOfWeek = dateObj.getDay();
-  const holiday = holidays.find((h) => h.date === dateStr && h.isWorkingDay !== true);
+  const holiday = holidays.find((h) => h.date === dateStr);
 
   if (holiday) {
     return {
-      type: 'holiday',
+      type: 'holiday' as const,
       label: `Holiday: ${holiday.name}`,
       isWorkingDay: false,
       holidayName: holiday.name,
@@ -57,26 +48,17 @@ export function classifyDay(
   }
 
   if (dayOfWeek === 0) {
-    return { type: 'sunday_off', label: 'Weekly Off (Sunday)', isWorkingDay: false };
+    return { type: 'sunday_off' as const, label: 'Weekly Off (Sunday)', isWorkingDay: false };
   }
 
   if (dayOfWeek === 6) {
-    return { type: 'saturday_working', label: 'Working Day (Saturday)', isWorkingDay: true };
+    return { type: 'saturday_working' as const, label: 'Working Day (Saturday)', isWorkingDay: true };
   }
 
-  return { type: 'weekday_working', label: 'Working Day', isWorkingDay: true };
+  return { type: 'weekday_working' as const, label: 'Working Day', isWorkingDay: true };
 }
 
-export function getMonthlyWorkingDaysCount(
-  year: number,
-  month: number,
-  holidays: HolidayItem[] = []
-): {
-  totalDays: number;
-  workingDays: number;
-  sundays: number;
-  holidayCount: number;
-} {
+export function getMonthlyWorkingDaysCount(year: number, month: number, holidays: HolidayItem[] = []) {
   const daysInMonth = new Date(year, month, 0).getDate();
   let workingDays = 0;
   let sundays = 0;

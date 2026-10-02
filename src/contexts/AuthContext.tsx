@@ -2,7 +2,6 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { UserRole } from '../types/attendance';
-import { startNewSession, endActiveSession } from '../lib/session';
 
 export interface AuthUser {
   id: string;
@@ -10,21 +9,38 @@ export interface AuthUser {
   role: UserRole;
   empId: string | null;
   employeeDbId: string | null;
+  loginId: string | null;
   name: string;
   avatar: string | null;
   department: string | null;
   designation: string | null;
+  designationId: string | null;
+  departmentId: string | null;
   phone?: string;
   shift?: string;
-  manager?: string;
+  shiftEnd?: string;
+  manager?: string | null;
+  managerId?: string | null;
   status?: 'active' | 'inactive';
+  workMode?: 'office' | 'remote';
   wfhBalance?: number;
   leaveBalance?: number;
+  currentSalary?: number;
 }
 
 type LoginPortal = 'employee' | 'admin';
+
 const ADMIN_LOGIN_IDS = new Set(['IRA', 'APEXADMIN']);
-const ADMIN_AUTH_EMAIL = 'ira.admin@ira-presence.local';
+export const ADMIN_AUTH_EMAIL = 'ira.admin@ira-presence.local';
+const EMPLOYEE_AUTH_DOMAIN = 'employee.ira.local';
+
+export function normalizeLoginId(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function loginIdToAuthEmail(loginId: string): string {
+  return `${normalizeLoginId(loginId)}@${EMPLOYEE_AUTH_DOMAIN}`;
+}
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -32,164 +48,238 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (identifier: string, password: string, portal: LoginPortal) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  changePassword: (newPassword: string) => Promise<{ error: string | null }>;
   isConfigured: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const ACTIVE_SESSION_ID_KEY = 'ira_presence_active_auth_session_id_v2';
+
+function formatSessionDuration(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safe / 3600)}h ${Math.floor((safe % 3600) / 60)}m`;
+}
+
+async function startApplicationSession(user: AuthUser): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const now = new Date();
+  const { data: activeRows } = await (supabase as any)
+    .from('auth_sessions')
+    .select('id, login_at')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .order('login_at', { ascending: false });
+
+  for (const row of activeRows ?? []) {
+    const duration = Math.max(0, Math.floor((now.getTime() - new Date(row.login_at).getTime()) / 1000));
+    await (supabase as any)
+      .from('auth_sessions')
+      .update({ logout_at: now.toISOString(), session_duration_seconds: duration, status: 'ended' })
+      .eq('id', row.id);
+  }
+
+  const { data, error } = await (supabase as any)
+    .from('auth_sessions')
+    .insert({
+      user_id: user.id,
+      login_at: now.toISOString(),
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      status: 'active',
+    })
+    .select('id')
+    .single();
+
+  if (!error && data?.id) {
+    sessionStorage.setItem(ACTIVE_SESSION_ID_KEY, data.id);
+  }
+}
+
+async function endApplicationSession(userId: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const sessionId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(ACTIVE_SESSION_ID_KEY) : null;
+  const now = new Date();
+
+  let query = (supabase as any)
+    .from('auth_sessions')
+    .select('id, login_at')
+    .eq('user_id', userId)
+    .eq('status', 'active');
+
+  if (sessionId) query = query.eq('id', sessionId);
+
+  const { data } = await query;
+  for (const row of data ?? []) {
+    const duration = Math.max(0, Math.floor((now.getTime() - new Date(row.login_at).getTime()) / 1000));
+    await (supabase as any)
+      .from('auth_sessions')
+      .update({ logout_at: now.toISOString(), session_duration_seconds: duration, status: 'ended' })
+      .eq('id', row.id);
+  }
+  if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACTIVE_SESSION_ID_KEY);
+}
+
+export interface CurrentEmployeeRow {
+  id: string;
+  profile_id: string | null;
+  emp_id: string;
+  login_id: string;
+  name: string;
+  work_email: string | null;
+  phone: string | null;
+  status: 'active' | 'inactive';
+  work_mode: 'office' | 'remote';
+  shift_start: string;
+  shift_end: string;
+  join_date: string;
+  department_id: string | null;
+  designation_id: string;
+  manager_id: string | null;
+  avatar_url: string | null;
+}
+
+const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => {
+  if (!isSupabaseConfigured) return null;
+
+  const db = supabase as any;
+  const { data: profile, error: profileError } = await db
+    .from('profiles')
+    .select('id, role, emp_id')
+    .eq('id', supabaseUser.id)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    console.error('[Auth] Profile lookup failed:', profileError);
+    return null;
+  }
+
+  if (profile.role === 'admin') {
+    return {
+      id: supabaseUser.id,
+      email: supabaseUser.email ?? ADMIN_AUTH_EMAIL,
+      role: 'admin',
+      empId: null,
+      employeeDbId: null,
+      loginId: 'IRA',
+      name: 'IRA',
+      avatar: null,
+      department: null,
+      designation: null,
+      designationId: null,
+      departmentId: null,
+      status: 'active',
+    };
+  }
+
+  const { data: employee, error: employeeError } = await db
+    .from('employees')
+    .select('id, profile_id, emp_id, login_id, name, work_email, phone, status, work_mode, shift_start, shift_end, join_date, department_id, designation_id, manager_id, avatar_url')
+    .eq('profile_id', supabaseUser.id)
+    .maybeSingle();
+
+  if (employeeError || !employee) {
+    console.error('[Auth] Employee lookup failed:', employeeError);
+    return null;
+  }
+
+  const [{ data: department }, { data: designation }, { data: manager }, { data: salary }] = await Promise.all([
+    employee.department_id
+      ? db.from('departments').select('name').eq('id', employee.department_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    employee.designation_id
+      ? db.from('designations').select('name').eq('id', employee.designation_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    employee.manager_id
+      ? db.from('employees').select('name').eq('id', employee.manager_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    db.from('salary_history').select('monthly_salary').eq('employee_id', employee.id).order('effective_from', { ascending: false }).limit(1).maybeSingle(),
+  ]);
+
+  return {
+    id: supabaseUser.id,
+    email: employee.work_email ?? supabaseUser.email ?? loginIdToAuthEmail(employee.login_id),
+    role: 'employee',
+    empId: employee.emp_id,
+    employeeDbId: employee.id,
+    loginId: employee.login_id,
+    name: employee.name,
+    avatar: employee.avatar_url ?? null,
+    department: department?.name ?? null,
+    designation: designation?.name ?? null,
+    designationId: employee.designation_id,
+    departmentId: employee.department_id,
+    phone: employee.phone ?? undefined,
+    shift: employee.shift_start ?? undefined,
+    shiftEnd: employee.shift_end ?? undefined,
+    manager: manager?.name ?? null,
+    managerId: employee.manager_id ?? null,
+    status: employee.status,
+    workMode: employee.work_mode,
+    wfhBalance: 0,
+    leaveBalance: 0,
+    currentSalary: salary?.monthly_salary == null ? undefined : Number(salary.monthly_salary),
+  };
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadUserProfile = useCallback(async (supabaseUser: User): Promise<AuthUser | null> => {
-    if (!isSupabaseConfigured) return null;
-
-    try {
-      const db = supabase as any;
-
-      // Use the security-definer RPC created in Supabase to load the
-      // authenticated user's complete account context. This avoids
-      // RLS/relationship-query failures during login.
-      const { data, error } = await db
-        .rpc('get_current_user_context')
-        .maybeSingle();
-
-      if (error) {
-        console.error('[Auth] User context RPC failed:', error);
-        return null;
-      }
-
-      if (!data?.role) {
-        console.error('[Auth] No user context found for authenticated user:', supabaseUser.id);
-        return null;
-      }
-
-      const role = data.role as UserRole;
-
-      if (role === 'admin') {
-        return {
-          id: supabaseUser.id,
-          email: supabaseUser.email ?? data.email ?? '',
-          role,
-          empId: null,
-          employeeDbId: null,
-          name: 'IRA',
-          avatar: null,
-          department: null,
-          designation: null,
-          phone: undefined,
-          shift: data.shift_start ?? undefined,
-          manager: undefined,
-          status: 'active',
-          wfhBalance: 0,
-          leaveBalance: 0,
-        };
-      }
-
-      if (!data.employee_id) {
-        console.error('[Auth] Employee record is missing for authenticated user:', supabaseUser.id);
-        return null;
-      }
-
-      return {
-        id: supabaseUser.id,
-        email: supabaseUser.email ?? data.email ?? '',
-        role,
-        empId: data.emp_id ?? data.profile_emp_id ?? null,
-        employeeDbId: data.employee_id,
-        name: data.name ?? supabaseUser.user_metadata?.name ?? 'User',
-        avatar: data.avatar_url ?? null,
-        department: null,
-        designation: data.designation ?? null,
-        phone: data.phone ?? undefined,
-        shift: data.shift_start ?? undefined,
-        manager: undefined,
-        status: data.status ?? 'active',
-        wfhBalance: Number(data.wfh_balance ?? 0),
-        leaveBalance: Number(data.leave_balance ?? 0),
-      };
-    } catch (error) {
-      console.error('[Auth] loadUserProfile error:', error);
-      return null;
-    }
-  }, []);
-
   useEffect(() => {
     let mounted = true;
-
-    const loadInitialSession = async () => {
+    const load = async () => {
       if (!isSupabaseConfigured) {
-        if (mounted) setLoading(false);
+        setLoading(false);
         return;
       }
-
-      const { data, error } = await supabase.auth.getSession();
-      if (error) console.error('[Auth] Session load failed:', error);
+      const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-
       setSession(data.session);
       if (data.session?.user) {
-        const authUser = await loadUserProfile(data.session.user);
-        if (mounted) setUser(authUser);
+        const profile = await loadUserProfile(data.session.user);
+        if (mounted) setUser(profile);
       }
       if (mounted) setLoading(false);
     };
-
-    void loadInitialSession();
+    void load();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
-
-      if (nextSession?.user) {
-        const authUser = await loadUserProfile(nextSession.user);
-        if (mounted) setUser(authUser);
-      } else {
+      if (!nextSession?.user) {
         setUser(null);
+        setLoading(false);
+        return;
       }
-
-      if (mounted) setLoading(false);
+      const profile = await loadUserProfile(nextSession.user);
+      if (mounted) {
+        setUser(profile);
+        setLoading(false);
+      }
     });
 
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [loadUserProfile]);
+  }, []);
 
-  const signIn = async (
-    identifier: string,
-    password: string,
-    portal: LoginPortal
-  ): Promise<{ error: string | null }> => {
+  const signIn = useCallback(async (identifier: string, password: string, portal: LoginPortal) => {
     const value = identifier.trim();
     if (!value || !password) return { error: 'Please enter all required fields.' };
     if (!isSupabaseConfigured) return { error: 'Unable to sign in right now. Please try again.' };
 
     try {
-      let email: string;
+      const email = portal === 'admin'
+        ? (ADMIN_LOGIN_IDS.has(value.toUpperCase()) ? ADMIN_AUTH_EMAIL : '')
+        : (/^[a-z0-9][a-z0-9._-]{2,31}$/i.test(value) ? loginIdToAuthEmail(value) : '');
 
-      if (portal === 'employee') {
-        const { data: resolvedEmail, error: resolveError } = await (supabase as any).rpc(
-          'get_employee_login_email',
-          { p_name: value }
-        );
-        if (resolveError || !resolvedEmail) {
-          return { error: 'Employee name or password is incorrect.' };
-        }
-        email = resolvedEmail;
-      } else {
-        if (!ADMIN_LOGIN_IDS.has(value.toUpperCase())) {
-          return { error: 'Admin ID or password is incorrect.' };
-        }
-        email = ADMIN_AUTH_EMAIL;
+      if (!email) {
+        return { error: portal === 'admin' ? 'Admin ID or password is incorrect.' : 'Login ID or password is incorrect.' };
       }
 
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error || !data.user) {
-        return { error: 'Invalid credentials. Please check your details and try again.' };
-      }
+      if (error || !data.user) return { error: 'Invalid credentials. Please check your details and try again.' };
 
       const authUser = await loadUserProfile(data.user);
       if (!authUser) {
@@ -207,25 +297,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: `This account is not enabled for the ${portal} portal.` };
       }
 
-      await startNewSession(authUser.id, authUser.name, authUser.role);
+      await startApplicationSession(authUser);
       setSession(data.session);
       setUser(authUser);
       return { error: null };
-    } catch (error: any) {
-      console.error('[Auth] signIn error:', error);
-      return { error: error?.message ?? 'Unable to sign in. Please try again.' };
+    } catch (error) {
+      console.error('[Auth] Sign-in failed:', error);
+      return { error: 'Unable to sign in right now. Please try again.' };
     }
-  };
+  }, []);
 
-  const signOut = async () => {
-    if (user?.id && isSupabaseConfigured) await endActiveSession(user.id);
+  const signOut = useCallback(async () => {
+    if (user?.id) await endApplicationSession(user.id);
     if (isSupabaseConfigured) await supabase.auth.signOut();
     setUser(null);
     setSession(null);
-  };
+  }, [user?.id]);
+
+  const changePassword = useCallback(async (newPassword: string) => {
+    if (!isSupabaseConfigured) return { error: 'Unable to change password right now.' };
+    if (newPassword.length < 8) return { error: 'Password must be at least 8 characters.' };
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error: error?.message ?? null };
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signOut, isConfigured: isSupabaseConfigured }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signOut, changePassword, isConfigured: isSupabaseConfigured }}>
       {children}
     </AuthContext.Provider>
   );
@@ -236,3 +333,5 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 }
+
+export { formatSessionDuration };
