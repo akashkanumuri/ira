@@ -181,23 +181,31 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
   if (existing) throw new Error('This Login ID is already in use.')
 
+  const normalizedDesignationName = cleanText(input.designationName)
   let designation = null
-  if (input.designationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.designationId)) {
-    designation = (await admin.from('designations').select('id,name').eq('id', input.designationId).maybeSingle()).data
+  if (normalizedDesignationName) {
+    const { data, error } = await admin.from('designations').select('id,name').ilike('name', normalizedDesignationName).maybeSingle()
+    if (error) throw new Error(`Unable to read designations: ${error.message}`)
+    designation = data
   }
-  if (!designation && input.designationName) {
-    designation = (await admin.from('designations').select('id,name').ilike('name', input.designationName.trim()).maybeSingle()).data
+  if (!designation && input.designationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.designationId.trim())) {
+    const { data, error } = await admin.from('designations').select('id,name').eq('id', input.designationId.trim()).maybeSingle()
+    if (error) throw new Error(`Unable to read designations: ${error.message}`)
+    designation = data
   }
   // Backward-compatible recovery for older clients that accidentally sent the
   // designation name in the designationId field.
   if (!designation && input.designationId) {
-    designation = (await admin.from('designations').select('id,name').ilike('name', input.designationId.trim()).maybeSingle()).data
+    const { data, error } = await admin.from('designations').select('id,name').ilike('name', input.designationId.trim()).maybeSingle()
+    if (error) throw new Error(`Unable to read designations: ${error.message}`)
+    designation = data
   }
   if (!designation) {
-    const { data: available } = await admin.from('designations').select('id,name').order('name')
+    const { data: available, error } = await admin.from('designations').select('id,name').order('name')
+    if (error) throw new Error(`Unable to read designations: ${error.message}`)
     if (available?.length === 1) designation = available[0]
   }
-  if (!designation) throw new Error('Selected designation was not found. Refresh the page and select the designation again.')
+  if (!designation) throw new Error('Selected designation is not available in the current database. Please reopen the employee form.')
 
   let department = null
   if (input.departmentId || input.departmentName) {
