@@ -216,12 +216,15 @@ export function mapTask(row: any, employees: Map<string, Employee>): Task {
 }
 
 export function mapHoliday(row: any): Holiday {
+  const [y,m,d] = String(row.date).split('-').map(Number);
+  const localNoon = new Date(Date.UTC(y, m - 1, d, 12));
   return {
     id: row.id,
     name: row.name,
     date: row.date,
-    dayOfWeek: new Date(`${row.date}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'long' }),
+    dayOfWeek: localNoon.toLocaleDateString('en-IN', { weekday: 'long', timeZone: 'Asia/Kolkata' }),
     description: row.description ?? '',
+    holidayType: row.holiday_type === 'public' ? 'public' : 'company',
   };
 }
 
