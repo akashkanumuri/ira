@@ -504,7 +504,7 @@ function propsHasAssignableDesignation(designations: Designation[] | undefined, 
   return Boolean(designations?.find(d => d.id === id)?.canAssignTasks);
 }
 
-function AttendanceEmployee({ user, attendance, holidays, onRefresh }: any) {
+function AttendanceEmployee({ user, attendance, holidays, loginSessions = [], onRefresh }: any) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -574,6 +574,26 @@ function AttendanceEmployee({ user, attendance, holidays, onRefresh }: any) {
           const style=label==='Present'?'text-emerald-700 bg-emerald-50 border-emerald-200':label==='WFH'?'text-sky-700 bg-sky-50 border-sky-200':label==='Late'?'text-amber-700 bg-amber-50 border-amber-200':label==='Leave'?'text-purple-700 bg-purple-50 border-purple-200':label==='Holiday'?'text-indigo-700 bg-indigo-50 border-indigo-200':label==='Off'?'text-purple-600 bg-purple-50 border-purple-100':'text-slate-500 bg-slate-50 border-slate-200';
           return <div key={ds} className={`h-20 rounded-xl border p-2 flex flex-col justify-between ${ds===today()?'ring-2 ring-blue-500/20':''} `}><span className="text-xs font-bold">{d}</span><span className={`text-[9px] rounded-md px-1.5 py-1 border font-bold truncate ${style}`}>{label}</span></div>;
         })}</div>
+      </section>
+      <section className="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="font-bold text-sm">Login sessions</h3>
+          <p className="text-xs text-slate-500 mt-1">Login/logout history is separate from attendance check-in/check-out.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Login</Th><Th>Logout</Th><Th>Session</Th><Th>Status</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {loginSessions.slice(0,50).map((s:any)=><tr key={s.id}>
+                <Td mono>{new Date(s.loginTime).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</Td>
+                <Td mono>{s.logoutTime?new Date(s.logoutTime).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}):'Active'}</Td>
+                <Td mono>{s.duration==null?'—':duration(Number(s.duration))}</Td>
+                <Td><StatusBadge label={s.status}/></Td>
+              </tr>)}
+              {!loginSessions.length && <EmptyRow colSpan={4} text="No login sessions yet."/>}
+            </tbody>
+          </table>
+        </div>
       </section>
     </PageShell>
   );
