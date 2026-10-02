@@ -12,6 +12,7 @@ create unique index if not exists employees_work_email_ci_unique on public.emplo
 alter table public.auth_sessions drop constraint if exists auth_sessions_status_check;
 alter table public.auth_sessions add constraint auth_sessions_status_check check (status = any(array['active','ended','expired']));
 
+create schema if not exists extensions;
 create extension if not exists btree_gist with schema extensions;
 
 do $$
