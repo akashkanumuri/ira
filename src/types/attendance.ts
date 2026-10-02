@@ -138,6 +138,7 @@ export interface Holiday {
   dayOfWeek: string;
   description: string;
   mandatory?: boolean;
+  holidayType?: 'company' | 'public';
 }
 
 export interface AuthSession {
