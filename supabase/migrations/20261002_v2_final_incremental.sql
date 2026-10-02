@@ -82,6 +82,8 @@ using (
 
 -- Cron: run at 00:05 IST daily; the ledger function is idempotent,
 -- so the current month is created automatically and historical rows are preserved.
+select cron.unschedule('ira-monthly-leave-ledger');
+select cron.unschedule('ira-monthly-leave-ledger-v2');
 select cron.schedule(
   'ira-monthly-leave-ledger-v2',
   '35 18 * * *',
