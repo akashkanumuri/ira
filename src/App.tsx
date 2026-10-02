@@ -69,6 +69,7 @@ export default function App() {
 function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }) {
   const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [headerNow, setHeaderNow] = useState(new Date());
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -88,6 +89,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
   const reloadTimer = useRef<number | null>(null);
+
+  useEffect(() => { const timer = window.setInterval(() => setHeaderNow(new Date()), 1000); return () => window.clearInterval(timer); }, []);
 
   const reload = useCallback(async () => {
     if (!user) return;
@@ -349,8 +352,9 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold">{user.role === 'admin' ? 'IRA Workforce Management' : 'IRA Employee Workspace'}</p>
             <h1 className="text-sm font-bold text-slate-900 truncate">{getPageTitle(activeTab)}</h1>
           </div>
-          <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" /> Live
+          <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/55 border border-slate-200/75 text-[11px] font-semibold text-slate-600 backdrop-blur-xl">
+            <span className="ira-live-dot" />
+            <span>{headerNow.toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}</span>
           </div>
           <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200/70">
             <div className="w-8 h-8 rounded-full bg-slate-950 text-white flex items-center justify-center text-[11px] font-bold">{(user.name || 'U').charAt(0).toUpperCase()}</div>
@@ -367,7 +371,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
               <div className="p-4 border-b border-slate-800 flex items-center justify-between text-white"><b>IRA Hospitality</b><button onClick={() => setMobileOpen(false)}><X className="w-5 h-5" /></button></div>
               <nav className="p-3 space-y-1">
                 {(user.role === 'admin' ? adminNav : employeeNav).map(([id, label, Icon]) => (
-                  <button key={id} onClick={() => navigate(id)} className={`w-full text-left px-3 py-3 rounded-xl flex items-center gap-3 text-sm ${activeTab === id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}><Icon className="w-4 h-4" />{label}</button>
+                  <button key={id} onClick={() => navigate(id)} className={`w-full text-left px-3 py-3 rounded-2xl flex items-center gap-3 text-sm transition-all ${activeTab === id ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_12px_30px_rgba(37,99,235,.20)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className="w-4 h-4" />{label}</button>
                 ))}
               </nav>
               <div className="mt-auto p-3 border-t border-white/10"><button onClick={()=>void onLogout()} className="w-full flex items-center justify-center gap-2 rounded-2xl bg-white/10 text-white px-4 py-3 text-sm font-semibold hover:bg-white/15 transition-all"><LogOut className="w-4 h-4"/>Sign out</button></div>
