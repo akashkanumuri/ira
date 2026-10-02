@@ -537,11 +537,13 @@ function AttendanceEmployee({ user, attendance, holidays, loginSessions = [], on
   useEffect(() => { const t = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(t); }, []);
 
   const employeeId = user.employeeDbId!;
-  const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + monthOffset);
-  const y = base.getFullYear(); const m = base.getMonth();
+  const base = new Date(today() + 'T12:00:00Z');
+  base.setUTCDate(1);
+  base.setUTCMonth(base.getUTCMonth() + monthOffset);
+  const y = base.getUTCFullYear(); const m = base.getUTCMonth();
   const monthStart = `${y}-${String(m+1).padStart(2,'0')}-01`;
-  const days = new Date(y,m+1,0).getDate();
-  const first = new Date(y,m,1).getDay();
+  const days = new Date(Date.UTC(y,m+1,0)).getUTCDate();
+  const first = new Date(Date.UTC(y,m,1,12)).getUTCDay();
   const offset = first === 0 ? 6 : first - 1;
   const current = attendance.find((a: AttendanceRecord) => a.date === today());
 
@@ -591,7 +593,7 @@ function AttendanceEmployee({ user, attendance, holidays, loginSessions = [], on
       </section>
 
       <section className="mt-5 bg-white rounded-2xl border border-slate-200 p-5">
-        <div className="flex items-center justify-between gap-4"><div><h3 className="font-bold text-sm">Monthly calendar</h3><p className="text-xs text-slate-500 mt-1">Sunday is weekly off. Added holidays are paid non-working days.</p></div><div className="flex items-center gap-1"><button onClick={() => setMonthOffset(v=>v-1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button><span className="px-3 text-xs font-bold min-w-28 text-center">{base.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</span><button onClick={() => setMonthOffset(v=>v+1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button></div></div>
+        <div className="flex items-center justify-between gap-4"><div><h3 className="font-bold text-sm">Monthly calendar</h3><p className="text-xs text-slate-500 mt-1">Sunday is weekly off. Added holidays are paid non-working days.</p></div><div className="flex items-center gap-1"><button onClick={() => setMonthOffset(v=>v-1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button><span className="px-3 text-xs font-bold min-w-28 text-center">{base.toLocaleDateString('en-IN',{month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}</span><button onClick={() => setMonthOffset(v=>v+1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button></div></div>
         <div className="grid grid-cols-7 gap-1 mt-5">{['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d,i)=><div key={d} className={`text-[9px] font-bold text-center py-2 ${i===6?'text-purple-600':'text-slate-400'}`}>{d}</div>)}{Array.from({length:offset}).map((_,i)=><div key={`e${i}`} className="h-20 bg-slate-50 rounded-xl" />)}{Array.from({length:days},(_,i)=>{
           const d=i+1; const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const cl=classifyDay(ds,holidays); const r=attendance.find((a:AttendanceRecord)=>a.date===ds);
           const label=r?.status==='late'?'Late':r?.mode==='wfh'?'WFH':r?.status==='present'?'Present':cl.type==='holiday'?'Holiday':cl.type==='sunday_off'?'Off':r?.status==='leave'?'Leave': 'Absent';
@@ -652,6 +654,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
     const fd=new FormData(e.currentTarget);
     const title=String(fd.get('title')??'').trim(), to=String(fd.get('assignedTo')??''), start=String(fd.get('startDate')??''), due=String(fd.get('dueDate')??'');
     if(!title||!to||!start||!due){setMessage('Complete all required task fields.');return;}
+    if(due < start){setMessage('Due date cannot be before the start date.');return;}
     const {error}=await (supabase as any).from('tasks').insert({title,description:clean(fd.get('description')),assigned_to:to,assigned_by:myId,start_date:start,due_date:due,priority:String(fd.get('priority')??'medium')});
     if(error)setMessage(error.message); else {e.currentTarget.reset();setAssignOpen(false);await onRefresh();}
   }
