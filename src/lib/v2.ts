@@ -76,7 +76,10 @@ export async function uploadEmployeeDocument(employeeId: string, file: File, doc
     .select('*')
     .single();
 
-  if (rowError || !data) throw new Error(rowError?.message || 'Document record failed.');
+  if (rowError || !data) {
+    await supabase.storage.from('hr-documents').remove([path]);
+    throw new Error(rowError?.message || 'Document record failed.');
+  }
   return {
     id: data.id,
     employeeId,

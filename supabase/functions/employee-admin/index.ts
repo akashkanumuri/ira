@@ -47,7 +47,7 @@ type StatusInput = {
 type Input = CreateEmployeeInput | UpdateEmployeeInput | ResetPasswordInput | StatusInput
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://ira-eta-two.vercel.app',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
@@ -346,11 +346,42 @@ async function resetPassword(input: ResetPasswordInput, admin: ReturnType<typeof
 }
 
 async function setStatus(input: StatusInput, admin: ReturnType<typeof createClient>) {
+  const { data: employee, error: employeeError } = await admin
+    .from('employees')
+    .select('id,profile_id,status')
+    .eq('id', input.employeeId)
+    .maybeSingle()
+  if (employeeError || !employee) throw new Error(employeeError?.message ?? 'Employee not found.')
+  if (employee.status === input.status) return { employeeId: input.employeeId, status: input.status }
+
   const { error } = await admin
     .from('employees')
     .update({ status: input.status })
     .eq('id', input.employeeId)
   if (error) throw error
+
+  const banDuration = input.status === 'inactive' ? '876000h' : 'none'
+  const { error: authError } = await admin.auth.admin.updateUserById(employee.profile_id, { ban_duration: banDuration })
+  if (authError) {
+    await admin.from('employees').update({ status: employee.status }).eq('id', input.employeeId)
+    throw new Error(authError.message)
+  }
+
+  if (input.status === 'inactive') {
+    const { data: activeSessions } = await admin
+      .from('auth_sessions')
+      .select('id,login_at')
+      .eq('user_id', employee.profile_id)
+      .eq('status', 'active')
+    for (const row of activeSessions ?? []) {
+      const duration = Math.max(0, Math.floor((Date.now() - new Date(row.login_at).getTime()) / 1000))
+      await admin.from('auth_sessions').update({
+        logout_at: new Date().toISOString(),
+        session_duration_seconds: duration,
+        status: 'ended',
+      }).eq('id', row.id)
+    }
+  }
   return { employeeId: input.employeeId, status: input.status }
 }
 

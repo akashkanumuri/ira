@@ -264,6 +264,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user || user.role !== 'employee' || !user.employeeDbId) return;
+    const employeeId = user.employeeDbId;
+    let active = true;
+    const channel = (supabase as any).channel(`ira-employee-status-${user.id}`);
+    const handleInactive = async () => {
+      await supabase.auth.signOut();
+      if (!active) return;
+      setUser(null);
+      setSession(null);
+    };
+    channel.on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'employees',
+      filter: `id=eq.${employeeId}`,
+    }, (payload: any) => {
+      if (payload.new?.status === 'inactive') void handleInactive();
+    });
+    channel.subscribe();
+
+    const timer = window.setInterval(async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!active) return;
+      if (!data.user) {
+        setUser(null);
+        setSession(null);
+        return;
+      }
+      const current = await loadUserProfile(data.user);
+      if (!current || current.status === 'inactive') {
+        await supabase.auth.signOut();
+        if (active) {
+          setUser(null);
+          setSession(null);
+        }
+        return;
+      }
+      setUser(current);
+    }, 60000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      (supabase as any).removeChannel(channel);
+    };
+  }, [user?.id, user?.role, user?.employeeDbId]);
+
   const signIn = useCallback(async (identifier: string, password: string, portal: LoginPortal) => {
     const value = identifier.trim();
     if (!value || !password) return { error: 'Please enter all required fields.' };
@@ -314,10 +362,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
   }, [user?.id]);
 
-  const changePassword = useCallback(async (newPassword: string) => {
+  const changePassword = useCallback(async (newPassword: string, currentPassword = '') => {
     if (!isSupabaseConfigured) return { error: 'Unable to change password right now.' };
     if (newPassword.length < 8) return { error: 'Password must be at least 8 characters.' };
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await (supabase.auth as any).updateUser({ password: newPassword, current_password: currentPassword });
     return { error: error?.message ?? null };
   }, []);
 
