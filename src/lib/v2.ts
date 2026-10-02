@@ -84,7 +84,6 @@ export async function uploadEmployeeDocument(employeeId: string, file: File, doc
       storage_path: path,
       mime_type: file.type || null,
       size_bytes: file.size,
-      uploaded_by: (await supabase.auth.getUser()).data.user?.id ?? null,
     })
     .select('*')
     .single();
