@@ -270,8 +270,11 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
 
           if (table === 'task_events' && payload.eventType === 'INSERT') {
             const actor = payload.new?.actor_employee_id ?? null;
+            const eventType = payload.new?.event_type ?? 'assigned';
             if (user.role === 'employee' && actor !== user.employeeDbId) {
-              notify(payload.new?.event_type === 'completed' ? 'A task was completed and is ready for your review.' : 'A new task has been assigned.', 'info');
+              notify(eventType === 'completed' ? 'A task was completed and is ready for your review.' : 'A new task has been assigned to you.', 'info');
+            } else if (user.role === 'admin' && eventType === 'completed') {
+              notify('An employee submitted completed work.', 'success');
             }
           } else if ((table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') && user.role === 'employee') {
             if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
@@ -606,12 +609,26 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], lo
     await onRefresh();
   };
 
-  const run = async (fn: () => Promise<any>) => {
+  const run = async (fn: () => Promise<any>, successMessage: string) => {
+    if (busy) return;
     setBusy(true); setMessage('');
-    const result = await fn();
-    if (!result.success) setMessage(result.error ?? 'Action failed.');
-    else await refreshRecord();
-    setBusy(false);
+    try {
+      const result = await fn();
+      if (!result?.success) {
+        const message = result?.error ?? 'Action failed.';
+        setMessage(message);
+        notify(message, 'error');
+        return;
+      }
+      notify(successMessage, 'success');
+      await refreshRecord();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Action failed.';
+      setMessage(message);
+      notify(message, 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const state = current?.attendanceState ?? 'not_checked_in';
@@ -638,10 +655,10 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], lo
 
         {!isHolidayToday && !isSunday && (
           <div className="mt-6 flex flex-wrap gap-2">
-            {!current && <button disabled={busy} onClick={() => void run(() => performCheckIn({ employeeId, mode: isRemote ? 'wfh' : 'office' }))} className="px-5 py-3 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm">{busy ? 'Saving…' : `Check in · ${isRemote ? 'WFH' : 'Office'}`}</button>}
-            {current && state === 'working' && <button disabled={busy} onClick={() => void run(() => performStartBreak(current))} className="px-5 py-3 rounded-xl bg-amber-500 text-white text-xs font-bold">{busy ? 'Saving…' : 'Start break'}</button>}
-            {current && state === 'on_break' && <button disabled={busy} onClick={() => void run(() => performResumeWork(current))} className="px-5 py-3 rounded-xl bg-emerald-600 text-white text-xs font-bold">{busy ? 'Saving…' : 'Resume work'}</button>}
-            {current && state === 'working' && <button disabled={busy} onClick={() => void run(() => performCheckOut(current))} className="px-5 py-3 rounded-xl bg-slate-950 text-white text-xs font-bold">{busy ? 'Saving…' : 'Check out'}</button>}
+            {!current && <button disabled={busy} onClick={() => void run(() => performCheckIn({ employeeId, mode: isRemote ? 'wfh' : 'office' }), `Checked in · ${isRemote ? 'WFH' : 'Office'}`)} className="px-5 py-3 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm">{busy ? 'Saving…' : `Check in · ${isRemote ? 'WFH' : 'Office'}`}</button>}
+            {current && state === 'working' && <button disabled={busy} onClick={() => void run(() => performStartBreak(current), 'Break started.')} className="px-5 py-3 rounded-xl bg-amber-500 text-white text-xs font-bold">{busy ? 'Saving…' : 'Start break'}</button>}
+            {current && state === 'on_break' && <button disabled={busy} onClick={() => void run(() => performResumeWork(current), 'Work resumed.')} className="px-5 py-3 rounded-xl bg-emerald-600 text-white text-xs font-bold">{busy ? 'Saving…' : 'Resume work'}</button>}
+            {current && state === 'working' && <button disabled={busy} onClick={() => void run(() => performCheckOut(current), 'Checked out successfully.')} className="px-5 py-3 rounded-xl bg-slate-950 text-white text-xs font-bold">{busy ? 'Saving…' : 'Check out'}</button>}
             {state === 'on_break' && <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-3">Resume work before checking out.</span>}
             {state === 'completed' && <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-3">Attendance completed for today.</span>}
           </div>
@@ -649,7 +666,7 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], lo
       </section>
 
       <section className="mt-5 bg-white rounded-2xl border border-slate-200 p-5">
-        <div className="flex items-center justify-between gap-4"><div><h3 className="font-bold text-sm">Monthly calendar</h3><p className="text-xs text-slate-500 mt-1">Sunday is weekly off. Added holidays are paid non-working days.</p></div><div className="flex items-center gap-1"><button onClick={() => setMonthOffset(v=>v-1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button><span className="px-3 text-xs font-bold min-w-28 text-center">{base.toLocaleDateString('en-IN',{month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}</span><button onClick={() => setMonthOffset(v=>v+1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button></div></div>
+        <div className="flex items-center justify-between gap-4"><div><h3 className="font-bold text-sm">Monthly calendar</h3><p className="text-xs text-slate-500 mt-1">Sunday is weekly off. Public and company holidays are paid non-working days.</p></div><div className="flex items-center gap-1"><button onClick={() => setMonthOffset(v=>v-1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button><span className="px-3 text-xs font-bold min-w-28 text-center">{base.toLocaleDateString('en-IN',{month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}</span><button onClick={() => setMonthOffset(v=>v+1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button></div></div>
         <div className="grid grid-cols-7 gap-1 mt-5">{['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d,i)=><div key={d} className={`text-[9px] font-bold text-center py-2 ${i===6?'text-purple-600':'text-slate-400'}`}>{d}</div>)}{Array.from({length:offset}).map((_,i)=><div key={`e${i}`} className="h-20 bg-slate-50 rounded-xl" />)}{Array.from({length:days},(_,i)=>{
           const d=i+1; const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const cl=classifyDay(ds,holidays); const r=attendance.find((a:AttendanceRecord)=>a.date===ds);
           const approvedLeave=(leaveRequests as LeaveRequest[]).find((l)=>l.status==='approved'&&l.startDate<=ds&&l.endDate>=ds);
@@ -999,7 +1016,8 @@ function HolidaysAdmin({holidays,onRefresh}:any){
 }
 
 function HolidaysEmployee({holidays}:any){
-  return <PageShell title="Holidays" subtitle="Company holidays are paid non-working days."><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{holidays.map((h:Holiday)=><div key={h.id} className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] uppercase tracking-wider font-bold text-indigo-600">{dateLabel(h.date,{weekday:'long'})}</p><h3 className="font-bold mt-1">{h.name}</h3><p className="text-xs text-slate-500 mt-2">{h.description||'Paid company holiday'}</p></div>)}{!holidays.length&&<EmptyCard text="No company holidays have been added yet."/>}</div></PageShell>;
+  const items=[...(holidays as Holiday[])].sort((a,b)=>a.date.localeCompare(b.date));
+  return <PageShell title="Holidays" subtitle="Public and company holidays are paid non-working days."><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{items.map((h:Holiday)=><div key={h.id} className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between gap-3"><p className="text-[10px] uppercase tracking-wider font-bold text-indigo-600">{dateLabel(h.date,{weekday:'long'})}</p>{h.holidayType==='public'&&<span className="text-[9px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 font-bold">Public</span>}</div><h3 className="font-bold mt-1">{h.name}</h3><p className="text-xs text-slate-500 mt-2">{h.description||(h.holidayType==='public'?'Public calendar holiday':'Paid company holiday')}</p></div>)}{!items.length&&<EmptyCard text="No holidays are scheduled yet."/>}</div></PageShell>;
 }
 
 function LeaveEmployee({user,leaveRequests,ledgers,holidays,onRefresh}:any){
@@ -1079,7 +1097,7 @@ function WfhEmployee({user,wfhRequests,onRefresh}:any){
   const [open,setOpen]=useState(false);const [error,setError]=useState('');const remote=user.workMode==='remote';
   const [busy,setBusy]=useState(false);
   async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setError('');setBusy(true);try{const fd=new FormData(e.currentTarget);const date=String(fd.get('date')||'');if(date<=today())throw new Error('WFH requests must be for a future working day.');const {error:err}=await(supabase as any).from('wfh_requests').insert({employee_id:user.employeeDbId,date,duration:String(fd.get('duration')),reason:String(fd.get('reason')||'').trim(),note:clean(fd.get('note'))});if(err)throw err;notify('WFH request submitted.','success');e.currentTarget.reset();setOpen(false);await onRefresh();}catch(error){setError(error instanceof Error?error.message:'Unable to submit WFH request.')}finally{setBusy(false);}}
-  return <PageShell title="WFH" subtitle="Temporary WFH requests are for office-based employees.">{remote?<div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 text-sm text-sky-900"><b>Permanent remote employee</b><p className="text-xs mt-1">You do not need a daily WFH request. Your attendance check-in is automatically treated as WFH.</p></div>:<>{error&&<Notice type="error" text={error}/>}<div className="flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Request WFH</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Date"><input type="date" name="date" min={tomorrow()} className="input" required/></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Reason"><input name="reason" className="input" required/></Field><Field label="Note"><input name="note" className="input"/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button className="btn-primary">Submit request</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Date</Th><Th>Duration</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{wfhRequests.map((r:WfhRequest)=><tr key={r.id}><Td>{dateLabel(r.date)}</Td><Td>{r.duration}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!wfhRequests.length&&<EmptyRow colSpan={4} text="No WFH requests yet."/>}</tbody></table></div></>}</PageShell>;
+  return <PageShell title="WFH" subtitle="Temporary WFH requests are for office-based employees.">{remote?<div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 text-sm text-sky-900"><b>Permanent remote employee</b><p className="text-xs mt-1">You do not need a daily WFH request. Your attendance check-in is automatically treated as WFH.</p></div>:<>{error&&<Notice type="error" text={error}/>}<div className="flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Request WFH</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Date"><input type="date" name="date" min={tomorrow()} className="input" required/></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Reason"><input name="reason" className="input" required/></Field><Field label="Note"><input name="note" className="input"/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Date</Th><Th>Duration</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{wfhRequests.map((r:WfhRequest)=><tr key={r.id}><Td>{dateLabel(r.date)}</Td><Td>{r.duration}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!wfhRequests.length&&<EmptyRow colSpan={4} text="No WFH requests yet."/>}</tbody></table></div></>}</PageShell>;
 }
 
 function validateStrongPassword(password:string){return password.length>=12&&/[A-Z]/.test(password)&&/[a-z]/.test(password)&&/\d/.test(password)&&/[^A-Za-z0-9]/.test(password)}
