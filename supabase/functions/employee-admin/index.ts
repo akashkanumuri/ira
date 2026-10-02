@@ -14,6 +14,7 @@ type CreateEmployeeInput = {
   departmentId?: string | null
   departmentName?: string | null
   managerId?: string | null
+  managerName?: string | null
   joinDate: string
   shiftStart: string
   shiftEnd: string
@@ -32,6 +33,7 @@ type UpdateEmployeeInput = {
   departmentId?: string | null
   departmentName?: string | null
   managerId?: string | null
+  managerName?: string | null
   joinDate: string
   shiftStart: string
   shiftEnd: string
@@ -218,8 +220,14 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
     if (!department) throw new Error('Selected department was not found.')
   }
 
-  if (input.managerId) {
-    const { data: manager } = await admin.from('employees').select('id,status').eq('id', input.managerId).maybeSingle()
+  let manager = null
+  if (input.managerId || input.managerName) {
+    if (input.managerId) {
+      manager = (await admin.from('employees').select('id,name,status').eq('id', input.managerId).maybeSingle()).data
+    }
+    if (!manager && input.managerName) {
+      manager = (await admin.from('employees').select('id,name,status').ilike('name', input.managerName.trim()).maybeSingle()).data
+    }
     if (!manager || manager.status !== 'active') throw new Error('Selected manager is not active.')
   }
 
@@ -259,7 +267,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
         join_date: input.joinDate,
         department_id: department?.id || null,
         designation_id: designation.id,
-        manager_id: input.managerId || null,
+        manager_id: manager?.id || null,
       })
       .select('id, emp_id, login_id')
       .single()
