@@ -150,7 +150,9 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       } else {
         const employeeId = user.employeeDbId;
         if (!employeeId) throw new Error('Your employee account is not linked.');
-        const [attR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, sessR, salaryR] = await Promise.all([
+        const [visibleEmpR, desR, attR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, sessR, salaryR, ruleR] = await Promise.all([
+          db.from('employees').select('*').order('name'),
+          db.from('designations').select('*').order('name'),
           db.from('attendance').select('*').eq('employee_id', employeeId).order('date', { ascending: false }).limit(400),
           db.from('tasks').select('*').or(`assigned_to.eq.${employeeId},assigned_by.eq.${employeeId}`).order('due_date'),
           db.from('leave_requests').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(300),
@@ -162,11 +164,21 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           db.from('payroll_records').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(24),
           db.from('auth_sessions').select('*').eq('user_id', user.id).order('login_at', { ascending: false }).limit(100),
           db.from('salary_history').select('*').eq('employee_id', employeeId).order('effective_from', { ascending: false }).limit(24),
+          db.from('task_assignment_rules').select('*').order('created_at'),
         ]);
-        const errors = [attR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, sessR, salaryR].filter((r: any) => r.error);
+        const errors = [visibleEmpR, desR, attR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, sessR, salaryR, ruleR].filter((r: any) => r.error);
         if (errors.length) throw errors[0].error;
+
         const emp = authEmployee(user);
-        const employeeMap = new Map([[employeeId, emp]]);
+        const desMap = new Map((desR.data ?? []).map((d: any) => [d.id, d.name]));
+        const visibleRaw = visibleEmpR.data ?? [];
+        const visibleSalary = new Map<string, number>();
+        for (const s of salaryR.data ?? []) visibleSalary.set(s.employee_id, Number(s.monthly_salary));
+        const managerNames = new Map(visibleRaw.map((e: any) => [e.id, e.name]));
+        const employeeMap = new Map<string, Employee>();
+        for (const row of visibleRaw) employeeMap.set(row.id, mapEmployee(row, { designations: desMap, managers: managerNames, salary: visibleSalary }));
+        employeeMap.set(employeeId, emp);
+
         const { data: breaks } = await db.from('break_events')
           .select('id,attendance_id,employee_id,break_start,break_end,duration_seconds')
           .in('attendance_id', (attR.data ?? []).map((a: any) => a.id))
@@ -177,7 +189,10 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           list.push(b);
           breaksBy.set(b.attendance_id, list);
         }
-        setEmployees([emp]);
+
+        setEmployees(Array.from(employeeMap.values()));
+        setDesignations((desR.data ?? []).map((d:any)=>({id:d.id,name:d.name,canAssignTasks:Boolean(d.can_assign_tasks)})));
+        setRules((ruleR.data ?? []).map((r:any)=>mapRule(r, desMap)));
         setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
         setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
         setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
@@ -193,14 +208,12 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         setLedgers((ledgerR.data ?? []).map(mapLedger));
         setPayrollPeriods((ppR.data ?? []).map(mapPayrollPeriod));
         setPayrollRecords((prR.data ?? []).map((r: any) => mapPayrollRecord(r, employeeMap)));
-        const taskRulesResult = await db.from('task_assignment_rules').select('*').order('created_at');\n        setRules((taskRulesResult.data ?? []).map((r:any)=>mapRule(r, desMap)));\n        setLoginSessions((sessR.data ?? []).map((r: any) => ({
+        setLoginSessions((sessR.data ?? []).map((r: any) => ({
           id: r.id, loginTime: r.login_at, logoutTime: r.logout_at, duration: r.session_duration_seconds,
           status: r.status, userAgent: r.user_agent,
         })));
-        if (salaryR.data?.[0]) {
-          user.currentSalary = Number(salaryR.data[0].monthly_salary);
-        }
-      }
+        if (salaryR.data?.[0]) user.currentSalary = Number(salaryR.data[0].monthly_salary);
+      }      }
       setLoadingData(false);
     } catch (e) {
       console.error('[Portal] load failed', e);
