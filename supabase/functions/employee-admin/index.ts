@@ -181,13 +181,23 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
   if (existing) throw new Error('This Login ID is already in use.')
 
-  let designation = input.designationId
-    ? (await admin.from('designations').select('id,name').eq('id', input.designationId).maybeSingle()).data
-    : null
+  let designation = null
+  if (input.designationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.designationId)) {
+    designation = (await admin.from('designations').select('id,name').eq('id', input.designationId).maybeSingle()).data
+  }
   if (!designation && input.designationName) {
     designation = (await admin.from('designations').select('id,name').ilike('name', input.designationName.trim()).maybeSingle()).data
   }
-  if (!designation) throw new Error('Selected designation was not found.')
+  // Backward-compatible recovery for older clients that accidentally sent the
+  // designation name in the designationId field.
+  if (!designation && input.designationId) {
+    designation = (await admin.from('designations').select('id,name').ilike('name', input.designationId.trim()).maybeSingle()).data
+  }
+  if (!designation) {
+    const { data: available } = await admin.from('designations').select('id,name').order('name')
+    if (available?.length === 1) designation = available[0]
+  }
+  if (!designation) throw new Error('Selected designation was not found. Refresh the page and select the designation again.')
 
   let department = null
   if (input.departmentId || input.departmentName) {
