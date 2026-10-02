@@ -406,13 +406,20 @@ Deno.serve(async (req: Request) => {
     const admin = ctx.supabaseAdmin
     const actorId = ctx.userClaims.id
 
-    const { data: profile, error: profileError } = await admin
+    // Read the caller's role through the user-scoped client.
+    // The separate admin client is reserved for privileged writes and Auth Admin API calls.
+    const { data: profile, error: profileError } = await ctx.supabase
       .from('profiles')
       .select('role')
       .eq('id', actorId)
       .maybeSingle()
 
-    if (profileError || profile?.role !== 'admin') {
+    if (profileError) {
+      console.error('[employee-admin] profile lookup failed', profileError)
+      return json({ error: 'Unable to verify administrator account.' }, 500)
+    }
+
+    if (profile?.role !== 'admin') {
       return json({ error: 'Admin access required' }, 403)
     }
 
