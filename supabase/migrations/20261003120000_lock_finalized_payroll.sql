@@ -41,6 +41,24 @@ to authenticated
 using (private.is_admin() and status = 'draft')
 with check (private.is_admin() and status = 'draft');
 
+-- Run the public entry point with the migration owner so it can execute the
+-- private generator. Keep the caller authorization check in this wrapper and do
+-- not grant authenticated users direct access to the internal generator.
+create or replace function public.generate_payroll(p_month date)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+begin
+  if not private.is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  return private.generate_payroll_internal(p_month);
+end;
+$function$;
+
 create or replace function public.finalize_payroll(p_period_id uuid)
 returns void
 language plpgsql
