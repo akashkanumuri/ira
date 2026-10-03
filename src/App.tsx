@@ -416,6 +416,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   ] as const;
 
   const pendingCount = leaveRequests.filter(x => x.status === 'pending').length + wfhRequests.filter(x => x.status === 'pending').length + corrections.filter(x => x.status === 'pending').length;
+  const employeeOpenTasks = tasks.filter(t => t.assignedTo === user.employeeDbId && t.status === 'assigned').length;
+  const adminSubmittedTasks = tasks.filter(t => t.status === 'completed').length;
 
   const navigate = (tab: string) => { setActiveTab(tab); setMobileOpen(false); };
   const selectedComponent = user.role === 'admin'
