@@ -363,7 +363,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     .from('salary_history')
     .select('monthly_salary,effective_from')
     .eq('employee_id', input.employeeId)
-    .lte('effective_from', new Date().toISOString().slice(0, 10))
+    .lte('effective_from', kolkataToday())
     .order('effective_from', { ascending: false })
     .limit(1)
     .maybeSingle()
