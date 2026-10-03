@@ -560,13 +560,12 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
   });
   const present = todayRows.filter((x: any) => x.record?.status === 'present' || x.record?.status === 'late' || x.record?.status === 'wfh').length;
   const pending = [...leaveRequests, ...wfhRequests, ...corrections].filter((r: any) => r.status === 'pending').length;
-  const latestPayroll = [...(payrollRecords as PayrollRecord[])]
-    .filter(p=>Boolean(p.finalizedAt))
-    .sort((a,b)=>{
-      const am=payrollPeriods?.find((pp:PayrollPeriod)=>pp.id===a.periodId)?.monthStart ?? '';
-      const bm=payrollPeriods?.find((pp:PayrollPeriod)=>pp.id===b.periodId)?.monthStart ?? '';
-      return bm.localeCompare(am) || (b.finalizedAt??'').localeCompare(a.finalizedAt??'');
-    })[0];
+  const latestPayrollPeriod = [...(payrollPeriods as PayrollPeriod[])]
+    .filter(pp=>pp.status==='finalized' && Boolean(pp.finalizedAt))
+    .sort((a,b)=>b.monthStart.localeCompare(a.monthStart) || (b.finalizedAt??'').localeCompare(a.finalizedAt??''))[0];
+  const latestPayrollTotal = latestPayrollPeriod
+    ? (payrollRecords as PayrollRecord[]).filter(p=>p.periodId===latestPayrollPeriod.id).reduce((sum,p)=>sum+p.finalPay,0)
+    : 0;
 
   return (
     <PageShell title="Dashboard" subtitle="Live workforce snapshot.">
@@ -574,7 +573,8 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
         <Kpi label="Active Employees" value={active.length} icon={<Users className="w-4 h-4" />} />
         <Kpi label={todayClass.isWorkingDay ? 'Present Today' : 'Today'} value={todayClass.isWorkingDay ? present : 0} icon={<Activity className="w-4 h-4" />} />
         <Kpi label="Pending Requests" value={pending} icon={<FileClock className="w-4 h-4" />} />
-        <Kpi label="Latest Final Pay" value={latestPayroll ? money(latestPayroll.finalPay) : '—'} icon={<WalletCards className="w-4 h-4" />} textValue />
+        <Kpi label="Latest Final Payroll" value={latestPayrollPeriod ? money(latestPayrollTotal) : '—'} icon={<WalletCards className="w-4 h-4" />} textValue />
+        {latestPayrollPeriod && <p className="text-[10px] text-slate-400 -mt-2 col-span-2 xl:col-span-4">Period: {dateLabel(latestPayrollPeriod.monthStart,{month:'long',year:'numeric'})}</p>}
       </div>
 
       <section className="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -592,7 +592,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
                     <Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.designation}</span></Td>
                     <Td>{leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : '—'}</Td>
                     <Td mono>{record?.checkIn ?? '—'}</Td><Td mono>{record?.checkOut ?? '—'}</Td><Td mono>{record ? duration(record.workingSeconds) : '—'}</Td>
-                    <Td><StatusBadge label={leave ? 'Leave' : record?.status ? record.status : 'Absent'} /></Td>
+                    <Td><StatusBadge label={leave ? 'Leave' : record?.status ? record.status : todayClass.isWorkingDay ? 'Not checked-in' : todayClass.label} /></Td>
                   </tr>
                 ))}
                 {!todayRows.length && <EmptyRow colSpan={6} text="No active employees yet. Create the first employee from Employees / HR." />}
@@ -630,8 +630,10 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
     .sort((a,b)=>a.dueDate.localeCompare(b.dueDate) || a.priority.localeCompare(b.priority))
     .slice(0,4);
 
+  const kolkataHour=Number(new Intl.DateTimeFormat('en-IN',{hour:'2-digit',hourCycle:'h23',timeZone:'Asia/Kolkata'}).format(new Date()));
+  const greeting=kolkataHour<12?'morning':kolkataHour<17?'afternoon':'evening';
   return (
-    <PageShell title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]}`} subtitle={new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}>
+    <PageShell title={`Good ${greeting}, ${user.name.split(' ')[0]}`} subtitle={new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}>
       <div className="grid xl:grid-cols-3 gap-4">
         <section className="xl:col-span-2 bg-slate-950 text-white rounded-3xl p-5 sm:p-7 shadow-[0_18px_60px_rgba(15,23,42,.14)]">
           <div className="flex items-start justify-between gap-4">
