@@ -22,14 +22,45 @@ body {
     #f5f7fb;
 }
 body, button, input, select, textarea { font-family: inherit; }
-button { cursor: pointer; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 button:disabled { cursor: not-allowed; }
 input::placeholder, textarea::placeholder { color: #94a3b8; }
+::selection { background: rgba(37,99,235,.14); color: #0b1020; }
+input, select, textarea { color-scheme: light; }
 
 .ira-app-bg {
+  position: relative;
+  isolation: isolate;
   background:
     radial-gradient(700px 320px at 100% 6%, rgba(96,165,250,.10), transparent 62%),
-    radial-gradient(540px 300px at 3% 90%, rgba(129,140,248,.08), transparent 64%);
+    radial-gradient(540px 300px at 3% 90%, rgba(129,140,248,.08), transparent 64%),
+    linear-gradient(180deg, #f7f9fc 0%, #f3f6fb 100%);
+}
+.ira-app-bg::before,
+.ira-app-bg::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: -1;
+  border-radius: 999px;
+  filter: blur(30px);
+  opacity: .55;
+}
+.ira-app-bg::before {
+  width: 320px;
+  height: 320px;
+  right: 5%;
+  top: 12%;
+  background: radial-gradient(circle, rgba(96,165,250,.16), transparent 68%);
+  animation: ira-ambient-a 18s ease-in-out infinite alternate;
+}
+.ira-app-bg::after {
+  width: 280px;
+  height: 280px;
+  left: 4%;
+  bottom: 9%;
+  background: radial-gradient(circle, rgba(129,140,248,.12), transparent 68%);
+  animation: ira-ambient-b 22s ease-in-out infinite alternate;
 }
 
 .ira-main {
@@ -107,7 +138,16 @@ input::placeholder, textarea::placeholder { color: #94a3b8; }
     filter: saturate(1.06);
   }
   .btn-primary:hover:not(:disabled)::after { transform: translateX(55%); }
-  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  .btn-primary:focus-visible,
+  .btn-secondary:focus-visible,
+  .btn-approve:focus-visible,
+  .btn-reject:focus-visible,
+  .icon-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(37,99,235,.14);
+  }
+  .btn-primary:active:not(:disabled) { transform: scale(.985); }
+
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200/90 px-4 py-2.5 text-xs font-bold text-slate-700 disabled:text-slate-300;
@@ -137,6 +177,8 @@ input::placeholder, textarea::placeholder { color: #94a3b8; }
 
   .icon-btn {
     @apply inline-flex items-center justify-center rounded-xl p-2 text-slate-500;
+    min-width: 40px;
+    min-height: 40px;
     transition: transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
   }
   .icon-btn:hover {
@@ -156,8 +198,49 @@ input::placeholder, textarea::placeholder { color: #94a3b8; }
 }
 
 .ira-toast {
+  position: relative;
+  overflow: hidden;
   animation: ira-toast-in .36s cubic-bezier(.2,.75,.2,1) both;
 }
+.ira-toast::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(37,99,235,.52), rgba(79,70,229,.18));
+  transform-origin: left center;
+  animation: ira-toast-progress 4.2s linear both;
+}
+.ira-toast:hover::after { animation-play-state: paused; }
+
+.ira-page .bg-white,
+.surface-card,
+.summary-card,
+.kpi-card,
+.export-card {
+  position: relative;
+  overflow: hidden;
+}
+.ira-page .bg-white::before,
+.surface-card::before,
+.summary-card::before,
+.kpi-card::before,
+.export-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent);
+  opacity: .9;
+  pointer-events: none;
+}
+.ira-page table tbody tr {
+  transition: background .18s ease, transform .18s ease;
+}
+.ira-page table tbody tr:hover {
+  background: rgba(248,250,252,.78);
+}
+
 
 
 .ira-modal {
@@ -247,6 +330,18 @@ input::placeholder, textarea::placeholder { color: #94a3b8; }
 @keyframes ira-pulse {
   0%, 100% { box-shadow: 0 0 0 4px rgba(16,185,129,.09); opacity: .9; }
   50% { box-shadow: 0 0 0 7px rgba(16,185,129,.03); opacity: 1; }
+}
+@keyframes ira-toast-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+@keyframes ira-ambient-a {
+  from { transform: translate3d(0,0,0) scale(1); }
+  to { transform: translate3d(-28px,18px,0) scale(1.08); }
+}
+@keyframes ira-ambient-b {
+  from { transform: translate3d(0,0,0) scale(1); }
+  to { transform: translate3d(22px,-20px,0) scale(1.06); }
 }
 
 @media (prefers-reduced-motion: reduce) {
