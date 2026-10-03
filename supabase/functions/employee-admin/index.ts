@@ -179,12 +179,14 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
   if (!input.joinDate) throw new Error('Join date is required.')
   if (!Number.isFinite(input.monthlySalary) || input.monthlySalary < 0) throw new Error('Monthly salary is invalid.')
 
-  const { data: existing } = await admin
+  const escapedLoginId = loginId.replace(/_/g, '\\_')
+  const { data: existing, error: existingError } = await admin
     .from('employees')
     .select('id')
-    .ilike('login_id', loginId)
+    .ilike('login_id', escapedLoginId)
     .maybeSingle()
 
+  if (existingError) throw new Error(`Unable to verify Login ID: ${existingError.message}`)
   if (existing) throw new Error('This Login ID is already in use.')
 
   const normalizedDesignationName = cleanText(input.designationName)
