@@ -1,23 +1,24 @@
 import React from 'react';
 import type { AuthUser } from '../../contexts/AuthContext';
-import { LayoutDashboard, Clock3, Users, BriefcaseBusiness, CalendarDays, Home, WalletCards, FileClock, Settings2, LogOut, UserRound, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, Clock3, Users, BriefcaseBusiness, CalendarDays, Home, WalletCards, FileClock, Settings2, UserRound, FileSpreadsheet } from 'lucide-react';
 
 interface Props {
   activeRole: 'admin' | 'employee';
   activeTab: string;
   onSelectTab: (tab: string) => void;
   currentUser: AuthUser;
-  onLogout: () => void;
+  pendingTaskCount?: number;
+  pendingTaskCount?: number;
   pendingWfhCount?: number;
   pendingLeaveCount?: number;
   pendingCorrectionCount?: number;
 }
 
-export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, currentUser, onLogout, pendingWfhCount = 0, pendingLeaveCount = 0, pendingCorrectionCount = 0 }) => {
+export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, currentUser, pendingTaskCount = 0, pendingWfhCount = 0, pendingLeaveCount = 0, pendingCorrectionCount = 0 }) => {
   const employeeItems = [
     ['emp-dashboard', 'Dashboard', LayoutDashboard],
     ['emp-attendance', 'My Attendance', Clock3],
-    ['emp-tasks', 'Work & Assignments', BriefcaseBusiness],
+    ['emp-tasks', 'Work & Assignments', BriefcaseBusiness, pendingTaskCount],
     ['emp-leave', 'Leave Requests', CalendarDays, pendingLeaveCount],
     ['emp-wfh', 'WFH Requests', Home, pendingWfhCount],
     ['emp-corrections', 'Corrections', FileClock, pendingCorrectionCount],
@@ -29,7 +30,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
     ['admin-dashboard', 'Dashboard', LayoutDashboard],
     ['admin-employees', 'Employees / HR', Users],
     ['admin-attendance', 'Attendance', Clock3],
-    ['admin-tasks', 'Work & Assignments', BriefcaseBusiness],
+    ['admin-tasks', 'Work & Assignments', BriefcaseBusiness, pendingTaskCount],
     ['admin-requests', 'Requests', FileClock, pendingWfhCount + pendingLeaveCount + pendingCorrectionCount],
     ['admin-payroll', 'Payroll', WalletCards],
     ['admin-holidays', 'Holidays', CalendarDays],
@@ -83,7 +84,6 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
             <p className="text-xs font-semibold text-white truncate">{currentUser.name}</p>
             <p className="text-[10px] text-slate-500 truncate">{currentUser.designation ?? (activeRole === 'admin' ? 'Administrator' : currentUser.loginId)}</p>
           </div>
-          <button onClick={onLogout} className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-all" aria-label="Sign out"><LogOut className="w-4 h-4" /></button>
         </div>
       </div>
     </aside>
