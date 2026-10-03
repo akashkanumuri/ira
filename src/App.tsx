@@ -853,7 +853,7 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], lo
           const d=i+1; const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const cl=classifyDay(ds,holidays); const r=attendance.find((a:AttendanceRecord)=>a.date===ds);
           const approvedLeave=(leaveRequests as LeaveRequest[]).find((l)=>l.status==='approved'&&l.startDate<=ds&&l.endDate>=ds);
           const isFuture=ds>today(); const isBeforeJoin=Boolean(user.joinDate&&ds<user.joinDate);
-          const label=r?.status==='late'?'Late':r?.mode==='wfh'?'WFH':r?.status==='present'?'Present':r?.status==='leave'?'Leave':cl.type==='holiday'?'Holiday':cl.type==='sunday_off'?'Off':isBeforeJoin?'Not joined':approvedLeave?'Leave':isFuture?'Upcoming':ds===today()?'Not checked-in':'Absent';
+          const label=isBeforeJoin?'Not joined':r?.status==='late'?'Late':r?.mode==='wfh'?'WFH':r?.status==='present'?'Present':r?.status==='leave'?'Leave':cl.type==='holiday'?'Holiday':cl.type==='sunday_off'?'Off':approvedLeave?'Leave':isFuture?'Upcoming':ds===today()?'Not checked-in':'Not recorded';
           const style=label==='Present'?'text-emerald-700 bg-emerald-50 border-emerald-200':label==='WFH'?'text-sky-700 bg-sky-50 border-sky-200':label==='Late'?'text-amber-700 bg-amber-50 border-amber-200':label==='Leave'?'text-purple-700 bg-purple-50 border-purple-200':label==='Holiday'?'text-indigo-700 bg-indigo-50 border-indigo-200':label==='Off'?'text-purple-600 bg-purple-50 border-purple-100':label==='Upcoming'?'text-slate-400 bg-white border-slate-100':'text-slate-500 bg-slate-50 border-slate-200';
           return <div key={ds} title={cl.type==='holiday'?cl.label:approvedLeave?'Approved leave':label} className={`h-20 rounded-xl border p-2 flex flex-col justify-between ${ds===today()?'ring-2 ring-blue-500/20':''} `}><span className="text-xs font-bold">{d}</span><span className={`text-[9px] rounded-md px-1.5 py-1 border font-bold truncate ${style}`}>{label}</span></div>;
         })}</div>
@@ -1179,7 +1179,7 @@ function PayrollAdmin({employees,payrollPeriods,payrollRecords,onRefresh}:any){
           {period&&<div className="flex justify-between"><span>Status</span><StatusBadge label={period.status}/></div>}
         </div>
         <div className="flex gap-2 mt-5">
-          <button disabled={busy} onClick={()=>void generate()} className="btn-primary flex-1">{busy?'Generating…':period?.status==='finalized'?'Regenerate locked':'Generate draft'}</button>
+          <button disabled={busy||period?.status==='finalized'} onClick={()=>void generate()} className="btn-primary flex-1">{busy?'Generating…':period?.status==='finalized'?'Finalized & locked':'Generate draft'}</button>
           {period&&period.status==='draft'&&<button disabled={busy} onClick={()=>void finalize()} className="btn-secondary">Finalize</button>}
         </div>
         {message&&<p className="text-xs mt-3 text-slate-600">{message}</p>}
