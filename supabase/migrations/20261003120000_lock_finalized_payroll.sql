@@ -31,6 +31,68 @@ create trigger payroll_period_finalized_lock
 before insert or update or delete on public.payroll_periods
 for each row execute function private.protect_finalized_payroll_period();
 
+-- Only the checked finalization RPC may move a period from draft to finalized.
+-- The RPC runs as its owner and validates the complete period before updating it.
+drop policy if exists payroll_periods_admin on public.payroll_periods;
+create policy payroll_periods_admin
+on public.payroll_periods
+for all
+to authenticated
+using (private.is_admin() and status = 'draft')
+with check (private.is_admin() and status = 'draft');
+
+create or replace function public.finalize_payroll(p_period_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  period_status text;
+  record_count integer;
+begin
+  if not private.is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  select pp.status into period_status
+  from public.payroll_periods pp
+  where pp.id = p_period_id
+  for update;
+
+  if period_status is null then
+    raise exception 'Payroll period not found';
+  end if;
+
+  if period_status = 'finalized' then
+    raise exception 'Payroll period is already finalized';
+  end if;
+
+  if period_status <> 'draft' then
+    raise exception 'Only a draft payroll period can be finalized';
+  end if;
+
+  select count(*) into record_count
+  from public.payroll_records pr
+  where pr.period_id = p_period_id;
+
+  if record_count = 0 then
+    raise exception 'Generate the payroll draft before finalizing';
+  end if;
+
+  update public.payroll_records
+  set finalized_at = coalesce(finalized_at, now()),
+      updated_at = now()
+  where period_id = p_period_id;
+
+  update public.payroll_periods
+  set status = 'finalized',
+      finalized_at = coalesce(finalized_at, now()),
+      updated_at = now()
+  where id = p_period_id;
+end;
+$function$;
+
 create or replace function private.protect_finalized_payroll_record()
 returns trigger
 language plpgsql
