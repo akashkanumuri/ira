@@ -380,7 +380,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
       work_mode: input.workMode,
       designation_id: designation.id,
       department_id: department?.id || null,
-      manager_id: input.managerId || null,
+      manager_id: manager?.id || null,
       join_date: input.joinDate,
       shift_start: input.shiftStart,
       shift_end: input.shiftEnd,
