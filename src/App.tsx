@@ -228,19 +228,26 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         ]);
 
         const emp = authEmployee(user);
-        const fallback = dataSnapshot.current.employees;
+        const fallbackEmployees = dataSnapshot.current.employees;
         const desData = desR.error ? dataSnapshot.current.designations : (desR.data ?? []).map((d: any) => ({ id: d.id, name: d.name, canAssignTasks: Boolean(d.can_assign_tasks) }));
         if (!desR.error) {
           dataSnapshot.current.designations = desData;
           setDesignations(desData);
         }
         const desMap = new Map(desData.map(d => [d.id, d.name]));
-        const visibleRaw = visibleEmpR.error ? fallback : (visibleEmpR.data ?? []);
         const visibleSalary = new Map<string, number>();
-        for (const s of salaryR.data ?? []) if (!visibleSalary.has(s.employee_id)) visibleSalary.set(s.employee_id, Number(s.monthly_salary));
-        const managerNames = new Map((visibleRaw as any[]).map((e: any) => [e.id, e.name]));
+        for (const salary of salaryR.data ?? []) if (!visibleSalary.has(salary.employee_id)) visibleSalary.set(salary.employee_id, Number(salary.monthly_salary));
+
         const employeeMap = new Map<string, Employee>();
-        for (const row of visibleRaw as any[]) employeeMap.set(row.id, mapEmployee(row, { designations: desMap, managers: managerNames, salary: visibleSalary }));
+        if (visibleEmpR.error) {
+          for (const employee of fallbackEmployees) employeeMap.set(employee.id, employee);
+        } else {
+          const visibleRaw = visibleEmpR.data ?? [];
+          const managerNames = new Map(visibleRaw.map((row: any) => [row.id, row.name]));
+          for (const row of visibleRaw) {
+            employeeMap.set(row.id, mapEmployee(row, { designations: desMap, managers: managerNames, salary: visibleSalary }));
+          }
+        }
         employeeMap.set(employeeId, emp);
 
         if (!visibleEmpR.error) {
