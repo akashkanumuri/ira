@@ -956,7 +956,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
 }
 
 function EmployeeModal({mode,employee,departments,designations,employees,onClose,onSaved}:{mode:'create'|'edit';employee:Employee|null;departments:Department[];designations:Designation[];employees:Employee[];onClose:()=>void;onSaved:()=>Promise<void>}) {
-  const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [success,setSuccess]=useState<{loginId:string;password?:string}|null>(null);
+  const [busy,setBusy]=useState(false);const [resetBusy,setResetBusy]=useState(false);const [error,setError]=useState('');const [success,setSuccess]=useState<{loginId:string;password?:string}|null>(null);
   const [docs,setDocs]=useState<{type:string;file:File|null}[]>(ALL_DOCUMENT_TYPES.map(type=>({type,file:null})));
   const [liveDesignations,setLiveDesignations]=useState<Designation[]>(designations);
   const [liveDepartments,setLiveDepartments]=useState<Department[]>(departments);
@@ -1022,10 +1022,10 @@ function EmployeeModal({mode,employee,departments,designations,employees,onClose
         if(failedDocs.length)notify(`Employee updated; failed document uploads: ${failedDocs.join(', ')}`,'info');else notify('Employee details updated.','success');
         await onSaved(); onClose();
       }
-    }catch(err){setError(err instanceof Error?err.message:'Unable to save employee.')}finally{setBusy(false);}
+    }catch(err){const message=err instanceof Error?err.message:'Unable to save employee.';setError(message);notify(message,'error')}finally{setBusy(false);}
   };
-  async function resetPassword(){if(!employee)return;setError('');try{const r=await invokeEmployeeAdmin({action:'reset_password',employeeId:employee.id});setSuccess({loginId:r.loginId,password:r.temporaryPassword});notify('Temporary password generated.','success')}catch(e){setError(e instanceof Error?e.message:'Reset failed.');notify(e instanceof Error?e.message:'Unable to reset password.','error')}}
-  async function viewDoc(doc:EmployeeDocument){try{const url=await getSignedDocumentUrl(doc.storagePath);window.open(url,'_blank','noopener,noreferrer')}catch(e){setError(e instanceof Error?e.message:'Unable to open document.')}}
+  async function resetPassword(){if(!employee||resetBusy)return;setError('');setResetBusy(true);try{const r=await invokeEmployeeAdmin({action:'reset_password',employeeId:employee.id});setSuccess({loginId:r.loginId,password:r.temporaryPassword});notify('Temporary password generated.','success')}catch(e){const message=e instanceof Error?e.message:'Unable to reset password.';setError(message);notify(message,'error')}finally{setResetBusy(false)}}
+  async function viewDoc(doc:EmployeeDocument){try{const url=await getSignedDocumentUrl(doc.storagePath);window.open(url,'_blank','noopener,noreferrer')}catch(e){const message=e instanceof Error?e.message:'Unable to open document.';setError(message);notify(message,'error')}}
   return <Modal title={mode==='create'?'Add employee':'Edit employee'} onClose={onClose} wide>
     {success&&<div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="flex items-center gap-2 text-emerald-800 font-bold text-sm"><CheckCircle2 className="w-4 h-4"/>Employee account ready</div><p className="text-xs text-emerald-700 mt-2">Login ID: <b>{success.loginId}</b>{success.password&&<> · Temporary password: <b>{success.password}</b></>}</p>{mode==='create'&&<p className="text-[11px] text-emerald-700 mt-2">Share the password securely. It is not stored in the employee record.</p>}</div>}
     {error&&<Notice type="error" text={error}/>}
