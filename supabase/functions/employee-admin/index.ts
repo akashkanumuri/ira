@@ -120,6 +120,10 @@ function cleanText(value?: string | null) {
   return v ? v : null
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, character => `\\${character}`)
+}
+
 function kolkataToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 }
@@ -179,30 +183,32 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
   if (!input.joinDate) throw new Error('Join date is required.')
   if (!Number.isFinite(input.monthlySalary) || input.monthlySalary < 0) throw new Error('Monthly salary is invalid.')
 
-  const { data: existing } = await admin
+  const escapedLoginId = escapeLikePattern(loginId)
+  const { data: existing, error: existingError } = await admin
     .from('employees')
     .select('id')
-    .ilike('login_id', loginId)
+    .ilike('login_id', escapedLoginId)
     .maybeSingle()
 
+  if (existingError) throw new Error(`Unable to verify Login ID: ${existingError.message}`)
   if (existing) throw new Error('This Login ID is already in use.')
 
   const normalizedDesignationName = cleanText(input.designationName)
   let designation = null
-  if (normalizedDesignationName) {
-    const { data, error } = await admin.from('designations').select('id,name').ilike('name', normalizedDesignationName).maybeSingle()
+  if (input.designationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.designationId.trim())) {
+    const { data, error } = await admin.from('designations').select('id,name').eq('id', input.designationId.trim()).maybeSingle()
     if (error) throw new Error(`Unable to read designations: ${error.message}`)
     designation = data
   }
-  if (!designation && input.designationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.designationId.trim())) {
-    const { data, error } = await admin.from('designations').select('id,name').eq('id', input.designationId.trim()).maybeSingle()
+  if (!designation && normalizedDesignationName) {
+    const { data, error } = await admin.from('designations').select('id,name').ilike('name', escapeLikePattern(normalizedDesignationName)).maybeSingle()
     if (error) throw new Error(`Unable to read designations: ${error.message}`)
     designation = data
   }
   // Backward-compatible recovery for older clients that accidentally sent the
   // designation name in the designationId field.
   if (!designation && input.designationId) {
-    const { data, error } = await admin.from('designations').select('id,name').ilike('name', input.designationId.trim()).maybeSingle()
+    const { data, error } = await admin.from('designations').select('id,name').ilike('name', escapeLikePattern(input.designationId.trim())).maybeSingle()
     if (error) throw new Error(`Unable to read designations: ${error.message}`)
     designation = data
   }
@@ -219,7 +225,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
       department = (await admin.from('departments').select('id,name').eq('id', input.departmentId).maybeSingle()).data
     }
     if (!department && input.departmentName) {
-      department = (await admin.from('departments').select('id,name').ilike('name', input.departmentName.trim()).maybeSingle()).data
+      department = (await admin.from('departments').select('id,name').ilike('name', escapeLikePattern(input.departmentName.trim())).maybeSingle()).data
     }
     if (!department) throw new Error('Selected department was not found.')
   }
@@ -230,7 +236,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
       manager = (await admin.from('employees').select('id,name,status').eq('id', input.managerId).maybeSingle()).data
     }
     if (!manager && input.managerName) {
-      manager = (await admin.from('employees').select('id,name,status').ilike('name', input.managerName.trim()).maybeSingle()).data
+      manager = (await admin.from('employees').select('id,name,status').ilike('name', escapeLikePattern(input.managerName.trim())).maybeSingle()).data
     }
     if (!manager || manager.status !== 'active') throw new Error('Selected manager is not active.')
   }
@@ -322,11 +328,50 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
   if (!input.designationId && !input.designationName) throw new Error('Designation is required.')
   if (!Number.isFinite(input.monthlySalary) || input.monthlySalary < 0) throw new Error('Monthly salary is invalid.')
 
+  let manager = null
+  if (input.managerId || input.managerName) {
+    if (input.managerId) {
+      const { data, error } = await admin
+        .from('employees')
+        .select('id,name,status,manager_id')
+        .eq('id', input.managerId)
+        .maybeSingle()
+      if (error) throw new Error(`Unable to verify manager: ${error.message}`)
+      manager = data
+    }
+    if (!manager && input.managerName) {
+      const { data, error } = await admin
+        .from('employees')
+        .select('id,name,status,manager_id')
+        .ilike('name', escapeLikePattern(input.managerName.trim()))
+        .maybeSingle()
+      if (error) throw new Error(`Unable to verify manager: ${error.message}`)
+      manager = data
+    }
+    if (!manager || manager.status !== 'active') throw new Error('Selected manager is not active.')
+
+    const visitedManagerIds = new Set<string>()
+    let ancestor = manager
+    while (ancestor) {
+      if (ancestor.id === current.id) throw new Error('This manager assignment would create a reporting loop.')
+      if (visitedManagerIds.has(ancestor.id)) throw new Error('The existing manager hierarchy contains a loop.')
+      visitedManagerIds.add(ancestor.id)
+      if (!ancestor.manager_id) break
+      const { data, error } = await admin
+        .from('employees')
+        .select('id,manager_id')
+        .eq('id', ancestor.manager_id)
+        .maybeSingle()
+      if (error) throw new Error(`Unable to verify manager hierarchy: ${error.message}`)
+      ancestor = data
+    }
+  }
+
   let designation = input.designationId
     ? (await admin.from('designations').select('id').eq('id', input.designationId).maybeSingle()).data
     : null
   if (!designation && input.designationName) {
-    designation = (await admin.from('designations').select('id').ilike('name', input.designationName.trim()).maybeSingle()).data
+    designation = (await admin.from('designations').select('id').ilike('name', escapeLikePattern(input.designationName.trim())).maybeSingle()).data
   }
   if (!designation) throw new Error('Selected designation was not found.')
 
@@ -336,7 +381,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
       department = (await admin.from('departments').select('id').eq('id', input.departmentId).maybeSingle()).data
     }
     if (!department && input.departmentName) {
-      department = (await admin.from('departments').select('id').ilike('name', input.departmentName.trim()).maybeSingle()).data
+      department = (await admin.from('departments').select('id').ilike('name', escapeLikePattern(input.departmentName.trim())).maybeSingle()).data
     }
     if (!department) throw new Error('Selected department was not found.')
   }
@@ -350,7 +395,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
       work_mode: input.workMode,
       designation_id: designation.id,
       department_id: department?.id || null,
-      manager_id: input.managerId || null,
+      manager_id: manager?.id || null,
       join_date: input.joinDate,
       shift_start: input.shiftStart,
       shift_end: input.shiftEnd,
@@ -363,7 +408,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     .from('salary_history')
     .select('monthly_salary,effective_from')
     .eq('employee_id', input.employeeId)
-    .lte('effective_from', new Date().toISOString().slice(0, 10))
+    .lte('effective_from', kolkataToday())
     .order('effective_from', { ascending: false })
     .limit(1)
     .maybeSingle()
