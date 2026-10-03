@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { notify } from '../../lib/toast';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react';
 
 type Portal = 'employee' | 'admin';
@@ -34,12 +35,12 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     e.preventDefault();
     setError('');
     if (!identifier.trim() || !password) {
-      setError(isEmployee ? 'Enter your Login ID and password.' : 'Enter your Admin ID and password.');
-      return;
+      const message=isEmployee ? 'Enter your Login ID and password.' : 'Enter your Admin ID and password.';
+      setError(message); notify(message,'error'); return;
     }
     setLoading(true);
     const result = await signIn(identifier, password, activePortal);
-    if (result.error) setError(result.error);
+    if (result.error) { setError(result.error); notify(result.error,'error'); }
     setLoading(false);
   }
 
