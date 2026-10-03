@@ -120,6 +120,10 @@ function cleanText(value?: string | null) {
   return v ? v : null
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, character => `\\${character}`)
+}
+
 function kolkataToday() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 }
@@ -179,7 +183,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
   if (!input.joinDate) throw new Error('Join date is required.')
   if (!Number.isFinite(input.monthlySalary) || input.monthlySalary < 0) throw new Error('Monthly salary is invalid.')
 
-  const escapedLoginId = loginId.replace(/_/g, '\\_')
+  const escapedLoginId = escapeLikePattern(loginId)
   const { data: existing, error: existingError } = await admin
     .from('employees')
     .select('id')
@@ -191,20 +195,20 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
   const normalizedDesignationName = cleanText(input.designationName)
   let designation = null
-  if (normalizedDesignationName) {
-    const { data, error } = await admin.from('designations').select('id,name').ilike('name', normalizedDesignationName).maybeSingle()
+  if (input.designationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.designationId.trim())) {
+    const { data, error } = await admin.from('designations').select('id,name').eq('id', input.designationId.trim()).maybeSingle()
     if (error) throw new Error(`Unable to read designations: ${error.message}`)
     designation = data
   }
-  if (!designation && input.designationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.designationId.trim())) {
-    const { data, error } = await admin.from('designations').select('id,name').eq('id', input.designationId.trim()).maybeSingle()
+  if (!designation && normalizedDesignationName) {
+    const { data, error } = await admin.from('designations').select('id,name').ilike('name', escapeLikePattern(normalizedDesignationName)).maybeSingle()
     if (error) throw new Error(`Unable to read designations: ${error.message}`)
     designation = data
   }
   // Backward-compatible recovery for older clients that accidentally sent the
   // designation name in the designationId field.
   if (!designation && input.designationId) {
-    const { data, error } = await admin.from('designations').select('id,name').ilike('name', input.designationId.trim()).maybeSingle()
+    const { data, error } = await admin.from('designations').select('id,name').ilike('name', escapeLikePattern(input.designationId.trim())).maybeSingle()
     if (error) throw new Error(`Unable to read designations: ${error.message}`)
     designation = data
   }
@@ -221,7 +225,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
       department = (await admin.from('departments').select('id,name').eq('id', input.departmentId).maybeSingle()).data
     }
     if (!department && input.departmentName) {
-      department = (await admin.from('departments').select('id,name').ilike('name', input.departmentName.trim()).maybeSingle()).data
+      department = (await admin.from('departments').select('id,name').ilike('name', escapeLikePattern(input.departmentName.trim())).maybeSingle()).data
     }
     if (!department) throw new Error('Selected department was not found.')
   }
@@ -232,7 +236,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
       manager = (await admin.from('employees').select('id,name,status').eq('id', input.managerId).maybeSingle()).data
     }
     if (!manager && input.managerName) {
-      manager = (await admin.from('employees').select('id,name,status').ilike('name', input.managerName.trim()).maybeSingle()).data
+      manager = (await admin.from('employees').select('id,name,status').ilike('name', escapeLikePattern(input.managerName.trim())).maybeSingle()).data
     }
     if (!manager || manager.status !== 'active') throw new Error('Selected manager is not active.')
   }
@@ -328,7 +332,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     ? (await admin.from('designations').select('id').eq('id', input.designationId).maybeSingle()).data
     : null
   if (!designation && input.designationName) {
-    designation = (await admin.from('designations').select('id').ilike('name', input.designationName.trim()).maybeSingle()).data
+    designation = (await admin.from('designations').select('id').ilike('name', escapeLikePattern(input.designationName.trim())).maybeSingle()).data
   }
   if (!designation) throw new Error('Selected designation was not found.')
 
@@ -338,7 +342,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
       department = (await admin.from('departments').select('id').eq('id', input.departmentId).maybeSingle()).data
     }
     if (!department && input.departmentName) {
-      department = (await admin.from('departments').select('id').ilike('name', input.departmentName.trim()).maybeSingle()).data
+      department = (await admin.from('departments').select('id').ilike('name', escapeLikePattern(input.departmentName.trim())).maybeSingle()).data
     }
     if (!department) throw new Error('Selected department was not found.')
   }
