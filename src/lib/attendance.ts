@@ -91,15 +91,22 @@ export async function fetchAttendanceRecord(employeeId: string, date = getKolkat
     .eq('attendance_id', row.id)
     .order('break_start', { ascending: true });
 
-  const [{ data: emp }, { data: dept }] = await Promise.all([
-    db.from('employees').select('name,emp_id,department_id').eq('id', employeeId).maybeSingle(),
-    db.from('employees').select('department_id').eq('id', employeeId).maybeSingle(),
-  ]);
+  const { data: emp, error: employeeError } = await db
+    .from('employees')
+    .select('name,emp_id,department_id')
+    .eq('id', employeeId)
+    .maybeSingle();
+
+  if (employeeError || !emp) return buildRecord(row, '', '', '', (breaks ?? []).map(toBreak));
 
   let department = '';
-  if (dept?.department_id) {
-    const { data: d } = await db.from('departments').select('name').eq('id', dept.department_id).maybeSingle();
-    department = d?.name ?? '';
+  if (emp.department_id) {
+    const { data: d, error: departmentError } = await db
+      .from('departments')
+      .select('name')
+      .eq('id', emp.department_id)
+      .maybeSingle();
+    if (!departmentError) department = d?.name ?? '';
   }
 
   return buildRecord(row, emp?.name ?? '', emp?.emp_id ?? '', department, (breaks ?? []).map(toBreak));
