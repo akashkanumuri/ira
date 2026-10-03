@@ -328,6 +328,30 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
   if (!input.designationId && !input.designationName) throw new Error('Designation is required.')
   if (!Number.isFinite(input.monthlySalary) || input.monthlySalary < 0) throw new Error('Monthly salary is invalid.')
 
+  let manager = null
+  if (input.managerId || input.managerName) {
+    if (input.managerId) {
+      const { data, error } = await admin
+        .from('employees')
+        .select('id,name,status')
+        .eq('id', input.managerId)
+        .maybeSingle()
+      if (error) throw new Error(`Unable to verify manager: ${error.message}`)
+      manager = data
+    }
+    if (!manager && input.managerName) {
+      const { data, error } = await admin
+        .from('employees')
+        .select('id,name,status')
+        .ilike('name', escapeLikePattern(input.managerName.trim()))
+        .maybeSingle()
+      if (error) throw new Error(`Unable to verify manager: ${error.message}`)
+      manager = data
+    }
+    if (!manager || manager.status !== 'active') throw new Error('Selected manager is not active.')
+    if (manager.id === current.id) throw new Error('An employee cannot be their own manager.')
+  }
+
   let designation = input.designationId
     ? (await admin.from('designations').select('id').eq('id', input.designationId).maybeSingle()).data
     : null
