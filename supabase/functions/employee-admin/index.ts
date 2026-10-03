@@ -333,7 +333,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     if (input.managerId) {
       const { data, error } = await admin
         .from('employees')
-        .select('id,name,status')
+        .select('id,name,status,manager_id')
         .eq('id', input.managerId)
         .maybeSingle()
       if (error) throw new Error(`Unable to verify manager: ${error.message}`)
@@ -342,14 +342,29 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     if (!manager && input.managerName) {
       const { data, error } = await admin
         .from('employees')
-        .select('id,name,status')
+        .select('id,name,status,manager_id')
         .ilike('name', escapeLikePattern(input.managerName.trim()))
         .maybeSingle()
       if (error) throw new Error(`Unable to verify manager: ${error.message}`)
       manager = data
     }
     if (!manager || manager.status !== 'active') throw new Error('Selected manager is not active.')
-    if (manager.id === current.id) throw new Error('An employee cannot be their own manager.')
+
+    const visitedManagerIds = new Set<string>()
+    let ancestor = manager
+    while (ancestor) {
+      if (ancestor.id === current.id) throw new Error('This manager assignment would create a reporting loop.')
+      if (visitedManagerIds.has(ancestor.id)) throw new Error('The existing manager hierarchy contains a loop.')
+      visitedManagerIds.add(ancestor.id)
+      if (!ancestor.manager_id) break
+      const { data, error } = await admin
+        .from('employees')
+        .select('id,manager_id')
+        .eq('id', ancestor.manager_id)
+        .maybeSingle()
+      if (error) throw new Error(`Unable to verify manager hierarchy: ${error.message}`)
+      ancestor = data
+    }
   }
 
   let designation = input.designationId
