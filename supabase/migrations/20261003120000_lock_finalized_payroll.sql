@@ -1,6 +1,9 @@
 -- Preserve finalized payroll periods and snapshots against direct table mutations.
 -- finalize_payroll updates records while their parent period is still a draft,
 -- then marks the period finalized; that workflow remains allowed.
+-- The holiday date constraint already enforces uniqueness; remove the duplicate index.
+drop index if exists public.holidays_date_unique_idx;
+
 create or replace function private.protect_finalized_payroll_period()
 returns trigger
 language plpgsql
