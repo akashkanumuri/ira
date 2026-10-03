@@ -944,7 +944,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
 }
 
 function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
-  const [from,setFrom]=useState('');const [to,setTo]=useState('');const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');const [assignBusy,setAssignBusy]=useState(false);const assignRequestRef=useRef<string|null>(null);
+  const [from,setFrom]=useState('');const [to,setTo]=useState('');const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');const [assignBusy,setAssignBusy]=useState(false);const assignRequestRef=useRef<{signature:string;id:string}|null>(null);
   const activeEmployees=(employees as Employee[]).filter(e=>e.status==='active');
   const filtered=(tasks as Task[]).filter(t=>(!from||t.startDate>=from)&&(!to||t.startDate<=to)&&(employee==='all'||t.assignedTo===employee)&&(designation==='all'||t.assignedToDesignation===designation)&&(status==='all'||t.status===status)&&(priority==='all'||t.priority===priority)).sort((a:Task,b:Task)=>b.updatedAt.localeCompare(a.updatedAt));
   async function assignTask(e:React.FormEvent<HTMLFormElement>){
@@ -954,13 +954,16 @@ function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
     const title=String(fd.get('title')||'').trim(),toId=String(fd.get('assignedTo')||''),start=String(fd.get('startDate')||today()),due=String(fd.get('dueDate')||today()),priorityValue=String(fd.get('priority')||'medium');
     if(!title||!toId){setMessage('Task title and employee are required.');return;}
     if(due<start){setMessage('Due date cannot be before the start date.');return;}
-    assignRequestRef.current=crypto.randomUUID();setAssignBusy(true);
+    const description=clean(fd.get('description'));
+    const signature=JSON.stringify([title,description,toId,start,due,priorityValue]);
+    if(assignRequestRef.current?.signature!==signature)assignRequestRef.current={signature,id:crypto.randomUUID()};
+    setAssignBusy(true);
     try{
-      const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:clean(fd.get('description')),p_assigned_to:toId,p_start_date:start,p_due_date:due,p_priority:priorityValue,p_client_request_id:assignRequestRef.current});
+      const {error}=await (supabase as any).rpc('create_task',{p_title:title,p_description:description,p_assigned_to:toId,p_start_date:start,p_due_date:due,p_priority:priorityValue,p_client_request_id:assignRequestRef.current.id});
       if(error)throw error;
-      notify('Task assigned successfully.','success');e.currentTarget.reset();setAssignOpen(false);await onRefresh();
+      assignRequestRef.current=null;notify('Task assigned successfully.','success');e.currentTarget.reset();setAssignOpen(false);await onRefresh();
     }catch(error){setMessage(error instanceof Error?error.message:'Unable to assign task.');notify(error instanceof Error?error.message:'Unable to assign task.','error');}
-    finally{assignRequestRef.current=null;setAssignBusy(false);}
+    finally{setAssignBusy(false);}
   }
   return <PageShell title="Work & Assignments" subtitle="Admin view of assignments, submissions and completion history.">
     {message&&<Notice type="error" text={message}/>}
