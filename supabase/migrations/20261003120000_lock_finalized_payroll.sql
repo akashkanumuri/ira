@@ -7,6 +7,13 @@ language plpgsql
 set search_path = ''
 as $$
 begin
+  if tg_op = 'INSERT' then
+    if new.status = 'finalized' then
+      raise exception 'Payroll periods must be finalized through the payroll workflow';
+    end if;
+    return new;
+  end if;
+
   if old.status = 'finalized' then
     raise exception 'Finalized payroll periods are locked';
   end if;
@@ -17,11 +24,11 @@ begin
 
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists payroll_period_finalized_lock on public.payroll_periods;
 create trigger payroll_period_finalized_lock
-before update or delete on public.payroll_periods
+before insert or update or delete on public.payroll_periods
 for each row execute function private.protect_finalized_payroll_period();
 
 create or replace function private.protect_finalized_payroll_record()
