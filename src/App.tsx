@@ -86,153 +86,306 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const [rules, setRules] = useState<AssignmentRule[]>([]);
   const [loginSessions, setLoginSessions] = useState<any[]>([]);
   const lastRealtimeEvent = useRef<string>('');
+  const reloadTimer = useRef<number | null>(null);
+  const dataSnapshot = useRef({
+    employees: [] as Employee[],
+    departments: [] as Department[],
+    designations: [] as Designation[],
+  });
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
-  const reloadTimer = useRef<number | null>(null);
 
-  useEffect(() => { const timer = window.setInterval(() => setHeaderNow(new Date()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    const timer = window.setInterval(() => setHeaderNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const reload = useCallback(async () => {
     if (!user) return;
-    setDataError('');
-    try {
-      const db = supabase as any;
-      if (user.role === 'admin') {
-        const [empR, depR, desR, salaryR, attR, breaksR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, ruleR] = await Promise.all([
-          db.from('employees').select('*').order('name'),
-          db.from('departments').select('*').order('name'),
-          db.from('designations').select('*').order('name'),
-          db.from('salary_history').select('employee_id,monthly_salary,effective_from').lte('effective_from', today()).order('effective_from', { ascending: false }),
-          db.from('attendance_effective').select('*').order('date', { ascending: false }).limit(1500),
-          db.from('break_events').select('id,attendance_id,employee_id,break_start,break_end,duration_seconds').order('break_start'),
-          db.from('tasks').select('*').order('start_date', { ascending: false }).limit(1500),
-          db.from('leave_requests').select('*').order('created_at', { ascending: false }).limit(1000),
-          db.from('wfh_requests').select('*').order('created_at', { ascending: false }).limit(1000),
-          db.from('regularization_requests').select('*').order('created_at', { ascending: false }).limit(1000),
-          db.from('holidays').select('*').order('date'),
-          db.from('leave_ledger').select('*').order('period_start', { ascending: false }).limit(1000),
-          db.from('payroll_periods').select('*').order('month_start', { ascending: false }).limit(24),
-          db.from('payroll_records').select('*').limit(3000),
-          db.from('task_assignment_rules').select('*').order('created_at'),
-        ]);
-        const errors = [empR, depR, desR, salaryR, attR, breaksR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, ruleR].filter((r: any) => r.error);
-        if (errors.length) throw errors[0].error;
+    setLoadingData(prev => prev);
+    const failures: string[] = [];
+    const db = supabase as any;
 
-        const departmentsMap = new Map((depR.data ?? []).map((d: any) => [d.id, d.name]));
-        const designationsMap = new Map((desR.data ?? []).map((d: any) => [d.id, d.name]));
+    const safe = async (promise: Promise<any>, label: string) => {
+      try {
+        const result = await promise;
+        if (result?.error) failures.push(label);
+        return result;
+      } catch (error) {
+        failures.push(label);
+        return { data: null, error: { message: error instanceof Error ? error.message : 'Request failed.' } };
+      }
+    };
+
+    try {
+      if (user.role === 'admin') {
+        const [
+          empR, depR, desR, salaryR, attR, breaksR, taskR, leaveR, wfhR, corrR,
+          holR, ledgerR, ppR, prR, ruleR
+        ] = await Promise.all([
+          safe(db.from('employees').select('*').order('name'), 'employees'),
+          safe(db.from('departments').select('*').order('name'), 'departments'),
+          safe(db.from('designations').select('*').order('name'), 'designations'),
+          safe(db.from('salary_history').select('employee_id,monthly_salary,effective_from').lte('effective_from', today()).order('effective_from', { ascending: false }), 'salary'),
+          safe(db.from('attendance_effective').select('*').order('date', { ascending: false }).limit(1500), 'attendance'),
+          safe(db.from('break_events').select('id,attendance_id,employee_id,break_start,break_end,duration_seconds').order('break_start'), 'breaks'),
+          safe(db.from('tasks').select('*').order('start_date', { ascending: false }).limit(1500), 'tasks'),
+          safe(db.from('leave_requests').select('*').order('created_at', { ascending: false }).limit(1000), 'leave'),
+          safe(db.from('wfh_requests').select('*').order('created_at', { ascending: false }).limit(1000), 'wfh'),
+          safe(db.from('regularization_requests').select('*').order('created_at', { ascending: false }).limit(1000), 'corrections'),
+          safe(db.from('holidays').select('*').order('date'), 'holidays'),
+          safe(db.from('leave_ledger').select('*').order('period_start', { ascending: false }).limit(1000), 'leave balances'),
+          safe(db.from('payroll_periods').select('*').order('month_start', { ascending: false }).limit(60), 'payroll periods'),
+          safe(db.from('payroll_records').select('*').order('created_at', { ascending: false }).limit(6000), 'payroll records'),
+          safe(db.from('task_assignment_rules').select('*').order('created_at'), 'assignment rules'),
+        ]);
+
+        const fallbackEmployees = dataSnapshot.current.employees;
+        const fallbackDepartments = dataSnapshot.current.departments;
+        const fallbackDesignations = dataSnapshot.current.designations;
+
+        const departmentsData = depR.error ? fallbackDepartments : (depR.data ?? []).map((d: any) => ({ id: d.id, name: d.name }));
+        const designationsData = desR.error ? fallbackDesignations : (desR.data ?? []).map((d: any) => ({ id: d.id, name: d.name, canAssignTasks: Boolean(d.can_assign_tasks) }));
+        const departmentsMap = new Map(departmentsData.map(d => [d.id, d.name]));
+        const designationsMap = new Map(designationsData.map(d => [d.id, d.name]));
+
+        if (!depR.error) {
+          dataSnapshot.current.departments = departmentsData;
+          setDepartments(departmentsData);
+        }
+        if (!desR.error) {
+          dataSnapshot.current.designations = designationsData;
+          setDesignations(designationsData);
+        }
+
         const salaryMap = new Map<string, number>();
         for (const s of salaryR.data ?? []) if (!salaryMap.has(s.employee_id)) salaryMap.set(s.employee_id, Number(s.monthly_salary));
-        const rawEmployees = empR.data ?? [];
-        const managersMap = new Map(rawEmployees.map((e: any) => [e.id, e.name]));
-        const mappedEmployees = rawEmployees.map((e: any) => mapEmployee(e, {
-          departments: departmentsMap,
-          designations: designationsMap,
-          managers: managersMap,
-          salary: salaryMap,
-        }));
-        const employeeMap = new Map(mappedEmployees.map((e) => [e.id, e]));
 
-        const breaksBy = new Map<string, any[]>();
-        for (const b of breaksR.data ?? []) {
-          const list = breaksBy.get(b.attendance_id) ?? [];
-          list.push(b);
-          breaksBy.set(b.attendance_id, list);
+        let mappedEmployees = fallbackEmployees;
+        if (!empR.error) {
+          const rawEmployees = empR.data ?? [];
+          const managersMap = new Map(rawEmployees.map((e: any) => [e.id, e.name]));
+          mappedEmployees = rawEmployees.map((e: any) => mapEmployee(e, {
+            departments: departmentsMap,
+            designations: designationsMap,
+            managers: managersMap,
+            salary: salaryMap,
+          }));
+          dataSnapshot.current.employees = mappedEmployees;
+          setEmployees(mappedEmployees);
         }
-        setEmployees(mappedEmployees);
-        setDepartments((depR.data ?? []).map((d: any) => ({ id: d.id, name: d.name })));
-        setDesignations((desR.data ?? []).map((d: any) => ({ id: d.id, name: d.name, canAssignTasks: Boolean(d.can_assign_tasks) })));
-        setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
-        setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
-        setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
-        setWfhRequests((wfhR.data ?? []).map((r: any) => mapWfh(r, employeeMap)));
-        setCorrections((corrR.data ?? []).map((r: any) => ({
-          id: r.id, employeeId: r.employee_id, employeeName: employeeMap.get(r.employee_id)?.name ?? '',
-          department: employeeMap.get(r.employee_id)?.department ?? '', date: r.date,
-          originalCheckIn: r.original_check_in ? formatKolkataTime(new Date(r.original_check_in)) : '',
-          originalCheckOut: r.original_check_out ? formatKolkataTime(new Date(r.original_check_out)) : '',
-          requestedCheckIn: r.requested_check_in, requestedCheckOut: r.requested_check_out,
-          reason: r.reason, status: r.status, requestedOn: r.created_at, reviewNote: r.review_note,
-        })));
-        setHolidays((holR.data ?? []).map(mapHoliday));
-        setLedgers((ledgerR.data ?? []).map(mapLedger));
-        setPayrollPeriods((ppR.data ?? []).map(mapPayrollPeriod));
-        setPayrollRecords((prR.data ?? []).map((r: any) => mapPayrollRecord(r, employeeMap)));
-        setRules((ruleR.data ?? []).map((r: any) => mapRule(r, designationsMap)));
+        const employeeMap = new Map(mappedEmployees.map(e => [e.id, e]));
+
+        if (!attR.error && !breaksR.error) {
+          const breaksBy = new Map<string, any[]>();
+          for (const b of breaksR.data ?? []) {
+            const list = breaksBy.get(b.attendance_id) ?? [];
+            list.push(b);
+            breaksBy.set(b.attendance_id, list);
+          }
+          setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
+        }
+        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
+        if (!leaveR.error) setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
+        if (!wfhR.error) setWfhRequests((wfhR.data ?? []).map((r: any) => mapWfh(r, employeeMap)));
+        if (!corrR.error) {
+          setCorrections((corrR.data ?? []).map((r: any) => ({
+            id: r.id, employeeId: r.employee_id, employeeName: employeeMap.get(r.employee_id)?.name ?? '',
+            department: employeeMap.get(r.employee_id)?.department ?? '', date: r.date,
+            originalCheckIn: r.original_check_in ? formatKolkataTime(new Date(r.original_check_in)) : '',
+            originalCheckOut: r.original_check_out ? formatKolkataTime(new Date(r.original_check_out)) : '',
+            requestedCheckIn: r.requested_check_in, requestedCheckOut: r.requested_check_out,
+            reason: r.reason, status: r.status, requestedOn: r.created_at, reviewNote: r.review_note,
+          })));
+        }
+        if (!holR.error) setHolidays((holR.data ?? []).map(mapHoliday));
+        if (!ledgerR.error) setLedgers((ledgerR.data ?? []).map(mapLedger));
+        if (!ppR.error) setPayrollPeriods((ppR.data ?? []).map(mapPayrollPeriod));
+        if (!prR.error) setPayrollRecords((prR.data ?? []).map((r: any) => mapPayrollRecord(r, employeeMap)));
+        if (!ruleR.error) setRules((ruleR.data ?? []).map((r: any) => mapRule(r, designationsMap)));
       } else {
         const employeeId = user.employeeDbId;
         if (!employeeId) throw new Error('Your employee account is not linked.');
-        const [visibleEmpR, desR, attR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, sessR, salaryR, ruleR] = await Promise.all([
-          db.from('employees').select('id,profile_id,emp_id,login_id,name,status,work_mode,shift_start,shift_end,department_id,designation_id,manager_id,avatar_url').order('name'),
-          db.from('designations').select('*').order('name'),
-          db.from('attendance_effective').select('*').eq('employee_id', employeeId).order('date', { ascending: false }).limit(400),
-          db.from('tasks').select('*').or(`assigned_to.eq.${employeeId},assigned_by.eq.${employeeId}`).order('due_date'),
-          db.from('leave_requests').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(300),
-          db.from('wfh_requests').select('*').eq('employee_id', employeeId).order('date', { ascending: false }).limit(300),
-          db.from('regularization_requests').select('*').eq('employee_id', employeeId).order('date', { ascending: false }).limit(300),
-          db.from('holidays').select('*').order('date'),
-          db.from('leave_ledger').select('*').eq('employee_id', employeeId).order('period_start', { ascending: false }).limit(120),
-          db.from('payroll_periods').select('*').order('month_start', { ascending: false }).limit(24),
-          db.from('payroll_records').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(24),
-          db.from('auth_sessions').select('*').eq('user_id', user.id).order('login_at', { ascending: false }).limit(100),
-          db.from('salary_history').select('*').eq('employee_id', employeeId).lte('effective_from', today()).order('effective_from', { ascending: false }).limit(24),
-          db.from('task_assignment_rules').select('*').order('created_at'),
+
+        const [
+          visibleEmpR, desR, attR, taskR, leaveR, wfhR, corrR, holR, ledgerR,
+          ppR, prR, sessR, salaryR, ruleR
+        ] = await Promise.all([
+          safe(db.from('employees').select('id,profile_id,emp_id,login_id,name,status,work_mode,shift_start,shift_end,department_id,designation_id,manager_id,avatar_url').order('name'), 'employees'),
+          safe(db.from('designations').select('*').order('name'), 'designations'),
+          safe(db.from('attendance_effective').select('*').eq('employee_id', employeeId).order('date', { ascending: false }).limit(1000), 'attendance'),
+          safe(db.from('tasks').select('*').or(`assigned_to.eq.${employeeId},assigned_by.eq.${employeeId}`).order('due_date'), 'tasks'),
+          safe(db.from('leave_requests').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(500), 'leave'),
+          safe(db.from('wfh_requests').select('*').eq('employee_id', employeeId).order('date', { ascending: false }).limit(500), 'wfh'),
+          safe(db.from('regularization_requests').select('*').eq('employee_id', employeeId).order('date', { ascending: false }).limit(500), 'corrections'),
+          safe(db.from('holidays').select('*').order('date'), 'holidays'),
+          safe(db.from('leave_ledger').select('*').eq('employee_id', employeeId).order('period_start', { ascending: false }).limit(120), 'leave balances'),
+          safe(db.from('payroll_periods').select('*').order('month_start', { ascending: false }).limit(120), 'payroll periods'),
+          safe(db.from('payroll_records').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(120), 'payroll records'),
+          safe(db.from('auth_sessions').select('*').eq('user_id', user.id).order('login_at', { ascending: false }).limit(100), 'login sessions'),
+          safe(db.from('salary_history').select('*').eq('employee_id', employeeId).lte('effective_from', today()).order('effective_from', { ascending: false }).limit(120), 'salary history'),
+          safe(db.from('task_assignment_rules').select('*').order('created_at'), 'assignment rules'),
         ]);
-        const errors = [visibleEmpR, desR, attR, taskR, leaveR, wfhR, corrR, holR, ledgerR, ppR, prR, sessR, salaryR, ruleR].filter((r: any) => r.error);
-        if (errors.length) throw errors[0].error;
 
         const emp = authEmployee(user);
-        const desMap = new Map((desR.data ?? []).map((d: any) => [d.id, d.name]));
-        const visibleRaw = visibleEmpR.data ?? [];
+        const fallback = dataSnapshot.current.employees;
+        const desData = desR.error ? dataSnapshot.current.designations : (desR.data ?? []).map((d: any) => ({ id: d.id, name: d.name, canAssignTasks: Boolean(d.can_assign_tasks) }));
+        if (!desR.error) {
+          dataSnapshot.current.designations = desData;
+          setDesignations(desData);
+        }
+        const desMap = new Map(desData.map(d => [d.id, d.name]));
+        const visibleRaw = visibleEmpR.error ? fallback : (visibleEmpR.data ?? []);
         const visibleSalary = new Map<string, number>();
         for (const s of salaryR.data ?? []) if (!visibleSalary.has(s.employee_id)) visibleSalary.set(s.employee_id, Number(s.monthly_salary));
-        const managerNames = new Map(visibleRaw.map((e: any) => [e.id, e.name]));
+        const managerNames = new Map((visibleRaw as any[]).map((e: any) => [e.id, e.name]));
         const employeeMap = new Map<string, Employee>();
-        for (const row of visibleRaw) employeeMap.set(row.id, mapEmployee(row, { designations: desMap, managers: managerNames, salary: visibleSalary }));
+        for (const row of visibleRaw as any[]) employeeMap.set(row.id, mapEmployee(row, { designations: desMap, managers: managerNames, salary: visibleSalary }));
         employeeMap.set(employeeId, emp);
 
-        const { data: breaks } = await db.from('break_events')
-          .select('id,attendance_id,employee_id,break_start,break_end,duration_seconds')
-          .in('attendance_id', (attR.data ?? []).map((a: any) => a.id))
-          .order('break_start');
-        const breaksBy = new Map<string, any[]>();
-        for (const b of breaks ?? []) {
-          const list = breaksBy.get(b.attendance_id) ?? [];
-          list.push(b);
-          breaksBy.set(b.attendance_id, list);
+        if (!visibleEmpR.error) {
+          const mapped = Array.from(employeeMap.values());
+          dataSnapshot.current.employees = mapped;
+          setEmployees(mapped);
         }
 
-        setEmployees(Array.from(employeeMap.values()));
-        setDesignations((desR.data ?? []).map((d:any)=>({id:d.id,name:d.name,canAssignTasks:Boolean(d.can_assign_tasks)})));
-        setRules((ruleR.data ?? []).map((r:any)=>mapRule(r, desMap)));
-        setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
-        setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
-        setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
-        setWfhRequests((wfhR.data ?? []).map((r: any) => mapWfh(r, employeeMap)));
-        setCorrections((corrR.data ?? []).map((r: any) => ({
-          id: r.id, employeeId: r.employee_id, employeeName: emp.name, department: emp.department, date: r.date,
-          originalCheckIn: r.original_check_in ? formatKolkataTime(new Date(r.original_check_in)) : '',
-          originalCheckOut: r.original_check_out ? formatKolkataTime(new Date(r.original_check_out)) : '',
-          requestedCheckIn: r.requested_check_in, requestedCheckOut: r.requested_check_out, reason: r.reason,
-          status: r.status, requestedOn: r.created_at, reviewNote: r.review_note,
-        })));
-        setHolidays((holR.data ?? []).map(mapHoliday));
-        setLedgers((ledgerR.data ?? []).map(mapLedger));
-        setPayrollPeriods((ppR.data ?? []).map(mapPayrollPeriod));
-        setPayrollRecords((prR.data ?? []).map((r: any) => mapPayrollRecord(r, employeeMap)));
-        setLoginSessions((sessR.data ?? []).map((r: any) => ({
+        if (!attR.error) {
+          const attendanceIds = (attR.data ?? []).map((a: any) => a.id);
+          const breaksResult = attendanceIds.length
+            ? await safe(db.from('break_events').select('id,attendance_id,employee_id,break_start,break_end,duration_seconds').in('attendance_id', attendanceIds).order('break_start'), 'breaks')
+            : { data: [], error: null };
+          if (!breaksResult.error) {
+            const breaksBy = new Map<string, any[]>();
+            for (const b of breaksResult.data ?? []) {
+              const list = breaksBy.get(b.attendance_id) ?? [];
+              list.push(b);
+              breaksBy.set(b.attendance_id, list);
+            }
+            setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
+          }
+        }
+        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
+        if (!leaveR.error) setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
+        if (!wfhR.error) setWfhRequests((wfhR.data ?? []).map((r: any) => mapWfh(r, employeeMap)));
+        if (!corrR.error) {
+          setCorrections((corrR.data ?? []).map((r: any) => ({
+            id: r.id, employeeId: r.employee_id, employeeName: emp.name, department: emp.department, date: r.date,
+            originalCheckIn: r.original_check_in ? formatKolkataTime(new Date(r.original_check_in)) : '',
+            originalCheckOut: r.original_check_out ? formatKolkataTime(new Date(r.original_check_out)) : '',
+            requestedCheckIn: r.requested_check_in, requestedCheckOut: r.requested_check_out, reason: r.reason,
+            status: r.status, requestedOn: r.created_at, reviewNote: r.review_note,
+          })));
+        }
+        if (!holR.error) setHolidays((holR.data ?? []).map(mapHoliday));
+        if (!ledgerR.error) setLedgers((ledgerR.data ?? []).map(mapLedger));
+        if (!ppR.error) setPayrollPeriods((ppR.data ?? []).map(mapPayrollPeriod));
+        if (!prR.error) setPayrollRecords((prR.data ?? []).map((r: any) => mapPayrollRecord(r, employeeMap)));
+        if (!sessR.error) setLoginSessions((sessR.data ?? []).map((r: any) => ({
           id: r.id, loginTime: r.login_at, logoutTime: r.logout_at, duration: r.session_duration_seconds,
           status: r.status, userAgent: r.user_agent,
         })));
-        // Salary is derived from the effective salary history in the mapped employee state.
-        // Do not mutate the AuthContext user object from the data loader.
+        if (!ruleR.error) setRules((ruleR.data ?? []).map((r: any) => mapRule(r, desMap)));
       }
-      setLoadingData(false);
+
+      setDataError(failures.length
+        ? `Some live modules could not be refreshed: ${failures.join(', ')}. Available data remains on screen.`
+        : '');
     } catch (e) {
       console.error('[Portal] load failed', e);
-      setDataError(e instanceof Error ? e.message : 'Unable to load data.');
+      setDataError(e instanceof Error ? e.message : 'Unable to load workspace data.');
+    } finally {
       setLoadingData(false);
     }
   }, [user]);
+
+  useEffect(() => { void reload(); }, [reload]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = (supabase as any).channel(`ira-v2-${user.id}`);
+    const employeeId = user.role === 'employee' ? user.employeeDbId : null;
+    const subscriptions = [
+      ['employees', employeeId ? `id=eq.${employeeId}` : undefined],
+      ['attendance', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['break_events', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['attendance_events', undefined],
+      ['tasks', undefined],
+      ['leave_requests', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['wfh_requests', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['regularization_requests', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['holidays', undefined],
+      ['salary_history', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['leave_ledger', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['payroll_periods', undefined],
+      ['payroll_records', employeeId ? `employee_id=eq.${employeeId}` : undefined],
+      ['departments', undefined],
+      ['designations', undefined],
+      ['task_assignment_rules', undefined],
+    ] as Array<[string,string|undefined]>;
+    for (const [table, filter] of subscriptions) {
+      const options:any = { event: '*', schema: 'public', table };
+      if (filter) options.filter = filter;
+      channel.on('postgres_changes', options, (payload:any) => {
+        const eventKey = `${table}:${payload.eventType}:${payload.new?.id ?? payload.old?.id ?? ''}`;
+        if (lastRealtimeEvent.current !== eventKey) {
+          lastRealtimeEvent.current = eventKey;
+          const now = Date.now();
+          window.setTimeout(() => { if (lastRealtimeEvent.current === eventKey && Date.now() - now > 800) lastRealtimeEvent.current = ''; }, 900);
+
+          if (table === 'tasks') {
+            const next = payload.new ?? {};
+            const previous = payload.old ?? {};
+            if (
+              user.role === 'employee' &&
+              payload.eventType === 'INSERT' &&
+              next.assigned_to === user.employeeDbId
+            ) {
+              notify('New task assigned to you.', 'info');
+            } else if (
+              user.role === 'employee' &&
+              payload.eventType === 'UPDATE' &&
+              next.assigned_to === user.employeeDbId &&
+              previous.assigned_to !== next.assigned_to
+            ) {
+              notify('A task has been assigned to you.', 'info');
+            } else if (
+              user.role === 'admin' &&
+              payload.eventType === 'UPDATE' &&
+              previous.status !== 'completed' &&
+              next.status === 'completed'
+            ) {
+              notify('Employee submitted completed work.', 'success');
+            }
+          } else if ((table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') && user.role === 'employee') {
+            if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
+              const label = table === 'leave_requests' ? 'Leave request' : table === 'wfh_requests' ? 'WFH request' : 'Correction request';
+              notify(`${label} ${payload.new?.status ?? 'updated'}.`, payload.new?.status === 'approved' ? 'success' : payload.new?.status === 'rejected' ? 'error' : 'info');
+            }
+          } else if (table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') {
+            if (user.role === 'admin' && payload.eventType === 'INSERT') notify('New employee request needs review.', 'info');
+          } else if (table === 'holidays' && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+            notify('Holiday calendar updated.', 'info');
+          } else if (table === 'payroll_records' && user.role === 'employee' && payload.eventType === 'UPDATE' && payload.new?.finalized_at) {
+            notify('Your payroll has been finalized.', 'success');
+          }
+        }
+
+        if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
+        reloadTimer.current = window.setTimeout(() => void reload(), 180);
+      });
+    }
+    channel.subscribe((status:string) => {
+      if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        notify('Live updates are temporarily unavailable. The workspace will retry automatically.', 'error');
+      }
+    });
+    return () => {
+      if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
+      (supabase as any).removeChannel(channel);
+    };
+  }, [user, reload]);
+
+  const employeeNav = [
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -306,6 +459,9 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     };
   }, [user, reload]);
 
+  const employeeOpenTasks = tasks.filter(t => t.assignedTo === user.employeeDbId && t.status === 'assigned').length;
+  const adminSubmittedTasks = tasks.filter(t => t.status === 'completed').length;
+
   const employeeNav = [
     ['emp-dashboard', 'Dashboard', LayoutDashboard],
     ['emp-attendance', 'My Attendance', Clock3],
@@ -349,7 +505,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     <div className="min-h-screen text-slate-900 flex ira-app-bg">
       <Sidebar
         activeRole={user.role} activeTab={activeTab} onSelectTab={navigate} currentUser={user}
-        onLogout={onLogout} pendingWfhCount={user.role === 'admin' ? wfhRequests.filter(x => x.status === 'pending').length : undefined}
+        pendingTaskCount={user.role === 'admin' ? adminSubmittedTasks : employeeOpenTasks}
+        pendingWfhCount={user.role === 'admin' ? wfhRequests.filter(x => x.status === 'pending').length : undefined}
         pendingLeaveCount={user.role === 'admin' ? leaveRequests.filter(x => x.status === 'pending').length : undefined}
         pendingCorrectionCount={user.role === 'admin' ? corrections.filter(x => x.status === 'pending').length : undefined}
       />
