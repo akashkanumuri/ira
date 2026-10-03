@@ -31,7 +31,8 @@ export function duration(seconds: number | null | undefined) {
 }
 
 export function dateLabel(date: string, options?: Intl.DateTimeFormatOptions) {
-  return new Date(`${date}T12:00:00`).toLocaleDateString('en-IN', {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
