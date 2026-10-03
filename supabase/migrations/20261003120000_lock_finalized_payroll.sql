@@ -24,7 +24,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists payroll_period_finalized_lock on public.payroll_periods;
 create trigger payroll_period_finalized_lock
