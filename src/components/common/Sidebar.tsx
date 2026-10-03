@@ -58,7 +58,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
             <button
               key={id}
               onClick={() => onSelectTab(id)}
-              className={`w-full flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-sm transition-all duration-200 ${active ? 'bg-gradient-to-r from-blue-600/95 to-indigo-600/95 text-white shadow-[0_12px_30px_rgba(37,99,235,.22)]' : 'text-slate-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'}`}
+              className={`w-full min-h-11 flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-sm transition-all duration-200 ${active ? 'bg-gradient-to-r from-blue-600/95 to-indigo-600/95 text-white shadow-[0_12px_30px_rgba(37,99,235,.22)]' : 'text-slate-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'}`}
             >
               <span className="flex items-center gap-3 min-w-0">
                 <Icon className="w-4.5 h-4.5 shrink-0" />
