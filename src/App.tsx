@@ -1027,7 +1027,7 @@ function EmployeeModal({mode,employee,departments,designations,employees,onClose
   };
   async function resetPassword(){if(!employee||resetBusy)return;setError('');setResetBusy(true);try{const r=await invokeEmployeeAdmin({action:'reset_password',employeeId:employee.id});setSuccess({loginId:r.loginId,password:r.temporaryPassword});notify('Temporary password generated.','success')}catch(e){const message=e instanceof Error?e.message:'Unable to reset password.';setError(message);notify(message,'error')}finally{setResetBusy(false)}}
   async function viewDoc(doc:EmployeeDocument){try{const url=await getSignedDocumentUrl(doc.storagePath);window.open(url,'_blank','noopener,noreferrer')}catch(e){const message=e instanceof Error?e.message:'Unable to open document.';setError(message);notify(message,'error')}}
-  return <Modal title={mode==='create'?'Add employee':'Edit employee'} onClose={onClose} wide>
+  return <Modal title={mode==='create'?'Add employee':'Edit employee'} onClose={onClose} closeDisabled={busy||resetBusy} wide>
     {success&&<div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="flex items-center gap-2 text-emerald-800 font-bold text-sm"><CheckCircle2 className="w-4 h-4"/>Employee account ready</div><p className="text-xs text-emerald-700 mt-2">Login ID: <b>{success.loginId}</b>{success.password&&<> · Temporary password: <b>{success.password}</b></>}</p>{mode==='create'&&<p className="text-[11px] text-emerald-700 mt-2">Share the password securely. It is not stored in the employee record.</p>}</div>}
     {error&&<Notice type="error" text={error}/>}
     <form onSubmit={save} className="space-y-6">
@@ -1333,11 +1333,12 @@ function NotificationBell(){
 }
 function LoadingScreen({label='Loading IRA…'}:{label?:string}){return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin"/>{label}</div></div>}
 
-function Modal({title,onClose,children,wide=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean}){
-  useEffect(()=>{const prev=document.body.style.overflow;const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')onClose()};document.body.style.overflow='hidden';window.addEventListener('keydown',onKey);return()=>{document.body.style.overflow=prev;window.removeEventListener('keydown',onKey)}},[onClose]);
-  return <div className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-md p-3 sm:p-6 flex items-start sm:items-center justify-center overflow-y-auto" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target)onClose()}}>
+function Modal({title,onClose,children,wide=false,closeDisabled=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean;closeDisabled?:boolean}){
+  const requestClose=useCallback(()=>{if(!closeDisabled)onClose()},[closeDisabled,onClose]);
+  useEffect(()=>{const prev=document.body.style.overflow;const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')requestClose()};document.body.style.overflow='hidden';window.addEventListener('keydown',onKey);return()=>{document.body.style.overflow=prev;window.removeEventListener('keydown',onKey)}},[requestClose]);
+  return <div className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-md p-3 sm:p-6 flex items-start sm:items-center justify-center overflow-y-auto" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target)requestClose()}}>
     <div className={`ira-modal w-full ${wide?'max-w-5xl':'max-w-lg'} my-auto`} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="px-5 py-4 border-b border-slate-200/70 flex items-center justify-between bg-white/50"><h3 className="font-bold text-slate-950">{title}</h3><button onClick={onClose} className="icon-btn" aria-label="Close"><X className="w-5 h-5"/></button></div>
+      <div className="px-5 py-4 border-b border-slate-200/70 flex items-center justify-between bg-white/50"><h3 className="font-bold text-slate-950">{title}</h3><button disabled={closeDisabled} onClick={requestClose} className="icon-btn disabled:opacity-50" aria-label="Close"><X className="w-5 h-5"/></button></div>
       <div className="p-5">{children}</div>
     </div>
   </div>
