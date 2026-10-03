@@ -120,6 +120,10 @@ function cleanText(value?: string | null) {
   return v ? v : null
 }
 
+function kolkataToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+}
+
 async function ensureEmployeeLedgers(
   admin: ReturnType<typeof createClient>,
   employeeId: string,
@@ -292,7 +296,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
     if (salaryError) throw salaryError
 
-    await ensureEmployeeLedgers(admin, employee.id, input.joinDate, new Date().toISOString().slice(0, 10))
+    await ensureEmployeeLedgers(admin, employee.id, input.joinDate, kolkataToday())
 
     return { employeeId: employee.id, empId, loginId }
   } catch (error) {
@@ -366,7 +370,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
 
   const newSalary = Number(input.monthlySalary)
   if (!latestSalary || Number(latestSalary.monthly_salary) !== newSalary) {
-    const effective = new Date().toISOString().slice(0, 10)
+    const effective = kolkataToday()
 
     if (latestSalary?.effective_from === effective) {
       const { error: salaryError } = await admin
@@ -395,7 +399,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
     }
   }
 
-  await ensureEmployeeLedgers(admin, input.employeeId, current.join_date, new Date().toISOString().slice(0, 10))
+  await ensureEmployeeLedgers(admin, input.employeeId, current.join_date, kolkataToday())
   return { employeeId: input.employeeId }
 }
 
