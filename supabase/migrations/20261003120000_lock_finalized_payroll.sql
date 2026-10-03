@@ -59,6 +59,9 @@ begin
 end;
 $function$;
 
+revoke all on function public.generate_payroll(date) from PUBLIC, anon, authenticated;
+grant execute on function public.generate_payroll(date) to authenticated;
+
 create or replace function public.finalize_payroll(p_period_id uuid)
 returns void
 language plpgsql
@@ -110,6 +113,9 @@ begin
   where id = p_period_id;
 end;
 $function$;
+
+revoke all on function public.finalize_payroll(uuid) from PUBLIC, anon, authenticated;
+grant execute on function public.finalize_payroll(uuid) to authenticated;
 
 create or replace function private.protect_finalized_payroll_record()
 returns trigger
