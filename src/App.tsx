@@ -443,7 +443,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <header className="ira-topbar h-16 sticky top-0 z-20 flex items-center px-4 sm:px-6 gap-3">
-          <button className="lg:hidden p-2 rounded-xl hover:bg-slate-100" onClick={() => setMobileOpen(v => !v)}><Menu className="w-5 h-5" /></button>
+          <button type="button" className="lg:hidden p-2 rounded-xl hover:bg-slate-100" onClick={() => setMobileOpen(v => !v)} aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={mobileOpen} aria-controls="mobile-navigation"><Menu className="w-5 h-5" /></button>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold">{user.role === 'admin' ? 'IRA Workforce Management' : 'IRA Employee Workspace'}</p>
             <h1 className="text-sm font-bold text-slate-900 truncate">{getPageTitle(activeTab)}</h1>
@@ -469,8 +469,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         {mobileOpen && (
           <div className="lg:hidden fixed inset-0 z-40 bg-slate-950/35" onClick={() => setMobileOpen(false)}>
             <div className="w-72 h-full bg-slate-950 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between text-white"><b>IRA Hospitality</b><button onClick={() => setMobileOpen(false)}><X className="w-5 h-5" /></button></div>
-              <nav className="p-3 space-y-1">
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between text-white"><b>IRA Hospitality</b><button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu"><X className="w-5 h-5" /></button></div>
+              <nav id="mobile-navigation" aria-label="Mobile navigation" className="p-3 space-y-1">
                 {(user.role === 'admin' ? adminNav : employeeNav).map(([id, label, Icon]) => (
                   <button key={id} onClick={() => navigate(id)} className={`w-full text-left px-3 py-3 rounded-2xl flex items-center gap-3 text-sm transition-all ${activeTab === id ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_12px_30px_rgba(37,99,235,.20)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className="w-4 h-4" />{label}</button>
                 ))}
