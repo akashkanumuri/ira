@@ -315,7 +315,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       ['employees', employeeId ? `id=eq.${employeeId}` : undefined],
       ['attendance', employeeId ? `employee_id=eq.${employeeId}` : undefined],
       ['break_events', employeeId ? `employee_id=eq.${employeeId}` : undefined],
-      ['attendance_events', undefined],
       ['tasks', undefined],
       ['leave_requests', employeeId ? `employee_id=eq.${employeeId}` : undefined],
       ['wfh_requests', employeeId ? `employee_id=eq.${employeeId}` : undefined],
