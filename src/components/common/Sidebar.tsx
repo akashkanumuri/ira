@@ -8,7 +8,6 @@ interface Props {
   onSelectTab: (tab: string) => void;
   currentUser: AuthUser;
   pendingTaskCount?: number;
-  pendingTaskCount?: number;
   pendingWfhCount?: number;
   pendingLeaveCount?: number;
   pendingCorrectionCount?: number;
