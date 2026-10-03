@@ -245,7 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     void load();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
       if (!nextSession?.user) {
@@ -253,11 +253,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
-      const profile = await loadUserProfile(nextSession.user);
-      if (mounted) {
-        setUser(profile);
-        setLoading(false);
-      }
+      window.setTimeout(() => {
+        void loadUserProfile(nextSession.user).then((profile) => {
+          if (!mounted) return;
+          setUser(profile);
+          setLoading(false);
+        });
+      }, 0);
     });
 
     return () => {
