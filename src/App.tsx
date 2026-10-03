@@ -822,6 +822,7 @@ function liveWorking(record: AttendanceRecord, now: Date) {
 function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh }: any) {
   const [submitId, setSubmitId] = useState('');
   const [link, setLink] = useState('');
+  const [submitBusy, setSubmitBusy] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [assignBusy, setAssignBusy] = useState(false);
@@ -832,14 +833,24 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   const targets = (employees as Employee[]).filter((e)=>e.status==='active' && e.id!==myId && (rules as AssignmentRule[]).some(r=>r.assignerDesignationId===user.designationId && (r.assigneeDesignationId==null || r.assigneeDesignationId===e.designationId) && (r.scope==='any' || (r.scope==='direct_reports' && e.managerId===myId))));
 
   async function submitTask() {
+    if (submitBusy || !submitId) return;
     setMessage('');
-    if (!submitId) return;
     const cleanLink=link.trim();
-    if (!/^https?:\/\//i.test(cleanLink)) { setMessage('Paste a valid http(s) work link.'); return; }
-    const { error } = await (supabase as any).rpc('submit_task',{p_task_id:submitId,p_submitted_link:cleanLink});
-    if(error){setMessage(error.message);return;}
-    notify('Work submitted successfully.','success');
-    setSubmitId('');setLink('');await onRefresh();
+    if (!/^https?:\/\//i.test(cleanLink)) { setMessage('Paste a valid http(s) work link.'); notify('Paste a valid work link.','error'); return; }
+    setSubmitBusy(true);
+    try {
+      const { error } = await (supabase as any).rpc('submit_task',{p_task_id:submitId,p_submitted_link:cleanLink});
+      if(error) throw error;
+      notify('Work submitted successfully.','success');
+      setSubmitId('');setLink('');
+      await onRefresh();
+    } catch(error) {
+      const message=error instanceof Error?error.message:'Unable to submit work.';
+      setMessage(message);
+      notify(message,'error');
+    } finally {
+      setSubmitBusy(false);
+    }
   }
 
   async function assignTask(e:React.FormEvent<HTMLFormElement>) {
@@ -867,12 +878,12 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
     </div>
     {assignOpen&&<TaskAssignForm targets={targets} onSubmit={assignTask} onClose={()=>setAssignOpen(false)} busy={assignBusy}/>}
     <TaskTable tasks={visible} employeeId={myId} onSubmit={(id)=>{setSubmitId(id);setLink('')}} onRefresh={onRefresh}/>
-    {submitId&&<Modal title="Submit completed work" onClose={()=>setSubmitId('')}><div className="space-y-4"><div className="rounded-2xl bg-slate-50 border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">Paste the final work link</p><p className="text-xs text-slate-500 mt-1">Submitting the link marks the assignment completed and makes the result visible to the person who assigned it.</p></div><input autoFocus value={link} onChange={e=>setLink(e.target.value)} placeholder="https://your-work-link.com" className="input"/><div className="flex justify-end gap-2"><button onClick={()=>setSubmitId('')} className="btn-secondary">Cancel</button><button disabled={!link.trim()} onClick={()=>void submitTask()} className="btn-primary"><CheckCircle2 className="w-4 h-4"/>Submit work</button></div></div></Modal>}
+    {submitId&&<Modal title="Submit completed work" onClose={()=>setSubmitId('')}><div className="space-y-4"><div className="rounded-2xl bg-slate-50 border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">Paste the final work link</p><p className="text-xs text-slate-500 mt-1">Submitting the link marks the assignment completed and makes the result visible to the person who assigned it.</p></div><input autoFocus value={link} onChange={e=>setLink(e.target.value)} placeholder="https://your-work-link.com" className="input"/><div className="flex justify-end gap-2"><button onClick={()=>setSubmitId('')} className="btn-secondary">Cancel</button><button disabled={!link.trim()||submitBusy} onClick={()=>void submitTask()} className="btn-primary">{submitBusy?<><LoaderCircle className="w-4 h-4 animate-spin"/>Submitting…</>:<><CheckCircle2 className="w-4 h-4"/>Submit work</>}</button></div></div></Modal>}
   </PageShell>;
 }
 
 function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
-  const [from,setFrom]=useState(today());const [to,setTo]=useState(today());const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');const [assignBusy,setAssignBusy]=useState(false);const assignRequestRef=useRef<string|null>(null);
+  const [from,setFrom]=useState('');const [to,setTo]=useState('');const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');const [assignBusy,setAssignBusy]=useState(false);const assignRequestRef=useRef<string|null>(null);
   const activeEmployees=(employees as Employee[]).filter(e=>e.status==='active');
   const filtered=(tasks as Task[]).filter(t=>(!from||t.startDate>=from)&&(!to||t.startDate<=to)&&(employee==='all'||t.assignedTo===employee)&&(designation==='all'||t.assignedToDesignation===designation)&&(status==='all'||t.status===status)&&(priority==='all'||t.priority===priority)).sort((a:Task,b:Task)=>b.updatedAt.localeCompare(a.updatedAt));
   async function assignTask(e:React.FormEvent<HTMLFormElement>){
@@ -921,7 +932,7 @@ function TaskAssignForm({targets,onSubmit,onClose,busy=false}:{targets:Employee[
 function TaskTable({tasks,employeeId,onSubmit,admin}:{tasks:Task[];employeeId:string;onSubmit:(id:string)=>void;onRefresh:()=>Promise<void>;admin?:boolean}) {
   return <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs">
     <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Task</Th><Th>Assigned To</Th><Th>Dates</Th><Th>Priority</Th><Th>Status</Th><Th>Work Link</Th><Th>Action</Th></tr></thead>
-    <tbody className="divide-y divide-slate-100">{tasks.map(t=><tr key={t.id}><Td strong>{t.title}<span className="block text-[10px] text-slate-400">{t.description}</span></Td><Td>{t.assignedToName}<span className="block text-[10px] text-slate-400">{t.assignedToDesignation}</span></Td><Td>{dateLabel(t.startDate)} → {dateLabel(t.dueDate)}</Td><Td><PriorityBadge value={t.priority}/></Td><Td><StatusBadge label={t.status}/></Td><Td>{t.submittedLink?<a href={t.submittedLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Link2 className="w-3.5 h-3.5"/>Open</a>:'—'}</Td><Td>{!admin&&t.assignedTo===employeeId&&t.status!=='completed'?<button onClick={()=>onSubmit(t.id)} className="btn-secondary">Submit</button>:'—'}</Td></tr>)}{!tasks.length&&<EmptyRow colSpan={7} text="No tasks match the current filters."/>}</tbody>
+    <tbody className="divide-y divide-slate-100">{tasks.map(t=><tr key={t.id}><Td strong>{t.title}<span className="block text-[10px] text-slate-400">{t.description}</span></Td><Td>{t.assignedToName}<span className="block text-[10px] text-slate-400">{t.assignedToDesignation}</span></Td><Td>{dateLabel(t.startDate)} → {dateLabel(t.dueDate)}</Td><Td><PriorityBadge value={t.priority}/></Td><Td><StatusBadge label={t.status}/></Td><Td>{t.submittedLink?<div className="space-y-0.5"><a href={t.submittedLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Link2 className="w-3.5 h-3.5"/>Open work</a>{t.submittedAt&&<span className="block text-[10px] text-slate-400">{new Date(t.submittedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</span>}</div>:'—'}</Td><Td>{!admin&&t.assignedTo===employeeId&&t.status!=='completed'?<button onClick={()=>onSubmit(t.id)} className="btn-secondary">Submit</button>:'—'}</Td></tr>)}{!tasks.length&&<EmptyRow colSpan={7} text="No tasks match the current filters."/>}</tbody>
   </table></div></div>;
 }
 
