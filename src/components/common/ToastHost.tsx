@@ -24,7 +24,7 @@ export const ToastHost: React.FC = () => {
   }, []);
 
   return (
-    <div className="fixed right-4 top-4 sm:right-6 sm:top-6 z-[100] w-[min(92vw,390px)] space-y-2.5 pointer-events-none" aria-live="polite" aria-atomic="true">
+    <div className="fixed right-4 top-4 sm:right-6 sm:top-6 z-[100] w-[min(92vw,420px)] space-y-2.5 pointer-events-none" aria-live="polite" aria-atomic="true">
       {items.map((item) => {
         const styles: Record<ToastType, string> = {
           success: 'border-emerald-200/80 bg-emerald-50/90 text-emerald-950',
@@ -33,9 +33,9 @@ export const ToastHost: React.FC = () => {
         };
         const Icon = item.type === 'success' ? CheckCircle2 : item.type === 'error' ? CircleAlert : Info;
         return (
-          <div key={item.id} className={`ira-toast pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_20px_60px_rgba(15,23,42,.16)] backdrop-blur-xl ${styles[item.type]}`}>
-            <span className="mt-0.5 shrink-0"><Icon className="w-4 h-4" /></span>
-            <p className="text-sm leading-5 font-medium flex-1">{item.message}</p>
+          <div key={item.id} role={item.type === 'error' ? 'alert' : 'status'} className={`ira-toast pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3.5 shadow-[0_20px_60px_rgba(15,23,42,.16)] backdrop-blur-2xl ${styles[item.type]}`}>
+            <span className="mt-0.5 shrink-0 rounded-xl bg-white/70 p-1.5 shadow-sm"><Icon className="w-4 h-4" /></span>
+            <p className="text-sm leading-5 font-semibold flex-1">{item.message}</p>
             <button type="button" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))} className="shrink-0 rounded-full p-1 text-slate-500 hover:text-slate-900 hover:bg-black/5 transition" aria-label="Dismiss notification">
               <X className="w-3.5 h-3.5" />
             </button>
