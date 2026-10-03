@@ -31,7 +31,9 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason.trim()) return;
+    if (!reason.trim() || submitting) return;
+    setSubmitError(null);
+    setSubmitting(true);
 
     try {
       await onSubmitCorrection({
