@@ -397,6 +397,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     ['emp-tasks', 'Work & Assignments', BriefcaseBusiness],
     ['emp-leave', 'Leave', CalendarDays],
     ['emp-wfh', 'WFH', Home],
+    ['emp-payroll', 'Payroll', WalletCards],
     ['emp-corrections', 'Corrections', FileClock],
     ['emp-holidays', 'Holidays', CalendarDays],
     ['emp-profile', 'Profile', UserRound],
@@ -517,6 +518,7 @@ function getPageTitle(tab: string) {
     'emp-tasks': 'Work & Assignments',
     'emp-leave': 'Leave',
     'emp-wfh': 'WFH',
+    'emp-payroll': 'Payroll',
     'emp-corrections': 'Corrections',
     'emp-holidays': 'Holidays',
     'emp-profile': 'Profile',
@@ -542,6 +544,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
   if (activeTab === 'emp-leave') return <LeaveEmployee {...props} />;
   if (activeTab === 'emp-wfh') return <WfhEmployee {...props} />;
+  if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
   if (activeTab === 'emp-corrections') return <CorrectionEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysEmployee {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
@@ -604,6 +607,60 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
   );
 }
 
+function PayrollEmployee({ payrollPeriods, payrollRecords }: any) {
+  const finalized = [...(payrollRecords as PayrollRecord[])]
+    .filter(record => Boolean(record.finalizedAt))
+    .sort((a, b) => {
+      const aMonth = payrollPeriods.find((period: PayrollPeriod) => period.id === a.periodId)?.monthStart ?? '';
+      const bMonth = payrollPeriods.find((period: PayrollPeriod) => period.id === b.periodId)?.monthStart ?? '';
+      return bMonth.localeCompare(aMonth) || (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? '');
+    });
+
+  return (
+    <PageShell title="Payroll / Salary" subtitle="Review your finalized salary payments and the leave deductions used for each month.">
+      {finalized.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+          <WalletCards className="w-6 h-6 text-slate-400 mx-auto" />
+          <h2 className="text-sm font-bold text-slate-900 mt-3">No finalized payroll yet</h2>
+          <p className="text-xs text-slate-500 mt-1">Finalized payments will appear here after payroll is processed.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-900">Finalized payment history</h2>
+            <p className="text-xs text-slate-500 mt-1">{finalized.length} payment record{finalized.length === 1 ? '' : 's'}</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <Th>Period</Th><Th>Salary snapshot</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Deduction</Th><Th>Final pay</Th><Th>Finalized</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {finalized.map(record => {
+                  const period = payrollPeriods.find((item: PayrollPeriod) => item.id === record.periodId);
+                  return (
+                    <tr key={record.id}>
+                      <Td strong>{period?.monthStart?.slice(0, 7) ?? '—'}</Td>
+                      <Td>{money(record.salarySnapshot)}</Td>
+                      <Td>{record.paidLeaveDays}</Td>
+                      <Td>{record.unpaidLeaveDays}</Td>
+                      <Td>{money(record.leaveDeduction)}</Td>
+                      <Td strong>{money(record.finalPay)}</Td>
+                      <Td>{record.finalizedAt ? new Date(record.finalizedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </PageShell>
+  );
+}
+
 function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPeriods, payrollRecords, tasks, employees, onSelectTab }: any) {
   const [live, setLive] = useState(new Date());
   const emp = authEmployee(user);
@@ -660,7 +717,7 @@ function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPe
           </div>
           {latestFinal && <p className="text-[11px] text-slate-500 mt-3">Unpaid leave: {latestFinal.unpaidLeaveDays} day(s) · Deduction {money(latestFinal.leaveDeduction)}</p>}
           {latestFinal && <div className="mt-4 pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-2"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Recent finalized payments</p><span className="text-[10px] text-slate-400">History</span></div>
+            <div className="flex items-center justify-between mb-2"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Recent finalized payments</p><button type="button" onClick={() => onSelectTab?.('emp-payroll')} className="text-[10px] font-semibold text-blue-600 hover:text-blue-700">View history</button></div>
             <div className="space-y-1.5">
               {[...(payrollRecords as PayrollRecord[])]
                 .filter(p=>Boolean(p.finalizedAt))
