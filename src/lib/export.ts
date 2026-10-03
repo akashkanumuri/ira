@@ -38,7 +38,7 @@ function formatTime(ts: string | null): string {
 }
 
 function formatDate(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString('en-IN', {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-IN', {
     timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
@@ -47,7 +47,7 @@ function formatDate(date: string): string {
 }
 
 function dayOfWeek(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString('en-IN', {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-IN', {
     timeZone: 'Asia/Kolkata',
     weekday: 'long',
   });
@@ -60,8 +60,8 @@ export async function fetchAttendanceData(filters: ExportFilters): Promise<Expor
 
   const db = supabase as any;
   let query = db
-    .from('attendance')
-    .select('date, mode, status, check_in_at, check_out_at, working_seconds, total_break_seconds, employees!inner(name)')
+    .from('attendance_effective')
+    .select('employee_id,date, mode, status, check_in_at, check_out_at, working_seconds, total_break_seconds')
     .order('date', { ascending: true });
 
   if (filters.startDate) query = query.gte('date', filters.startDate);
@@ -70,8 +70,8 @@ export async function fetchAttendanceData(filters: ExportFilters): Promise<Expor
   if (filters.month) {
     const [year, month] = filters.month.split('-').map(Number);
     const start = `${year}-${String(month).padStart(2, '0')}-01`;
-    const end = new Date(year, month, 0);
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+    const end = new Date(Date.UTC(year, month, 0));
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(end.getUTCDate()).padStart(2, '0')}`;
     query = query.gte('date', start).lte('date', endDate);
   }
 
@@ -87,8 +87,17 @@ export async function fetchAttendanceData(filters: ExportFilters): Promise<Expor
     if (!page || page.length < pageSize) break;
   }
 
+  const employeeIds = [...new Set(allRows.map((row: any) => row.employee_id).filter(Boolean))];
+  const employeeNames = new Map<string,string>();
+  for (let from = 0; from < employeeIds.length; from += 1000) {
+    const ids = employeeIds.slice(from, from + 1000);
+    const { data, error } = await db.from('employees').select('id,name').in('id',ids);
+    if (error) throw new Error('Failed to load employee names for export.');
+    for (const row of data ?? []) employeeNames.set(row.id,row.name);
+  }
+
   return allRows.map((row: any) => ({
-    'Employee Name': row.employees?.name ?? 'Employee',
+    'Employee Name': employeeNames.get(row.employee_id) ?? 'Employee',
     Date: formatDate(row.date),
     Day: dayOfWeek(row.date),
     'Attendance Mode': row.mode === 'wfh' ? 'WFH' : row.mode === 'office' ? 'Office' : '--',
