@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck, UserRound, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle } from 'lucide-react';
 
 type Portal = 'employee' | 'admin';
 
@@ -61,31 +61,6 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
       </div>
 
       <div className="ira-login-frame">
-        <div className="ira-login-mode-switch" role="tablist" aria-label="Choose portal">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isEmployee}
-            aria-label="Employee login"
-            onClick={() => switchPortal('employee')}
-            className={isEmployee ? 'active' : ''}
-          >
-            <UserRound />
-            <span>Employee</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!isEmployee}
-            aria-label="Admin login"
-            onClick={() => switchPortal('admin')}
-            className={!isEmployee ? 'active' : ''}
-          >
-            <ShieldCheck />
-            <span>Admin</span>
-          </button>
-        </div>
-
         <section className="ira-login-panel">
           <div className="ira-login-heading">
             <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="ira-login-brand-logo" />
@@ -138,9 +113,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             </label>
 
             <button type="submit" disabled={loading} className="ira-login-submit">
-              <span>{loading ? 'SIGNING IN…' : 'SIGN IN'}</span>
-              {!loading && <ArrowRight />}
-              {loading && <span className="ira-login-spinner" aria-hidden="true" />}
+              {loading ? 'SIGNING IN…' : 'SIGN IN'}
             </button>
           </form>
 
@@ -151,6 +124,12 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
           >
             Forgot Password?
           </button>
+          <div className="ira-login-account-switch">
+            <span>{isEmployee ? 'Have an admin account?' : 'Have an employee account?'}</span>
+            <button type="button" onClick={() => switchPortal(isEmployee ? 'admin' : 'employee')}>
+              {isEmployee ? 'ADMIN LOGIN' : 'EMPLOYEE LOGIN'}
+            </button>
+          </div>
         </section>
       </div>
     </main>
