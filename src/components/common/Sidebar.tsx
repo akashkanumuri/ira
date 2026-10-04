@@ -40,7 +40,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
   const items = activeRole === 'admin' ? adminItems : employeeItems;
 
   return (
-    <aside className="hidden lg:flex w-64 bg-slate-950/92 text-slate-300 flex-col shrink-0 sticky top-0 h-screen border-r border-white/10 shadow-[12px_0_50px_rgba(15,23,42,.12)] backdrop-blur-2xl">
+    <aside className="ira-sidebar hidden lg:flex w-64 text-slate-300 flex-col shrink-0 sticky top-0 h-screen border-r border-white/10 shadow-[12px_0_50px_rgba(15,23,42,.12)] backdrop-blur-2xl relative overflow-hidden">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="flex items-center">
           <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-9 w-auto max-w-[150px] object-contain object-left" />
@@ -54,7 +54,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
             <button
               key={id}
               onClick={() => onSelectTab(id)}
-              className={`w-full min-h-11 flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-sm transition-all duration-200 ${active ? 'bg-gradient-to-r from-blue-600/95 to-indigo-600/95 text-white shadow-[0_12px_30px_rgba(37,99,235,.22)]' : 'text-slate-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'}`}
+              className={`w-full min-h-11 flex items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-sm transition-all duration-200 ${active ? 'ira-nav-active text-white shadow-[0_12px_30px_rgba(0,51,255,.24)]' : 'text-slate-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'}`}
             >
               <span className="flex items-center gap-3 min-w-0">
                 <Icon className="w-4.5 h-4.5 shrink-0" />
