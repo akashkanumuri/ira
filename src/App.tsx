@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { useAuth, type AuthUser, loginIdToAuthEmail } from './contexts/AuthContext';
@@ -1394,14 +1395,36 @@ function NotificationBell(){
 function LoadingScreen({label='Loading IRA…'}:{label?:string}){return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin"/>{label}</div></div>}
 
 function Modal({title,onClose,children,wide=false,closeDisabled=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean;closeDisabled?:boolean}){
+  const dialogRef=useRef<HTMLDivElement>(null);
   const requestClose=useCallback(()=>{if(!closeDisabled)onClose()},[closeDisabled,onClose]);
-  useEffect(()=>{const prev=document.body.style.overflow;const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')requestClose()};document.body.style.overflow='hidden';window.addEventListener('keydown',onKey);return()=>{document.body.style.overflow=prev;window.removeEventListener('keydown',onKey)}},[requestClose]);
-  return <div className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-md p-3 sm:p-6 flex items-start sm:items-center justify-center overflow-y-auto" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target)requestClose()}}>
-    <div className={`ira-modal w-full ${wide?'max-w-5xl':'max-w-lg'} my-auto`} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="px-5 py-4 border-b border-slate-200/70 flex items-center justify-between bg-white/50"><h3 className="font-bold text-slate-950">{title}</h3><button disabled={closeDisabled} onClick={requestClose} className="icon-btn disabled:opacity-50" aria-label="Close"><X className="w-5 h-5"/></button></div>
-      <div className="p-5">{children}</div>
-    </div>
-  </div>
+  useEffect(()=>{
+    const previousOverflow=document.body.style.overflow;
+    const previousFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    document.body.style.overflow='hidden';
+    const getFocusable=()=>Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')??[]);
+    const focusable=getFocusable();
+    (focusable[0]??dialogRef.current)?.focus();
+    const onKey=(event:KeyboardEvent)=>{
+      if(event.key==='Escape'){requestClose();return}
+      if(event.key!=='Tab')return;
+      const items=getFocusable();
+      if(!items.length){event.preventDefault();dialogRef.current?.focus();return}
+      const first=items[0],last=items[items.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+    };
+    window.addEventListener('keydown',onKey);
+    return()=>{document.body.style.overflow=previousOverflow;window.removeEventListener('keydown',onKey);previousFocus?.focus()};
+  },[requestClose]);
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center overflow-y-auto overscroll-contain" role="presentation" onMouseDown={event=>{if(event.currentTarget===event.target)requestClose()}}>
+      <div ref={dialogRef} tabIndex={-1} className={`ira-modal w-full ${wide?'max-w-5xl':'max-w-lg'} max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] my-auto flex flex-col`} role="dialog" aria-modal="true" aria-label={title}>
+        <div className="shrink-0 px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 flex items-center justify-between bg-white"><h3 className="font-bold text-slate-950 truncate pr-3">{title}</h3><button type="button" disabled={closeDisabled} onClick={requestClose} className="icon-btn shrink-0 disabled:opacity-50" aria-label="Close"><X className="w-5 h-5"/></button></div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 function FormSection({title,icon,children}:{title:string;icon:React.ReactNode;children:React.ReactNode}){return <section className="ira-form-section"><div className="flex items-center gap-2 mb-3"><span className="w-8 h-8 rounded-xl bg-slate-100/85 border border-slate-200 flex items-center justify-center text-slate-600">{icon}</span><h4 className="text-sm font-bold text-slate-950">{title}</h4></div>{children}</section>}
