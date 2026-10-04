@@ -998,7 +998,7 @@ function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
         <p className="text-sm text-slate-600">“{archiveTarget.title}” will be removed from active task lists. Its assignment, submission and event history will remain available under Show removed.</p>
         <div className="flex justify-end gap-2">
           <button type="button" disabled={archiveBusy} onClick={()=>setArchiveTarget(null)} className="btn-secondary disabled:opacity-50">Cancel</button>
-          <button type="button" disabled={archiveBusy} onClick={()=>void removeTask()} className="btn-primary bg-rose-600 hover:bg-rose-700 disabled:opacity-50">{archiveBusy?<><RefreshCw className="w-4 h-4 animate-spin"/>Deleting…</>:<><Trash2 className="w-4 h-4"/>Delete task</>}</button>
+          <button type="button" disabled={archiveBusy} onClick={()=>void removeTask()} className="btn-secondary border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50">{archiveBusy?<><RefreshCw className="w-4 h-4 animate-spin"/>Deleting…</>:<><Trash2 className="w-4 h-4"/>Delete task</>}</button>
         </div>
       </div>
     </Modal>}
