@@ -54,47 +54,40 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   }
 
   return (
-    <main className="ira-login min-h-[100dvh]">
+    <main className="ira-login">
       <div className="ira-login-shape ira-login-shape-a" aria-hidden="true" />
       <div className="ira-login-shape ira-login-shape-b" aria-hidden="true" />
       <div className="ira-login-shape ira-login-shape-c" aria-hidden="true" />
 
-      <div className="ira-login-frame">
-        <header className="ira-login-top">
-          <img
-            src="/ira-hospitality-logo.png"
-            alt="IRA Hospitality"
-            className="ira-login-logo"
-          />
-          <div className="ira-login-mode-switch" role="tablist" aria-label="Choose portal">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isEmployee}
-              aria-label="Employee login"
-              onClick={() => switchPortal('employee')}
-              className={isEmployee ? 'active' : ''}
-            >
-              <UserRound />
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!isEmployee}
-              aria-label="Admin login"
-              onClick={() => switchPortal('admin')}
-              className={!isEmployee ? 'active' : ''}
-            >
-              <ShieldCheck />
-            </button>
-          </div>
-        </header>
+      <header className="ira-login-top">
+        <div className="ira-login-mode-switch" role="tablist" aria-label="Choose portal">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isEmployee}
+            aria-label="Employee login"
+            onClick={() => switchPortal('employee')}
+            className={isEmployee ? 'active' : ''}
+          >
+            <UserRound />
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isEmployee}
+            aria-label="Admin login"
+            onClick={() => switchPortal('admin')}
+            className={!isEmployee ? 'active' : ''}
+          >
+            <ShieldCheck />
+          </button>
+        </div>
+      </header>
 
+      <div className="ira-login-frame">
         <section className="ira-login-panel">
           <div className="ira-login-heading">
-            <span className="ira-login-kicker">{isEmployee ? 'Employee' : 'Admin'} portal</span>
             <h1>SIGN IN</h1>
-            <p>{isEmployee ? 'Access your workforce account.' : 'Access the administrator console.'}</p>
           </div>
 
           {error && (
@@ -149,16 +142,17 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             </button>
           </form>
 
-          <div className="ira-login-switch-hint">
-            <span>{isEmployee ? 'Employee access' : 'Administrator access'}</span>
-            <button
-              type="button"
-              onClick={() => switchPortal(isEmployee ? 'admin' : 'employee')}
-              disabled={loading}
-            >
-              Switch to {isEmployee ? 'Admin' : 'Employee'}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="ira-login-forgot"
+            onClick={() => setError('Please contact your administrator to reset your password.')}
+          >
+            Forgot Password?
+          </button>
+
+          <p className="ira-login-help">
+            {isEmployee ? 'Employee Workforce Portal' : 'IRA Administrator Portal'}
+          </p>
         </section>
       </div>
     </main>
