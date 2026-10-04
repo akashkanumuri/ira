@@ -2676,3 +2676,124 @@ body {
     animation: none !important;
   }
 }
+
+
+/* Final mobile polish — restore original vertical rhythm and make ambient brand motion visible. */
+.ira-app-bg {
+  position: relative !important;
+  isolation: isolate !important;
+}
+
+.ira-theme-canvas {
+  z-index: 0 !important;
+  opacity: 1 !important;
+}
+
+.ira-theme-orb {
+  width: 380px !important;
+  height: 380px !important;
+  filter: blur(85px) !important;
+  opacity: .18 !important;
+  mix-blend-mode: multiply !important;
+  z-index: 0 !important;
+}
+
+.ira-theme-orb-a {
+  left: -90px !important;
+  top: 12% !important;
+}
+.ira-theme-orb-b {
+  right: -110px !important;
+  top: 38% !important;
+}
+.ira-theme-orb-c {
+  left: 24% !important;
+  bottom: -80px !important;
+}
+
+.ira-sidebar,
+.ira-topbar,
+.ira-mobile-drawer,
+.ira-mobile-bottom-nav,
+.ira-main,
+.ira-main > *,
+.ira-topbar > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Keep the mobile header at the original compact 64px rhythm. */
+.ira-topbar {
+  height: 64px !important;
+  min-height: 64px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+.ira-topbar::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* The content starts at the same compact spacing rather than being pushed down. */
+.ira-main {
+  padding-top: 16px !important;
+}
+
+/* No decorative gradient strokes anywhere in the light product shell. */
+.ira-main .bg-white::before,
+.ira-main .bg-white::after,
+.ira-main .bg-slate-50::before,
+.ira-main .bg-slate-50::after,
+.surface-card::before,
+.surface-card::after,
+.summary-card::before,
+.summary-card::after,
+.kpi-card::before,
+.kpi-card::after,
+.export-card::before,
+.export-card::after {
+  display: none !important;
+  background: none !important;
+  border: 0 !important;
+}
+
+.ira-mobile-bottom-nav::before,
+.ira-mobile-bottom-nav::after {
+  display: none !important;
+}
+
+/* Give the ambient balls slightly more presence on small screens without reducing text contrast. */
+@media (max-width: 767px) {
+  .ira-theme-orb {
+    width: 330px !important;
+    height: 330px !important;
+    filter: blur(85px) !important;
+    opacity: .20 !important;
+  }
+
+  .ira-theme-orb-a {
+    left: -115px !important;
+    top: 18% !important;
+  }
+  .ira-theme-orb-b {
+    right: -120px !important;
+    top: 47% !important;
+  }
+  .ira-theme-orb-c {
+    left: 28% !important;
+    bottom: -110px !important;
+  }
+
+  .ira-main {
+    padding: 16px !important;
+    padding-bottom: 84px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ira-theme-orb {
+    animation: none !important;
+  }
+}
