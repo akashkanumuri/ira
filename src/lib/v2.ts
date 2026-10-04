@@ -211,6 +211,7 @@ export function mapTask(row: any, employees: Map<string, Employee>): Task {
     status: row.status,
     submittedLink: row.submitted_link,
     submittedAt: row.submitted_at,
+    archivedAt: row.archived_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
