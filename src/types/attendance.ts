@@ -168,6 +168,7 @@ export interface Task {
   status: TaskStatus;
   submittedLink?: string | null;
   submittedAt?: string | null;
+  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

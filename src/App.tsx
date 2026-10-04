@@ -891,7 +891,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   const assignRequestRef = useRef<string | null>(null);
   const myId = user.employeeDbId!;
   const canAssign = Boolean(user.designationId && (designations as Designation[]).some((d:Designation)=>d.id===user.designationId && d.canAssignTasks));
-  const visible = tasks.filter((t:Task)=>t.assignedTo===myId || t.assignedBy===myId).sort((a:Task,b:Task)=>a.status===b.status?a.dueDate.localeCompare(b.dueDate):a.status==='completed'?1:-1);
+  const visible = tasks.filter((t:Task)=>!t.archivedAt&&(t.assignedTo===myId || t.assignedBy===myId)).sort((a:Task,b:Task)=>a.status===b.status?a.dueDate.localeCompare(b.dueDate):a.status==='completed'?1:-1);
   const targets = (employees as Employee[]).filter((e)=>e.status==='active' && e.id!==myId && (rules as AssignmentRule[]).some(r=>r.assignerDesignationId===user.designationId && (r.assigneeDesignationId==null || r.assigneeDesignationId===e.designationId) && (r.scope==='any' || (r.scope==='direct_reports' && e.managerId===myId))));
 
   async function submitTask() {
@@ -945,9 +945,9 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
 }
 
 function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
-  const [from,setFrom]=useState('');const [to,setTo]=useState('');const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [message,setMessage]=useState('');const [assignBusy,setAssignBusy]=useState(false);const assignRequestRef=useRef<{signature:string;id:string}|null>(null);
+  const [from,setFrom]=useState('');const [to,setTo]=useState('');const [employee,setEmployee]=useState('all');const [designation,setDesignation]=useState('all');const [status,setStatus]=useState('all');const [priority,setPriority]=useState('all');const [assignOpen,setAssignOpen]=useState(false);const [showRemoved,setShowRemoved]=useState(false);const [archiveTarget,setArchiveTarget]=useState<Task|null>(null);const [archiveBusy,setArchiveBusy]=useState(false);const [message,setMessage]=useState('');const [assignBusy,setAssignBusy]=useState(false);const assignRequestRef=useRef<{signature:string;id:string}|null>(null);
   const activeEmployees=(employees as Employee[]).filter(e=>e.status==='active');
-  const filtered=(tasks as Task[]).filter(t=>(!from||t.startDate>=from)&&(!to||t.startDate<=to)&&(employee==='all'||t.assignedTo===employee)&&(designation==='all'||t.assignedToDesignation===designation)&&(status==='all'||t.status===status)&&(priority==='all'||t.priority===priority)).sort((a:Task,b:Task)=>b.updatedAt.localeCompare(a.updatedAt));
+  const filtered=(tasks as Task[]).filter(t=>(showRemoved?Boolean(t.archivedAt):!t.archivedAt)&&(!from||t.startDate>=from)&&(!to||t.startDate<=to)&&(employee==='all'||t.assignedTo===employee)&&(designation==='all'||t.assignedToDesignation===designation)&&(status==='all'||t.status===status)&&(priority==='all'||t.priority===priority)).sort((a:Task,b:Task)=>b.updatedAt.localeCompare(a.updatedAt));
   async function assignTask(e:React.FormEvent<HTMLFormElement>){
     e.preventDefault();setMessage('');
     if(assignBusy)return;
@@ -966,6 +966,20 @@ function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
     }catch(error){setMessage(error instanceof Error?error.message:'Unable to assign task.');notify(error instanceof Error?error.message:'Unable to assign task.','error');}
     finally{setAssignBusy(false);}
   }
+  async function removeTask(){
+    if(!archiveTarget||archiveBusy)return;
+    setArchiveBusy(true);setMessage('');
+    try{
+      const {error}=await (supabase as any).rpc('archive_task',{p_task_id:archiveTarget.id});
+      if(error)throw error;
+      notify('Task deleted. Its history is retained under Show removed.','success');
+      setArchiveTarget(null);
+      await onRefresh();
+    }catch(error){
+      const message=error instanceof Error?error.message:'Unable to delete this task.';
+      setMessage(message);notify(message,'error');
+    }finally{setArchiveBusy(false);}
+  }
   return <PageShell title="Work & Assignments" subtitle="Admin view of assignments, submissions and completion history.">
     {message&&<Notice type="error" text={message}/>}
     <div className="bg-white rounded-2xl border border-slate-200 p-4 grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
@@ -976,9 +990,18 @@ function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
       <FilterInput label="Status"><select value={status} onChange={e=>setStatus(e.target.value)} className="input"><option value="all">All</option><option value="assigned">Assigned</option><option value="completed">Completed</option></select></FilterInput>
       <FilterInput label="Priority"><select value={priority} onChange={e=>setPriority(e.target.value)} className="input"><option value="all">All</option>{['low','medium','high','urgent'].map(x=><option key={x}>{x}</option>)}</select></FilterInput>
     </div>
-    <div className="flex justify-between items-center mt-4"><p className="text-xs text-slate-500">{filtered.length} task(s)</p><button onClick={()=>setAssignOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>{assignOpen?'Close':'Assign task'}</button></div>
+    <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mt-4"><div className="flex items-center gap-3"><p className="text-xs text-slate-500">{filtered.length} task(s)</p><label className="inline-flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showRemoved} onChange={e=>setShowRemoved(e.target.checked)}/>Show removed</label></div><button onClick={()=>setAssignOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>{assignOpen?'Close':'Assign task'}</button></div>
     {assignOpen&&<TaskAssignForm targets={activeEmployees} onSubmit={assignTask} onClose={()=>setAssignOpen(false)} busy={assignBusy}/>}
-    <TaskTable tasks={filtered} employeeId="" onSubmit={()=>{}} onRefresh={onRefresh} admin/>
+    <TaskTable tasks={filtered} employeeId="" onSubmit={()=>{}} onRefresh={onRefresh} admin onDelete={setArchiveTarget} archivingId={archiveBusy?archiveTarget?.id:null}/>
+    {archiveTarget&&<Modal title="Delete task allocation?" onClose={()=>setArchiveTarget(null)} closeDisabled={archiveBusy}>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">“{archiveTarget.title}” will be removed from active task lists. Its assignment, submission and event history will remain available under Show removed.</p>
+        <div className="flex justify-end gap-2">
+          <button type="button" disabled={archiveBusy} onClick={()=>setArchiveTarget(null)} className="btn-secondary disabled:opacity-50">Cancel</button>
+          <button type="button" disabled={archiveBusy} onClick={()=>void removeTask()} className="btn-primary bg-rose-600 hover:bg-rose-700 disabled:opacity-50">{archiveBusy?<><RefreshCw className="w-4 h-4 animate-spin"/>Deleting…</>:<><Trash2 className="w-4 h-4"/>Delete task</>}</button>
+        </div>
+      </div>
+    </Modal>}
   </PageShell>;
 }
 
@@ -994,10 +1017,10 @@ function TaskAssignForm({targets,onSubmit,onClose,busy=false}:{targets:Employee[
   </form>;
 }
 
-function TaskTable({tasks,employeeId,onSubmit,admin}:{tasks:Task[];employeeId:string;onSubmit:(id:string)=>void;onRefresh:()=>Promise<void>;admin?:boolean}) {
+function TaskTable({tasks,employeeId,onSubmit,onDelete,archivingId,admin}:{tasks:Task[];employeeId:string;onSubmit:(id:string)=>void;onRefresh:()=>Promise<void>;onDelete?:(task:Task)=>void;archivingId?:string|null;admin?:boolean}) {
   return <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs">
     <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Task</Th><Th>Assigned To</Th><Th>Dates</Th><Th>Priority</Th><Th>Status</Th><Th>Work Link</Th><Th>Action</Th></tr></thead>
-    <tbody className="divide-y divide-slate-100">{tasks.map(t=><tr key={t.id}><Td strong>{t.title}<span className="block text-[10px] text-slate-400">{t.description}</span></Td><Td>{t.assignedToName}<span className="block text-[10px] text-slate-400">{t.assignedToDesignation}</span></Td><Td>{dateLabel(t.startDate)} → {dateLabel(t.dueDate)}</Td><Td><PriorityBadge value={t.priority}/></Td><Td><StatusBadge label={t.status}/></Td><Td>{t.submittedLink?<div className="space-y-0.5"><a href={t.submittedLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Link2 className="w-3.5 h-3.5"/>Open work</a>{t.submittedAt&&<span className="block text-[10px] text-slate-400">{new Date(t.submittedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</span>}</div>:'—'}</Td><Td>{!admin&&t.assignedTo===employeeId&&t.status!=='completed'?<button onClick={()=>onSubmit(t.id)} className="btn-secondary">Submit</button>:'—'}</Td></tr>)}{!tasks.length&&<EmptyRow colSpan={7} text="No tasks match the current filters."/>}</tbody>
+    <tbody className="divide-y divide-slate-100">{tasks.map(t=><tr key={t.id}><Td strong>{t.title}<span className="block text-[10px] text-slate-400">{t.description}</span></Td><Td>{t.assignedToName}<span className="block text-[10px] text-slate-400">{t.assignedToDesignation}</span></Td><Td>{dateLabel(t.startDate)} → {dateLabel(t.dueDate)}</Td><Td><PriorityBadge value={t.priority}/></Td><Td><StatusBadge label={t.archivedAt?'Removed':t.status}/></Td><Td>{t.submittedLink?<div className="space-y-0.5"><a href={t.submittedLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Link2 className="w-3.5 h-3.5"/>Open work</a>{t.submittedAt&&<span className="block text-[10px] text-slate-400">{new Date(t.submittedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</span>}</div>:'—'}</Td><Td>{admin?(t.archivedAt?<span className="text-[10px] text-slate-400">History kept</span>:<button type="button" title="Delete task" aria-label={`Delete task: ${t.title}`} disabled={archivingId===t.id} onClick={()=>onDelete?.(t)} className="icon-btn text-rose-600 disabled:opacity-50">{archivingId===t.id?<RefreshCw className="w-4 h-4 animate-spin"/>:<Trash2 className="w-4 h-4"/>}</button>):(!t.archivedAt&&t.assignedTo===employeeId&&t.status!=='completed'?<button onClick={()=>onSubmit(t.id)} className="btn-secondary">Submit</button>:'—')}</Td></tr>)}{!tasks.length&&<EmptyRow colSpan={7} text="No tasks match the current filters."/>}</tbody>
   </table></div></div>;
 }
 
@@ -1435,7 +1458,7 @@ function Summary({label,value}:{label:string;value:string|number}){return <div c
 function Kpi({label,value,icon,textValue=false}:{label:string;value:any;icon:React.ReactNode;textValue?:boolean}){return <div className="kpi-card"><div className="flex items-center justify-between text-slate-400"><span className="text-[10px] uppercase tracking-[0.12em] font-bold">{label}</span>{icon}</div><p className={`mt-3 font-bold text-slate-950 ${textValue?'text-base':'text-2xl'}`}>{value}</p></div>}
 function DarkMetric({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-white/5 border border-white/10 p-3"><span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">{label}</span><p className="text-sm font-bold font-mono mt-1">{value}</p></div>}
 function AttendanceMetric({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">{label}</span><p className="text-sm font-bold font-mono mt-1">{value}</p></div>}
-function StatusBadge({label,dark=false}:{label:string;dark?:boolean}){const x=String(label).toLowerCase();let c='bg-slate-100 text-slate-600 border-slate-200';if(x==='present'||x==='approved'||x==='completed'||x==='active')c='bg-emerald-50 text-emerald-700 border-emerald-200';if(x==='late'||x==='pending'||x==='assigned')c='bg-amber-50 text-amber-700 border-amber-200';if(x==='rejected'||x==='inactive'||x==='absent')c='bg-rose-50 text-rose-700 border-rose-200';if(x==='wfh')c='bg-sky-50 text-sky-700 border-sky-200';if(x==='leave')c='bg-purple-50 text-purple-700 border-purple-200';return <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[10px] font-bold uppercase ${dark?'bg-white/10 text-white border-white/10':c}`}>{label}</span>}
+function StatusBadge({label,dark=false}:{label:string;dark?:boolean}){const x=String(label).toLowerCase();let c='bg-slate-100 text-slate-600 border-slate-200';if(x==='present'||x==='approved'||x==='completed'||x==='active')c='bg-emerald-50 text-emerald-700 border-emerald-200';if(x==='late'||x==='pending'||x==='assigned')c='bg-amber-50 text-amber-700 border-amber-200';if(x==='rejected'||x==='inactive'||x==='absent')c='bg-rose-50 text-rose-700 border-rose-200';if(x==='wfh')c='bg-sky-50 text-sky-700 border-sky-200';if(x==='leave')c='bg-purple-50 text-purple-700 border-purple-200';if(x==='removed')c='bg-slate-100 text-slate-500 border-slate-200';return <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[10px] font-bold uppercase ${dark?'bg-white/10 text-white border-white/10':c}`}>{label}</span>}
 function PriorityBadge({value}:{value:TaskPriority}){return <span className="text-[10px] uppercase tracking-wider font-bold text-slate-600">{value}</span>}
 function Notice({type,text}:{type:'error'|'success';text:string}){return <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm flex items-start gap-2 ${type==='error'?'border-rose-200 bg-rose-50 text-rose-800':'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{type==='error'?<CircleAlert className="w-4 h-4 mt-0.5 shrink-0"/>:<CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0"/>}{text}</div>}
 function Th({children}:{children:React.ReactNode}){return <th className="px-4 py-3 font-semibold whitespace-nowrap">{children}</th>}
