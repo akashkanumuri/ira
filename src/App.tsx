@@ -491,7 +491,12 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       />;
 
   return (
-    <div className="min-h-screen text-slate-900 flex ira-app-bg">
+    <div className="ira-portal-root">
+      <div className="ira-fluid-background" aria-hidden="true">
+        <div className="ira-fluid-blob ira-fluid-blob-one" />
+        <div className="ira-fluid-blob ira-fluid-blob-two" />
+      </div>
+      <div className="min-h-screen text-slate-900 flex ira-app-bg">
       <div className="ira-theme-canvas" aria-hidden="true">
         <span className="ira-theme-orb ira-theme-orb-a" />
         <span className="ira-theme-orb ira-theme-orb-b" />
@@ -565,6 +570,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         <div className="hidden">{pendingCount}</div>
       </div>
       <ToastHost />
+      </div>
     </div>
   );
 }
