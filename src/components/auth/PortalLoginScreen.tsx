@@ -149,10 +149,6 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
           >
             Forgot Password?
           </button>
-
-          <p className="ira-login-help">
-            {isEmployee ? 'Employee Workforce Portal' : 'IRA Administrator Portal'}
-          </p>
         </section>
       </div>
     </main>
