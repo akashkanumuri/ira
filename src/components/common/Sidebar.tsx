@@ -13,7 +13,7 @@ interface Props {
   pendingCorrectionCount?: number;
 }
 
-export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, currentUser, pendingTaskCount = 0, pendingWfhCount = 0, pendingLeaveCount = 0, pendingCorrectionCount = 0 }) => {
+export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, currentUser: _currentUser, pendingTaskCount = 0, pendingWfhCount = 0, pendingLeaveCount = 0, pendingCorrectionCount = 0 }) => {
   const employeeItems = [
     ['emp-dashboard', 'Dashboard', LayoutDashboard],
     ['emp-attendance', 'My Attendance', Clock3],
@@ -41,12 +41,10 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
 
   return (
     <aside className="hidden lg:flex w-64 bg-slate-950/92 text-slate-300 flex-col shrink-0 sticky top-0 h-screen border-r border-white/10 shadow-[12px_0_50px_rgba(15,23,42,.12)] backdrop-blur-2xl">
-      <div className="px-5 py-5 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-white/95 p-1.5 shadow-[0_10px_30px_rgba(255,255,255,.08)] ring-1 ring-white/10 overflow-hidden"><img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="w-full h-full object-contain" /></div>
-          <div>
-            <p className="text-sm font-bold text-white">IRA Hospitality</p>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{activeRole === 'admin' ? 'Admin Console' : 'Employee Portal'}</p>
+      <div className="px-4 py-5 border-b border-white/10">
+        <div className="flex items-center">
+          <div className="w-10 h-10 rounded-2xl bg-white/95 p-1.5 shadow-[0_10px_30px_rgba(255,255,255,.08)] ring-1 ring-white/10 overflow-hidden">
+            <img src="/icon-192.png" alt="IRA" className="w-full h-full object-contain" />
           </div>
         </div>
       </div>
@@ -72,19 +70,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
         })}
       </nav>
 
-      <div className="p-3 border-t border-white/10">
-        <div className="rounded-2xl bg-white/[.06] border border-white/10 p-3 flex items-center gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]">
-          {currentUser.avatar ? (
-            <img src={currentUser.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center text-sm font-bold ring-1 ring-white/10">{currentUser.name.slice(0,1).toUpperCase()}</div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-white truncate">{currentUser.name}</p>
-            <p className="text-[10px] text-slate-500 truncate">{currentUser.designation ?? (activeRole === 'admin' ? 'Administrator' : currentUser.loginId)}</p>
-          </div>
-        </div>
-      </div>
+
     </aside>
   );
 };
