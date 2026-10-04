@@ -2860,164 +2860,26 @@ body {
   }
 }
 
+/* =========================================================
+   IRA FLUID SYSTEM — canonical implementation
+   Source: fluid_dark_theme_login.html
+   Only the palette is adapted to IRA Gradient 4.
+   ========================================================= */
 
-/* Source-faithful fluid background — based directly on fluid_dark_theme_login.html.
-   Keep the original two-blob morph/float behavior; only the palette is changed to IRA brand blue. */
-.ira-theme-canvas {
-  position: fixed !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  overflow: hidden !important;
-  pointer-events: none !important;
-  z-index: 0 !important;
-  opacity: 1 !important;
-}
-
-.ira-theme-orb {
-  position: absolute !important;
-  filter: blur(10px) !important;
-  opacity: .14 !important;
-  animation: ira-source-move-and-morph 20s ease-in-out infinite alternate !important;
-  will-change: transform, border-radius !important;
-  border: 0 !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-  mix-blend-mode: normal !important;
-  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50% !important;
-}
-
-/* Original source: top-left 60vw / max 500px blob */
-.ira-theme-orb-a {
-  top: -15% !important;
-  left: -20% !important;
-  width: 60vw !important;
-  height: 60vw !important;
-  max-width: 500px !important;
-  max-height: 500px !important;
-  background: #0033FF !important;
-  animation-duration: 25s !important;
-}
-
-/* Original source: bottom-right 70vw / max 600px blob */
-.ira-theme-orb-b {
-  bottom: -20% !important;
-  right: -10% !important;
-  width: 70vw !important;
-  height: 70vw !important;
-  max-width: 600px !important;
-  max-height: 600px !important;
-  background: #0600AB !important;
-  animation-duration: 22s !important;
-  animation-direction: alternate-reverse !important;
-}
-
-/* The supplied source has two animated blobs. */
-.ira-theme-orb-c {
-  display: none !important;
-}
-
-@keyframes ira-source-move-and-morph {
-  0% {
-    transform: rotate(0deg) scale(1) translate(0, 0);
-    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
-  }
-  33% {
-    transform: rotate(45deg) scale(1.05) translate(2%, 2%);
-    border-radius: 50% 50% 40% 60% / 50% 40% 50% 60%;
-  }
-  66% {
-    transform: rotate(90deg) scale(.95) translate(-2%, 5%);
-    border-radius: 60% 40% 50% 50% / 60% 50% 40% 50%;
-  }
-  100% {
-    transform: rotate(135deg) scale(1) translate(0, 0);
-    border-radius: 30% 70% 60% 40% / 50% 60% 40% 50%;
-  }
-}
-
-/* Keep application chrome/content above the fluid background. */
-.ira-app-bg > .ira-theme-canvas ~ *,
-.ira-app-bg > .ira-theme-canvas + * {
-  position: relative;
-  z-index: 1;
-}
-
-/* Do not wash the source animation out on mobile. */
-@media (max-width: 767px) {
-  .ira-theme-orb-a {
-    width: 125vw !important;
-    height: 125vw !important;
-    max-width: 500px !important;
-    max-height: 500px !important;
-  }
-  .ira-theme-orb-b {
-    width: 135vw !important;
-    height: 135vw !important;
-    max-width: 600px !important;
-    max-height: 600px !important;
-  }
-  .ira-theme-orb {
-    opacity: .16 !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ira-theme-orb {
-    animation: none !important;
-  }
-}
-
-
-/* Critical layering fix: fluid blobs are a background, never a foreground overlay. */
-.ira-app-bg {
-  position: relative !important;
-  isolation: isolate !important;
-  overflow: hidden !important;
-}
-
-.ira-app-bg > .ira-theme-canvas {
-  position: fixed !important;
-  inset: 0 !important;
-  z-index: 0 !important;
-  pointer-events: none !important;
-}
-
-.ira-app-bg > *:not(.ira-theme-canvas) {
-  position: relative !important;
-  z-index: 1 !important;
-}
-
-/* Preserve the supplied fluid animation while making it visible but not washing out the UI. */
-.ira-theme-orb {
-  filter: blur(85px) !important;
-  opacity: .13 !important;
-  pointer-events: none !important;
-}
-
-@media (max-width: 767px) {
-  .ira-theme-orb {
-    filter: blur(85px) !important;
-    opacity: .16 !important;
-  }
-}
-
-
-/* IRA — supplied fluid_dark_theme_login.html animation, adapted only for brand color.
-   The DOM architecture mirrors the source: a background layer with two animated blobs,
-   behind the application shell. */
 .ira-portal-root {
   position: relative;
-  min-height: 100vh;
+  min-height: 100dvh;
   isolation: isolate;
-  background: #f7f8fb;
+  background: #f7f8fb !important;
+  overflow-x: clip;
 }
 
+/* One and only one ambient animation layer for the authenticated app. */
 .ira-fluid-background {
-  position: fixed;
+  position: absolute;
   inset: 0;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
@@ -3029,9 +2891,10 @@ body {
   opacity: 0.7;
   animation: ira-fluid-move-and-morph 20s ease-in-out infinite alternate;
   will-change: transform, border-radius;
+  pointer-events: none;
 }
 
-/* Source .blob-1 — top left. */
+/* Exact source geometry — palette only changed. */
 .ira-fluid-blob-one {
   top: -15%;
   left: -20%;
@@ -3044,7 +2907,6 @@ body {
   animation-duration: 25s;
 }
 
-/* Source .blob-2 — bottom right. */
 .ira-fluid-blob-two {
   bottom: -20%;
   right: -10%;
@@ -3056,16 +2918,6 @@ body {
   border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
   animation-duration: 22s;
   animation-direction: alternate-reverse;
-}
-
-/* Keep every app pixel above the animation. */
-.ira-app-bg,
-.ira-portal-root > .ira-app-bg + .ira-fluid-background {
-  position: relative;
-}
-.ira-app-bg {
-  z-index: 1;
-  background: transparent !important;
 }
 
 @keyframes ira-fluid-move-and-morph {
@@ -3087,63 +2939,17 @@ body {
   }
 }
 
-@media (max-width: 767px) {
-  .ira-fluid-blob-one {
-    width: 125vw;
-    height: 125vw;
-  }
-  .ira-fluid-blob-two {
-    width: 135vw;
-    height: 135vw;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ira-fluid-blob {
-    animation: none !important;
-  }
-}
-
-/* FINAL LAYOUT FIX — remove the legacy in-app animation layer.
-   The supplied fluid animation lives only in .ira-fluid-background.
-   Keeping one animation layer avoids nested fixed/filter stacking contexts
-   obscuring the mobile content. */
-.ira-theme-canvas,
-.ira-theme-orb {
-  display: none !important;
-}
-
-.ira-portal-root {
-  position: relative !important;
-  min-height: 100vh !important;
-  isolation: isolate !important;
-  background: #f7f8fb !important;
-}
-
-.ira-fluid-background {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  min-height: 100% !important;
-  overflow: hidden !important;
-  pointer-events: none !important;
-  z-index: 0 !important;
-}
-
-.ira-fluid-blob {
-  pointer-events: none !important;
-}
-
+/* App shell is a transparent foreground layer; cards establish their own surfaces. */
 .ira-app-bg {
   position: relative !important;
   z-index: 1 !important;
   isolation: auto !important;
-  overflow: visible !important;
+  min-height: 100dvh !important;
   background: transparent !important;
-  min-height: 100vh !important;
+  overflow: visible !important;
 }
 
-/* FINAL LAYER CLEANUP — supplied fluid animation only */
+/* No legacy ambient layers. */
 .ira-theme-canvas,
 .ira-theme-orb,
 .ira-app-bg::before,
@@ -3151,38 +2957,176 @@ body {
   display: none !important;
 }
 
-.ira-portal-root {
-  position: relative !important;
-  min-height: 100vh !important;
-  isolation: isolate !important;
-  background: #f7f8fb !important;
-}
-
-.ira-fluid-background {
-  position: fixed !important;
-  inset: 0 !important;
-  z-index: 0 !important;
-  pointer-events: none !important;
-  overflow: hidden !important;
-}
-
-.ira-fluid-blob {
-  z-index: 0 !important;
-  pointer-events: none !important;
-}
-
-.ira-app-bg {
-  position: relative !important;
-  z-index: 1 !important;
-  isolation: auto !important;
-  overflow: visible !important;
-  background: transparent !important;
-}
-
+/* Let the moving forms remain visible in the page canvas without affecting content. */
 .ira-main {
   position: relative !important;
   z-index: 1 !important;
   background: transparent !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
+}
+
+/* Keep the product surfaces readable while allowing a small amount of the ambient motion
+   to register around/through the page. No gradient borders or gradient strokes. */
+.ira-main .bg-white,
+.ira-main .bg-white\/95,
+.ira-main .bg-white\/90 {
+  background: rgba(255,255,255,.90) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-image: none !important;
+}
+
+.ira-main .bg-slate-50,
+.ira-main .bg-slate-50\/80 {
+  background: rgba(248,250,252,.82) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* The three-dot/mobile bar stays neutral; no brand gradient stroke. */
+.ira-mobile-bottom-nav {
+  border-image: none !important;
+}
+
+/* Mobile: keep source proportions, but allow the blobs to occupy the viewport naturally. */
+@media (max-width: 767px) {
+  .ira-fluid-blob-one {
+    width: 125vw;
+    height: 125vw;
+    max-width: 500px;
+    max-height: 500px;
+  }
+
+  .ira-fluid-blob-two {
+    width: 135vw;
+    height: 135vw;
+    max-width: 600px;
+    max-height: 600px;
+  }
+}
+
+/* Login uses the exact same source animation, not a second approximation. */
+.ira-login {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 44px;
+  background: #f7f8fb !important;
+  color: #0f172a !important;
+  isolation: isolate;
+}
+
+.ira-login > .ira-fluid-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.ira-login-frame {
+  position: relative;
+  z-index: 2;
+}
+
+.ira-login-top {
+  z-index: 3;
+}
+
+.ira-login-mode-switch {
+  border: 1px solid rgba(15,23,42,.08);
+  background: rgba(255,255,255,.78);
+  box-shadow: 0 8px 24px rgba(15,23,42,.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ira-login-mode-switch button {
+  color: #667085;
+}
+
+.ira-login-mode-switch button.active {
+  color: #ffffff;
+  background: #0033ff;
+  box-shadow: 0 6px 18px rgba(0,51,255,.20);
+}
+
+.ira-login-heading h1 {
+  color: #00033d !important;
+}
+
+.ira-login-field > span {
+  color: #344054 !important;
+}
+
+.ira-login-field-box {
+  background: rgba(255,255,255,.88) !important;
+  border: 1px solid rgba(15,23,42,.10) !important;
+  box-shadow: 0 8px 26px rgba(15,23,42,.055) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ira-login-field-box svg {
+  color: #0033ff !important;
+}
+
+.ira-login-field-box input {
+  color: #101828 !important;
+}
+
+.ira-login-field-box input::placeholder {
+  color: #98a2b3 !important;
+}
+
+.ira-login-field-box:focus-within {
+  border-color: rgba(0,51,255,.40) !important;
+  box-shadow: 0 0 0 3px rgba(0,51,255,.08), 0 8px 26px rgba(15,23,42,.055) !important;
+}
+
+.ira-login-submit {
+  background: #0033ff !important;
+  box-shadow: 0 12px 28px rgba(0,51,255,.22) !important;
+}
+
+.ira-login-submit:hover:not(:disabled) {
+  background: #0600ab !important;
+  box-shadow: 0 16px 32px rgba(0,51,255,.25) !important;
+}
+
+.ira-login-forgot {
+  color: #667085 !important;
+}
+
+.ira-login-forgot:hover {
+  color: #0033ff !important;
+}
+
+.ira-login-error {
+  background: rgba(254,242,242,.94) !important;
+  border-color: rgba(239,68,68,.16) !important;
+  color: #b42318 !important;
+}
+
+@media (max-width: 640px) {
+  .ira-login {
+    padding: 0 20px;
+  }
+
+  .ira-login-frame {
+    width: min(100%, 360px);
+  }
+
+  .ira-login-heading {
+    margin-bottom: 44px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ira-fluid-blob {
+    animation: none !important;
+  }
 }
