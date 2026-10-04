@@ -310,7 +310,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
 
   useEffect(() => {
     if (!user) return;
-    const channel = (supabase as any).channel(`ira-v2-${user.id}`);
+
     const employeeId = user.role === 'employee' ? user.employeeDbId : null;
     const subscriptions = [
       ['employees', employeeId ? `id=eq.${employeeId}` : undefined],
@@ -329,89 +329,115 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       ['designations', undefined],
       ['task_assignment_rules', undefined],
     ] as Array<[string,string|undefined]>;
-    for (const [table, filter] of subscriptions) {
-      const options:any = { event: '*', schema: 'public', table };
-      if (filter) options.filter = filter;
-      channel.on('postgres_changes', options, (payload:any) => {
-        const eventKey = `${table}:${payload.eventType}:${payload.new?.id ?? payload.old?.id ?? ''}`;
-        if (lastRealtimeEvent.current !== eventKey) {
-          lastRealtimeEvent.current = eventKey;
-          const now = Date.now();
-          window.setTimeout(() => { if (lastRealtimeEvent.current === eventKey && Date.now() - now > 800) lastRealtimeEvent.current = ''; }, 900);
 
-          if (user.role === 'admin' && table === 'attendance') {
-            const next = payload.new ?? {};
-            const previous = payload.old ?? {};
-            const employeeName = dataSnapshot.current.employees.find(employee => employee.id === next.employee_id)?.name ?? 'An employee';
-            if (payload.eventType === 'INSERT') {
-              notify(employeeName + ' checked in.', 'info', 4200, 'attendance');
-            } else if (payload.eventType === 'UPDATE' && next.current_state === 'completed' && previous.current_state !== 'completed') {
-              notify(employeeName + ' checked out.', 'info', 4200, 'attendance');
-            }
-          } else if (user.role === 'admin' && table === 'break_events') {
-            const next = payload.new ?? {};
-            const previous = payload.old ?? {};
-            const employeeName = dataSnapshot.current.employees.find(employee => employee.id === next.employee_id)?.name ?? 'An employee';
-            if (payload.eventType === 'INSERT') {
-              notify(employeeName + ' started a break.', 'info', 4200, 'attendance');
-            } else if (payload.eventType === 'UPDATE' && next.break_end && !previous.break_end) {
-              notify(employeeName + ' resumed work.', 'info', 4200, 'attendance');
-            }
-          } else if (table === 'tasks') {
-            const next = payload.new ?? {};
-            const previous = payload.old ?? {};
-            if (
-              user.role === 'employee' &&
-              payload.eventType === 'INSERT' &&
-              next.assigned_to === user.employeeDbId
-            ) {
-              notify('New task assigned to you.', 'info');
-            } else if (
-              user.role === 'employee' &&
-              payload.eventType === 'UPDATE' &&
-              next.assigned_to === user.employeeDbId &&
-              previous.assigned_to !== next.assigned_to
-            ) {
-              notify('A task has been assigned to you.', 'info');
-            } else if (
-              user.role === 'admin' &&
-              payload.eventType === 'UPDATE' &&
-              previous.status !== 'completed' &&
-              next.status === 'completed'
-            ) {
-              notify('Employee submitted completed work.', 'success');
-            }
-          } else if ((table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') && user.role === 'employee') {
-            if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
-              const label = table === 'leave_requests' ? 'Leave request' : table === 'wfh_requests' ? 'WFH request' : 'Correction request';
-              const category: NotificationCategory | undefined = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'wfh' : undefined;
-              notify(`${label} ${payload.new?.status ?? 'updated'}.`, payload.new?.status === 'approved' ? 'success' : payload.new?.status === 'rejected' ? 'error' : 'info', 4200, category);
-            }
-          } else if (table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') {
-            if (user.role === 'admin' && payload.eventType === 'INSERT') {
-              const label = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'WFH' : 'attendance correction';
-              const category: NotificationCategory | undefined = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'wfh' : undefined;
-              notify('New ' + label + ' request needs review.', 'info', 4200, category);
-            }
-          } else if (table === 'holidays' && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
-            notify('Holiday calendar updated.', 'info');
-          } else if (table === 'payroll_records' && user.role === 'employee' && payload.eventType === 'UPDATE' && payload.new?.finalized_at) {
-            notify('Your payroll has been finalized.', 'success');
+    let channel: any = null;
+    let retryTimer: number | null = null;
+    let stopped = false;
+    let retryDelay = 1500;
+
+    const handlePayload = (table: string, payload: any) => {
+      const eventKey = `${table}:${payload.eventType}:${payload.new?.id ?? payload.old?.id ?? ''}`;
+      if (lastRealtimeEvent.current !== eventKey) {
+        lastRealtimeEvent.current = eventKey;
+        const now = Date.now();
+        window.setTimeout(() => {
+          if (lastRealtimeEvent.current === eventKey && Date.now() - now > 800) lastRealtimeEvent.current = '';
+        }, 900);
+
+        if (user.role === 'admin' && table === 'attendance') {
+          const next = payload.new ?? {};
+          const previous = payload.old ?? {};
+          const employeeName = dataSnapshot.current.employees.find(employee => employee.id === next.employee_id)?.name ?? 'An employee';
+          if (payload.eventType === 'INSERT') {
+            notify(employeeName + ' checked in.', 'info', 4200, 'attendance');
+          } else if (payload.eventType === 'UPDATE' && next.current_state === 'completed' && previous.current_state !== 'completed') {
+            notify(employeeName + ' checked out.', 'info', 4200, 'attendance');
           }
+        } else if (user.role === 'admin' && table === 'break_events') {
+          const next = payload.new ?? {};
+          const previous = payload.old ?? {};
+          const employeeName = dataSnapshot.current.employees.find(employee => employee.id === next.employee_id)?.name ?? 'An employee';
+          if (payload.eventType === 'INSERT') notify(employeeName + ' started a break.', 'info', 4200, 'attendance');
+          else if (payload.eventType === 'UPDATE' && next.break_end && !previous.break_end) notify(employeeName + ' resumed work.', 'info', 4200, 'attendance');
+        } else if (table === 'tasks') {
+          const next = payload.new ?? {};
+          const previous = payload.old ?? {};
+          if (user.role === 'employee' && payload.eventType === 'INSERT' && next.assigned_to === user.employeeDbId) {
+            notify('New task assigned to you.', 'info');
+          } else if (user.role === 'employee' && payload.eventType === 'UPDATE' && next.assigned_to === user.employeeDbId && previous.assigned_to !== next.assigned_to) {
+            notify('A task has been assigned to you.', 'info');
+          } else if (user.role === 'admin' && payload.eventType === 'UPDATE' && previous.status !== 'completed' && next.status === 'completed') {
+            notify('Employee submitted completed work.', 'success');
+          }
+        } else if ((table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') && user.role === 'employee') {
+          if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
+            const label = table === 'leave_requests' ? 'Leave request' : table === 'wfh_requests' ? 'WFH request' : 'Correction request';
+            const category: NotificationCategory | undefined = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'wfh' : undefined;
+            notify(`${label} ${payload.new?.status ?? 'updated'}.`, payload.new?.status === 'approved' ? 'success' : payload.new?.status === 'rejected' ? 'error' : 'info', 4200, category);
+          }
+        } else if (table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') {
+          if (user.role === 'admin' && payload.eventType === 'INSERT') {
+            const label = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'WFH' : 'attendance correction';
+            const category: NotificationCategory | undefined = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'wfh' : undefined;
+            notify('New ' + label + ' request needs review.', 'info', 4200, category);
+          }
+        } else if (table === 'holidays' && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+          notify('Holiday calendar updated.', 'info');
+        } else if (table === 'payroll_records' && user.role === 'employee' && payload.eventType === 'UPDATE' && payload.new?.finalized_at) {
+          notify('Your payroll has been finalized.', 'success');
         }
-
-        if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
-        reloadTimer.current = window.setTimeout(() => void reload(), 180);
-      });
-    }
-    channel.subscribe((status:string) => {
-      if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        notify('Live updates are temporarily unavailable. The workspace will retry automatically.', 'error');
       }
-    });
-    return () => {
+
       if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
-      (supabase as any).removeChannel(channel);
+      reloadTimer.current = window.setTimeout(() => void reload(), 180);
+    };
+
+    const scheduleRetry = () => {
+      if (stopped || retryTimer) return;
+      const delay = retryDelay;
+      retryDelay = Math.min(retryDelay * 2, 30000);
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        void connect();
+      }, delay);
+    };
+
+    const connect = async () => {
+      if (stopped) return;
+      if (channel) {
+        try { await (supabase as any).removeChannel(channel); } catch {}
+        channel = null;
+      }
+      channel = (supabase as any).channel(`ira-v2-${user.id}-${Date.now()}`);
+      for (const [table, filter] of subscriptions) {
+        const options: any = { event: '*', schema: 'public', table };
+        if (filter) options.filter = filter;
+        channel.on('postgres_changes', options, (payload: any) => handlePayload(table, payload));
+      }
+      channel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          retryDelay = 1500;
+          void reload();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Realtime can drop on mobile/network changes. Retry silently instead of showing a blocking error.
+          scheduleRetry();
+          void reload();
+        }
+      });
+    };
+
+    void connect();
+
+    const fallbackRefresh = window.setInterval(() => {
+      if (!stopped) void reload();
+    }, 30000);
+
+    return () => {
+      stopped = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      window.clearInterval(fallbackRefresh);
+      if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
+      if (channel) void (supabase as any).removeChannel(channel);
     };
   }, [user, reload]);
 
