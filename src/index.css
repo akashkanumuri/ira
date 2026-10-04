@@ -1811,3 +1811,371 @@ body {
     margin-bottom: 20px;
   }
 }
+
+
+/* =========================================================
+   IRA Brand Gradient System — Gradient 4
+   Brand: #0033FF → #0600AB → #00033D
+   Presentation-first contrast + premium motion
+   ========================================================= */
+:root {
+  --ira-brand-1: #0033FF;
+  --ira-brand-2: #0600AB;
+  --ira-brand-3: #00033D;
+  --ira-brand-gradient: linear-gradient(135deg, #0033FF 0%, #0600AB 52%, #00033D 100%);
+  --ira-brand-gradient-soft: linear-gradient(135deg, rgba(0,51,255,.16) 0%, rgba(6,0,171,.10) 52%, rgba(0,3,61,.06) 100%);
+  --ira-focus: rgba(0,51,255,.30);
+}
+
+:root[data-theme="light"] {
+  --ira-page: #f6f8ff;
+  --ira-surface: rgba(255,255,255,.90);
+  --ira-surface-soft: rgba(246,248,255,.94);
+  --ira-text: #07132f;
+  --ira-muted: #52617d;
+  --ira-border: rgba(0,51,255,.13);
+  --ira-nav: rgba(255,255,255,.86);
+}
+
+:root[data-theme="dark"] {
+  --ira-page: #00033D;
+  --ira-surface: rgba(5,12,48,.86);
+  --ira-surface-soft: rgba(7,17,61,.90);
+  --ira-text: #f7f9ff;
+  --ira-muted: #aab7d8;
+  --ira-border: rgba(121,151,255,.18);
+  --ira-nav: rgba(0,3,61,.88);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ira-page: #00033D;
+    --ira-surface: rgba(5,12,48,.86);
+    --ira-surface-soft: rgba(7,17,61,.90);
+    --ira-text: #f7f9ff;
+    --ira-muted: #aab7d8;
+    --ira-border: rgba(121,151,255,.18);
+    --ira-nav: rgba(0,3,61,.88);
+  }
+}
+
+/* Main canvas: never flat grey in either theme */
+.ira-app-bg {
+  background:
+    radial-gradient(900px 520px at 100% -5%, rgba(0,51,255,.14), transparent 62%),
+    radial-gradient(760px 500px at -8% 100%, rgba(6,0,171,.10), transparent 64%),
+    var(--ira-page) !important;
+}
+
+/* Animated brand orbs — light mode stays airy; dark mode becomes fluid neon-blue */
+:root[data-theme="light"] .ira-theme-orb,
+:root:not([data-theme="dark"]) .ira-theme-orb {
+  background: radial-gradient(circle at 32% 28%, rgba(0,51,255,.44) 0%, rgba(6,0,171,.30) 38%, rgba(0,3,61,.18) 62%, transparent 72%) !important;
+  opacity: .18 !important;
+  filter: blur(2px) !important;
+  box-shadow: 0 0 110px rgba(0,51,255,.14) !important;
+}
+
+:root[data-theme="dark"] .ira-theme-orb,
+:root:not([data-theme="light"]) .ira-theme-orb {
+  background: linear-gradient(135deg, #0033FF 0%, #0600AB 55%, #00033D 100%) !important;
+  opacity: .32 !important;
+  filter: blur(26px) saturate(125%) !important;
+  box-shadow: 0 0 120px rgba(0,51,255,.18), 0 0 180px rgba(6,0,171,.14) !important;
+}
+
+/* Top bar */
+.ira-topbar {
+  position: relative;
+  background: rgba(255,255,255,.82) !important;
+  border-bottom: 1px solid rgba(0,51,255,.10) !important;
+  box-shadow: 0 8px 30px rgba(0,3,61,.06) !important;
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+.ira-topbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #0033FF 28%, #0600AB 58%, #00033D 82%, transparent 100%);
+  opacity: .72;
+}
+:root[data-theme="dark"] .ira-topbar,
+:root:not([data-theme="light"]) .ira-topbar {
+  background: rgba(0,3,61,.84) !important;
+  border-bottom-color: rgba(104,137,255,.16) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,.24) !important;
+}
+
+/* Sidebar: make the brand gradient the navigation identity */
+.ira-sidebar {
+  background:
+    radial-gradient(420px 420px at 0% 0%, rgba(0,51,255,.32), transparent 58%),
+    linear-gradient(160deg, #00033D 0%, #0600AB 58%, #00033D 100%) !important;
+  border-right: 1px solid rgba(125,153,255,.18) !important;
+  box-shadow: 18px 0 60px rgba(0,3,61,.20) !important;
+}
+.ira-sidebar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 18%, transparent 82%, rgba(0,51,255,.10));
+}
+.ira-nav-active {
+  background: linear-gradient(135deg, #0033FF 0%, #0600AB 58%, #00033D 100%) !important;
+  box-shadow: 0 12px 30px rgba(0,51,255,.30), inset 0 1px 0 rgba(255,255,255,.20) !important;
+  color: #fff !important;
+}
+.ira-sidebar button:not(.ira-nav-active):hover {
+  background: rgba(255,255,255,.075) !important;
+  color: #fff !important;
+}
+
+/* Mobile drawer */
+.ira-mobile-drawer {
+  background:
+    radial-gradient(420px 360px at 0% 0%, rgba(0,51,255,.34), transparent 60%),
+    linear-gradient(160deg, #00033D 0%, #0600AB 62%, #00033D 100%) !important;
+}
+.ira-mobile-nav-active {
+  background: linear-gradient(135deg, #0033FF 0%, #0600AB 58%, #00033D 100%) !important;
+  box-shadow: 0 12px 30px rgba(0,51,255,.28) !important;
+}
+
+/* Mobile bottom bar — the little navigation bar should feel branded, not generic */
+.ira-mobile-bottom-nav {
+  background: rgba(255,255,255,.90) !important;
+  border-top: 1px solid rgba(0,51,255,.12) !important;
+  box-shadow: 0 -14px 40px rgba(0,3,61,.10) !important;
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  position: relative;
+}
+.ira-mobile-bottom-nav::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 2px;
+  background: var(--ira-brand-gradient);
+}
+.ira-mobile-bottom-nav .ira-bottom-active {
+  color: #fff !important;
+  background: var(--ira-brand-gradient);
+  border-radius: 12px;
+  box-shadow: 0 7px 18px rgba(0,51,255,.22);
+}
+.ira-mobile-bottom-nav .ira-bottom-idle {
+  color: #52617d !important;
+}
+:root[data-theme="dark"] .ira-mobile-bottom-nav,
+:root:not([data-theme="light"]) .ira-mobile-bottom-nav {
+  background: rgba(0,3,61,.90) !important;
+  border-top-color: rgba(110,143,255,.18) !important;
+  box-shadow: 0 -16px 45px rgba(0,0,0,.28) !important;
+}
+:root[data-theme="dark"] .ira-mobile-bottom-nav .ira-bottom-idle,
+:root:not([data-theme="light"]) .ira-mobile-bottom-nav .ira-bottom-idle {
+  color: #aab7d8 !important;
+}
+
+/* Premium surfaces: light glass / dark navy glass with a brand edge */
+.surface-card,
+.summary-card,
+.kpi-card,
+.export-card,
+.ira-page section.bg-white,
+.ira-page form.bg-white,
+.ira-page > .bg-white {
+  border-color: rgba(0,51,255,.13) !important;
+  box-shadow: 0 18px 55px rgba(0,3,61,.07), inset 0 1px 0 rgba(255,255,255,.82) !important;
+}
+.surface-card::after,
+.summary-card::after,
+.kpi-card::after,
+.export-card::after,
+.ira-page section.bg-white::after,
+.ira-page form.bg-white::after,
+.ira-page > .bg-white::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 2px;
+  background: var(--ira-brand-gradient);
+  opacity: .68;
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .surface-card,
+:root[data-theme="dark"] .summary-card,
+:root[data-theme="dark"] .kpi-card,
+:root[data-theme="dark"] .export-card,
+:root[data-theme="dark"] .ira-page section.bg-white,
+:root[data-theme="dark"] .ira-page form.bg-white,
+:root[data-theme="dark"] .ira-page > .bg-white,
+:root:not([data-theme="light"]) .surface-card,
+:root:not([data-theme="light"]) .summary-card,
+:root:not([data-theme="light"]) .kpi-card,
+:root:not([data-theme="light"]) .export-card,
+:root:not([data-theme="light"]) .ira-page section.bg-white,
+:root:not([data-theme="light"]) .ira-page form.bg-white,
+:root:not([data-theme="light"]) .ira-page > .bg-white {
+  background: linear-gradient(145deg, rgba(10,20,65,.92), rgba(3,8,42,.90)) !important;
+  border-color: rgba(105,139,255,.18) !important;
+  box-shadow: 0 22px 70px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.06) !important;
+}
+
+/* Primary actions: one unmistakable brand language */
+.btn-primary,
+.ira-login-submit {
+  background: var(--ira-brand-gradient) !important;
+  box-shadow: 0 14px 32px rgba(0,51,255,.25), inset 0 1px 0 rgba(255,255,255,.20) !important;
+}
+.btn-primary:hover:not(:disabled),
+.ira-login-submit:hover:not(:disabled) {
+  filter: brightness(1.10) saturate(1.08) !important;
+  box-shadow: 0 18px 42px rgba(0,51,255,.34), inset 0 1px 0 rgba(255,255,255,.24) !important;
+}
+
+/* Inputs: contrast first, brand only on interaction */
+.input,
+.ira-login-input,
+.ira-login-field-box {
+  border-color: rgba(0,51,255,.14) !important;
+}
+.input:focus,
+.ira-login-input:focus,
+.ira-login-field-box:focus-within {
+  border-color: rgba(0,51,255,.62) !important;
+  box-shadow: 0 0 0 4px rgba(0,51,255,.13), 0 12px 30px rgba(0,51,255,.08) !important;
+}
+:root[data-theme="dark"] .input,
+:root[data-theme="dark"] .ira-login-input,
+:root[data-theme="dark"] .ira-login-field-box,
+:root:not([data-theme="light"]) .input,
+:root:not([data-theme="light"]) .ira-login-input,
+:root:not([data-theme="light"]) .ira-login-field-box {
+  background: rgba(4,10,43,.88) !important;
+  color: #f7f9ff !important;
+  border-color: rgba(115,147,255,.20) !important;
+}
+
+/* Links / active accents */
+.ira-app-bg .text-blue-600,
+.ira-app-bg .text-blue-700 {
+  color: #0033FF !important;
+}
+:root[data-theme="dark"] .ira-app-bg .text-blue-600,
+:root[data-theme="dark"] .ira-app-bg .text-blue-700,
+:root:not([data-theme="light"]) .ira-app-bg .text-blue-600,
+:root:not([data-theme="light"]) .ira-app-bg .text-blue-700 {
+  color: #8eabff !important;
+}
+.ira-app-bg .bg-blue-600,
+.ira-app-bg .bg-blue-700 {
+  background: var(--ira-brand-gradient) !important;
+}
+.ira-app-bg .border-blue-600,
+.ira-app-bg .border-blue-700 {
+  border-color: #0033FF !important;
+}
+
+/* Headings remain crisp against the richer background */
+.ira-page h2,
+.ira-page h3,
+.ira-page h4 {
+  letter-spacing: -.015em;
+}
+
+/* Dark text hierarchy — brighter than the previous grey-on-grey treatment */
+:root[data-theme="dark"] .ira-app-bg .text-slate-900,
+:root[data-theme="dark"] .ira-app-bg .text-slate-950,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-900,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-950 { color: #f8faff !important; }
+:root[data-theme="dark"] .ira-app-bg .text-slate-800,
+:root[data-theme="dark"] .ira-app-bg .text-slate-700,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-800,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-700 { color: #e0e8ff !important; }
+:root[data-theme="dark"] .ira-app-bg .text-slate-600,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-600 { color: #bac7e5 !important; }
+:root[data-theme="dark"] .ira-app-bg .text-slate-500,
+:root[data-theme="dark"] .ira-app-bg .text-slate-400,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-500,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-400 { color: #9aa9ce !important; }
+
+/* Tables and dividers */
+:root[data-theme="dark"] .ira-app-bg table thead,
+:root:not([data-theme="light"]) .ira-app-bg table thead {
+  background: rgba(0,51,255,.10) !important;
+  color: #c9d5f3 !important;
+}
+:root[data-theme="dark"] .ira-app-bg table tbody tr:hover,
+:root:not([data-theme="light"]) .ira-app-bg table tbody tr:hover {
+  background: rgba(0,51,255,.08) !important;
+}
+
+/* Login inherits the brand system while retaining the supplied fluid animation */
+.ira-login {
+  background:
+    radial-gradient(700px 500px at 50% 50%, rgba(0,51,255,.10), transparent 68%),
+    #f7f9ff !important;
+  color: #07132f !important;
+}
+.ira-login-shape {
+  background: var(--ira-brand-gradient) !important;
+  filter: blur(34px);
+  opacity: .12 !important;
+  animation: ira-brand-blob 18s ease-in-out infinite alternate;
+}
+.ira-login-shape-b { animation-duration: 22s; }
+.ira-login-shape-c { animation-duration: 25s; }
+:root[data-theme="dark"] .ira-login,
+:root:not([data-theme="light"]) .ira-login {
+  background:
+    radial-gradient(900px 600px at 50% 45%, rgba(0,51,255,.16), transparent 65%),
+    #00033D !important;
+  color: #f8faff !important;
+}
+:root[data-theme="dark"] .ira-login-shape,
+:root:not([data-theme="light"]) .ira-login-shape {
+  opacity: .30 !important;
+  filter: blur(42px) saturate(130%);
+}
+@keyframes ira-brand-blob {
+  0% { transform: translate3d(0,0,0) rotate(0deg) scale(1); border-radius: 46% 54% 62% 38% / 42% 36% 64% 58%; }
+  50% { transform: translate3d(5vw,3vh,0) rotate(18deg) scale(1.08); border-radius: 62% 38% 44% 56% / 58% 48% 52% 42%; }
+  100% { transform: translate3d(-3vw,6vh,0) rotate(-12deg) scale(.96); border-radius: 38% 62% 58% 42% / 48% 60% 40% 52%; }
+}
+
+/* Theme toggle becomes part of the brand instead of a neutral control */
+.ira-theme-toggle {
+  border-color: rgba(0,51,255,.18) !important;
+  color: #0033FF !important;
+  background: rgba(255,255,255,.76) !important;
+}
+.ira-theme-toggle:hover {
+  color: #fff !important;
+  background: var(--ira-brand-gradient) !important;
+}
+:root[data-theme="dark"] .ira-theme-toggle,
+:root:not([data-theme="light"]) .ira-theme-toggle {
+  color: #dce6ff !important;
+  border-color: rgba(119,151,255,.22) !important;
+  background: rgba(7,16,58,.82) !important;
+}
+:root[data-theme="dark"] .ira-theme-toggle:hover,
+:root:not([data-theme="light"]) .ira-theme-toggle:hover {
+  color: #fff !important;
+  background: var(--ira-brand-gradient) !important;
+}
+
+/* Keep motion elegant and never distracting */
+@media (prefers-reduced-motion: reduce) {
+  .ira-theme-orb,
+  .ira-login-shape,
+  .ira-app-bg::before,
+  .ira-app-bg::after {
+    animation: none !important;
+  }
+}
