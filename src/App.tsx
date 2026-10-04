@@ -1385,34 +1385,39 @@ function SettingsAdmin({designations,departments,rules,onRefresh}:any){
 function PageShell({title,subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){return <div className="ira-page max-w-[1440px] mx-auto"><div className="mb-6 sm:mb-7"><div className="flex items-end justify-between gap-4"><div><h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-950">{title}</h2>{subtitle&&<p className="text-xs sm:text-sm text-slate-500 mt-1.5 max-w-3xl">{subtitle}</p>}</div><span className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/65 px-3 py-1.5 text-[10px] font-semibold text-slate-500 backdrop-blur-xl"><span className="ira-live-dot"/>Live data</span></div></div>{children}</div>}
 
 function NotificationBell(){
-  const [items,setItems]=useState<{id:string;type:'success'|'error'|'info';message:string;at:number}[]>([]);
+  type NotificationItem = {id:string;type:'success'|'error'|'info';message:string;at:number;count:number};
+  const [items,setItems]=useState<NotificationItem[]>([]);
   const [open,setOpen]=useState(false);
   useEffect(()=>{
     const onToast=(event:Event)=>{
       const detail=(event as CustomEvent<any>).detail;
       if(!detail?.message)return;
-      const item={id:detail.id??crypto.randomUUID(),type:detail.type??'info',message:String(detail.message),at:Date.now()};
-      setItems(current=>[item,...current.filter(x=>x.id!==item.id)].slice(0,8));
+      const item:NotificationItem={id:detail.id??crypto.randomUUID(),type:detail.type??'info',message:String(detail.message),at:Date.now(),count:1};
+      setItems(current=>{
+        const duplicate=current.find(x=>x.type===item.type&&x.message===item.message);
+        if(!duplicate)return [item,...current].slice(0,8);
+        return [{...duplicate,at:item.at,count:duplicate.count+1},...current.filter(x=>x.id!==duplicate.id)].slice(0,8);
+      });
     };
     window.addEventListener('ira:toast',onToast as EventListener);
     return()=>window.removeEventListener('ira:toast',onToast as EventListener);
   },[]);
-  const unread=items.length;
+  const unread=items.reduce((total,item)=>total+item.count,0);
   return <div className="relative">
     <button type="button" onClick={()=>setOpen(v=>!v)} className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-white/70 transition-all" aria-label={unread?String(unread)+' notifications':'Notifications'} aria-expanded={open}>
       <Bell className="w-4.5 h-4.5"/>
       {unread>0&&<span className="absolute -right-0.5 -top-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">{unread>9?'9+':unread}</span>}
     </button>
-    {open&&<div className="absolute right-0 top-12 w-[min(88vw,360px)] rounded-2xl border border-slate-200/80 bg-white/90 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.16)] overflow-hidden z-50">
+    {open&&createPortal(<div className="fixed left-3 right-3 top-16 max-h-[min(70dvh,24rem)] rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.16)] overflow-hidden z-[70] sm:left-auto sm:right-4 sm:w-[min(88vw,360px)]">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <div><p className="text-xs font-bold text-slate-900">Notifications</p><p className="text-[10px] text-slate-400">{unread?unread+' recent update'+(unread===1?'':'s'):'All caught up'}</p></div>
         {unread>0&&<button type="button" onClick={()=>setItems([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700">Clear</button>}
       </div>
-      {unread?<div className="max-h-80 overflow-y-auto">{items.map(item=><div key={item.id} className="px-4 py-3 border-b border-slate-100 last:border-0 flex gap-3">
+      {unread?<div className="max-h-[calc(min(70dvh,24rem)_-_4rem)] overflow-y-auto">{items.map(item=><div key={item.id} className="px-4 py-3 border-b border-slate-100 last:border-0 flex gap-3">
         <span className={'mt-0.5 w-2 h-2 rounded-full shrink-0 '+(item.type==='success'?'bg-emerald-500':item.type==='error'?'bg-rose-500':'bg-blue-500')}/>
-        <div className="min-w-0"><p className="text-xs font-semibold text-slate-800">{item.message}</p><p className="text-[10px] text-slate-400 mt-1">{new Date(item.at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})}</p></div>
+        <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-800 break-words">{item.message}{item.count>1&&<span className="ml-1 text-[10px] font-bold text-slate-500">×{item.count}</span>}</p><p className="text-[10px] text-slate-400 mt-1">{new Date(item.at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})}</p></div>
       </div>)}</div>:<div className="px-4 py-8 text-center text-xs text-slate-400">No new notifications.</div>}
-    </div>}
+    </div>,document.body)}
   </div>
 }
 function LoadingScreen({label='Loading IRA…'}:{label?:string}){return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin"/>{label}</div></div>}
