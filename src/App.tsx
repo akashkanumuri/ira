@@ -532,7 +532,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           <button type="button" aria-label="Close navigation menu" className="absolute inset-0 w-full h-full bg-slate-950/40 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
           <aside id="mobile-navigation" className={`ira-mobile-drawer relative w-[min(84vw,320px)] h-full shadow-[24px_0_70px_rgba(2,6,23,.30)] transition-transform duration-300 ease-[cubic-bezier(.2,.75,.2,1)] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`} aria-label="Mobile navigation">
             <div className="p-5 border-b border-slate-800/90 flex items-center justify-between text-white">
-              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-9 w-auto max-w-[132px] object-contain object-left" />
+              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-12 w-auto max-w-[170px] object-contain object-left" />
               <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu" className="icon-btn !text-slate-300 hover:!bg-white/10 hover:!text-white"><X className="w-5 h-5" /></button>
             </div>
             <nav className="p-3.5 space-y-1.5">
@@ -557,7 +557,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           )}
         </main>
 
-        <nav className="ira-mobile-bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-30 px-2 py-2 grid grid-cols-4">
+        <nav className={`ira-mobile-bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-30 px-2 py-2 grid grid-cols-4 ${mobileOpen ? 'pointer-events-none opacity-0 translate-y-full' : 'opacity-100 translate-y-0'}`}>
           {(user.role === 'admin' ? adminNav.slice(0,4) : employeeNav.slice(0,4)).map(([id,label,Icon]) => (
             <button key={id} onClick={() => navigate(id)} className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1.5 min-h-11 text-[10px] rounded-xl transition-all ${activeTab === id ? 'ira-bottom-active font-bold' : 'ira-bottom-idle'}`}><Icon className="w-4 h-4" />{label}</button>
           ))}
