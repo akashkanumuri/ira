@@ -87,6 +87,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
       <div className="ira-login-frame">
         <section className="ira-login-panel">
           <div className="ira-login-heading">
+            <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="ira-login-brand-logo" />
             <h1>SIGN IN</h1>
           </div>
 
