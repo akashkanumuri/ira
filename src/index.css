@@ -3814,3 +3814,183 @@ body {
     animation: none !important;
   }
 }
+
+
+/* FINAL LOGIN POLISH — compact switch, centered white brand lockup */
+.ira-login {
+  color: #fff !important;
+}
+
+.ira-login-frame {
+  width: min(100%, 400px) !important;
+}
+
+.ira-login-mode-switch {
+  position: fixed !important;
+  top: 24px !important;
+  right: 24px !important;
+  width: auto !important;
+  height: auto !important;
+  display: inline-flex !important;
+  grid-template-columns: none !important;
+  gap: 2px !important;
+  padding: 4px !important;
+  margin: 0 !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  border-radius: 16px !important;
+  background: rgba(255,255,255,.14) !important;
+  box-shadow: 0 10px 30px rgba(0,3,61,.12) !important;
+  backdrop-filter: blur(18px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(125%) !important;
+  z-index: 10 !important;
+}
+
+.ira-login-mode-switch button {
+  width: 46px !important;
+  min-width: 46px !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  gap: 0 !important;
+  border-radius: 12px !important;
+  color: rgba(255,255,255,.72) !important;
+  background: transparent !important;
+  font-size: 0 !important;
+}
+
+.ira-login-mode-switch button svg {
+  width: 19px !important;
+  height: 19px !important;
+  stroke-width: 1.8 !important;
+}
+
+.ira-login-mode-switch button.active {
+  color: #fff !important;
+  background: #0033ff !important;
+  box-shadow: 0 7px 18px rgba(0,51,255,.25) !important;
+}
+
+.ira-login-panel {
+  width: 100% !important;
+}
+
+.ira-login-heading {
+  align-items: center !important;
+  text-align: center !important;
+  gap: 18px !important;
+  margin: 0 0 38px !important;
+}
+
+.ira-login-brand-logo {
+  display: block !important;
+  width: 118px !important;
+  height: 36px !important;
+  max-width: 118px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  filter: brightness(0) invert(1) !important;
+  opacity: 1 !important;
+}
+
+.ira-login-heading h1 {
+  color: #fff !important;
+  font-size: clamp(36px, 8vw, 44px) !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  letter-spacing: -.055em !important;
+}
+
+.ira-login-field-box {
+  border: 1px solid rgba(255,255,255,.18) !important;
+  background: rgba(0,3,61,.18) !important;
+  box-shadow: 0 8px 24px rgba(0,3,61,.10) !important;
+  backdrop-filter: blur(18px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(125%) !important;
+}
+
+.ira-login-field-box > svg {
+  color: #fff !important;
+}
+
+.ira-login-field-box input {
+  color: #fff !important;
+}
+
+.ira-login-field-box input::placeholder {
+  color: rgba(255,255,255,.72) !important;
+}
+
+.ira-login-field-box:focus-within {
+  border-color: rgba(255,255,255,.42) !important;
+  background: rgba(0,3,61,.23) !important;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.10), 0 8px 24px rgba(0,3,61,.12) !important;
+}
+
+.ira-login-eye {
+  color: rgba(255,255,255,.72) !important;
+}
+
+.ira-login-eye:hover {
+  color: #fff !important;
+  background: rgba(255,255,255,.08) !important;
+}
+
+.ira-login-submit {
+  border: 0 !important;
+  background: #0033ff !important;
+  color: #fff !important;
+  box-shadow: 0 12px 28px rgba(0,3,61,.20) !important;
+}
+
+.ira-login-forgot {
+  color: rgba(255,255,255,.72) !important;
+}
+
+.ira-login-forgot:hover {
+  color: #fff !important;
+}
+
+@media (max-width: 699px) {
+  .ira-login {
+    padding: 76px 20px 32px !important;
+  }
+
+  .ira-login-frame {
+    width: min(100%, 380px) !important;
+  }
+
+  .ira-login-mode-switch {
+    top: 20px !important;
+    right: 18px !important;
+    padding: 4px !important;
+  }
+
+  .ira-login-mode-switch button {
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+  }
+
+  .ira-login-heading {
+    gap: 16px !important;
+    margin-bottom: 34px !important;
+  }
+
+  .ira-login-brand-logo {
+    width: 108px !important;
+    height: 34px !important;
+    max-width: 108px !important;
+  }
+
+  .ira-login-heading h1 {
+    font-size: 36px !important;
+  }
+
+  .ira-login-field-box,
+  .ira-login-submit {
+    height: 56px !important;
+    min-height: 56px !important;
+  }
+}
