@@ -2179,3 +2179,381 @@ body {
     animation: none !important;
   }
 }
+
+
+/* =========================================================
+   IRA V2 — Enterprise Product UI Layer
+   Research direction: Linear / Vercel Geist / Fluent / Atlassian
+   Principle: neutral foundations, brand used for hierarchy.
+   ========================================================= */
+
+:root {
+  --ira-bg-light: #f7f8fb;
+  --ira-surface-light: #ffffff;
+  --ira-surface-2-light: #fbfcfe;
+  --ira-line-light: #e5e8ef;
+  --ira-line-strong-light: #d7dce5;
+  --ira-ink-light: #111827;
+  --ira-muted-light: #667085;
+
+  --ira-bg-dark: #080a0f;
+  --ira-surface-dark: #0e1118;
+  --ira-surface-2-dark: #131720;
+  --ira-surface-3-dark: #181d27;
+  --ira-line-dark: rgba(255,255,255,.085);
+  --ira-line-strong-dark: rgba(255,255,255,.14);
+  --ira-ink-dark: #f4f7fb;
+  --ira-muted-dark: #969eae;
+
+  --ira-blue: #0033ff;
+  --ira-violet: #0600ab;
+  --ira-deep: #00033d;
+  --ira-brand: linear-gradient(135deg, #0033ff 0%, #0600ab 55%, #00033d 100%);
+}
+
+/* ---------- LIGHT: clean enterprise canvas ---------- */
+:root[data-theme="light"] .ira-app-bg,
+:root:not([data-theme="dark"]) .ira-app-bg {
+  background:
+    radial-gradient(900px 480px at 100% -10%, rgba(0,51,255,.055), transparent 65%),
+    radial-gradient(760px 420px at -10% 100%, rgba(6,0,171,.035), transparent 65%),
+    var(--ira-bg-light) !important;
+  color: var(--ira-ink-light) !important;
+}
+
+/* ---------- DARK: near-black, not giant blue canvas ---------- */
+:root[data-theme="dark"] .ira-app-bg,
+:root:not([data-theme="light"]) .ira-app-bg {
+  background:
+    radial-gradient(720px 420px at 92% -12%, rgba(0,51,255,.075), transparent 68%),
+    radial-gradient(620px 380px at 0% 100%, rgba(6,0,171,.055), transparent 68%),
+    var(--ira-bg-dark) !important;
+  color: var(--ira-ink-dark) !important;
+}
+
+/* Ambient motion becomes a background detail, never a competing UI element. */
+.ira-theme-canvas {
+  opacity: .72;
+  pointer-events: none !important;
+}
+.ira-theme-orb {
+  mix-blend-mode: screen;
+}
+:root[data-theme="light"] .ira-theme-orb,
+:root:not([data-theme="dark"]) .ira-theme-orb {
+  opacity: .10 !important;
+  filter: blur(18px) !important;
+}
+:root[data-theme="dark"] .ira-theme-orb,
+:root:not([data-theme="light"]) .ira-theme-orb {
+  opacity: .16 !important;
+  filter: blur(34px) saturate(120%) !important;
+}
+
+/* ---------- SIDEBAR: quieter than content, like Linear ---------- */
+.ira-sidebar {
+  background: #0b0e14 !important;
+  border-right: 1px solid rgba(255,255,255,.07) !important;
+  box-shadow: 12px 0 40px rgba(0,0,0,.12) !important;
+}
+.ira-sidebar::after {
+  background:
+    radial-gradient(460px 320px at 0% 0%, rgba(0,51,255,.12), transparent 68%),
+    linear-gradient(180deg, rgba(255,255,255,.018), transparent 24%) !important;
+}
+.ira-sidebar > div:first-child {
+  border-bottom-color: rgba(255,255,255,.07) !important;
+  background: rgba(255,255,255,.012);
+}
+.ira-sidebar button {
+  min-height: 42px !important;
+  border-radius: 11px !important;
+  font-size: 13px !important;
+}
+.ira-sidebar button:not(.ira-nav-active) {
+  color: #8f97a7 !important;
+}
+.ira-sidebar button:not(.ira-nav-active):hover {
+  color: #e9edf5 !important;
+  background: rgba(255,255,255,.055) !important;
+}
+.ira-sidebar .ira-nav-active {
+  background: linear-gradient(90deg, rgba(0,51,255,.92), rgba(6,0,171,.72)) !important;
+  box-shadow:
+    0 8px 24px rgba(0,51,255,.18),
+    inset 0 1px 0 rgba(255,255,255,.12) !important;
+}
+
+/* ---------- HEADER: transparent/quiet chrome ---------- */
+.ira-topbar {
+  height: 60px !important;
+  background: rgba(247,248,251,.78) !important;
+  border-bottom: 1px solid rgba(17,24,39,.07) !important;
+  box-shadow: none !important;
+}
+.ira-topbar::after {
+  height: 1px !important;
+  opacity: .34 !important;
+}
+:root[data-theme="dark"] .ira-topbar,
+:root:not([data-theme="light"]) .ira-topbar {
+  background: rgba(8,10,15,.82) !important;
+  border-bottom-color: rgba(255,255,255,.07) !important;
+  box-shadow: none !important;
+}
+.ira-topbar .text-slate-900 {
+  letter-spacing: -.01em;
+}
+.ira-topbar .bg-white\/55 {
+  background: rgba(255,255,255,.035) !important;
+  border-color: rgba(255,255,255,.08) !important;
+}
+
+/* ---------- MAIN CONTENT WIDTH / RHYTHM ---------- */
+.ira-main {
+  scrollbar-color: rgba(102,112,133,.35) transparent;
+}
+.ira-main > * {
+  position: relative;
+  z-index: 1;
+}
+.ira-main h1,
+.ira-main h2 {
+  letter-spacing: -.025em;
+}
+.ira-main h2 {
+  font-size: 15px;
+}
+.ira-main h3 {
+  letter-spacing: -.018em;
+}
+
+/* ---------- SURFACES: four levels, minimal shadows ---------- */
+.ira-main .bg-white,
+.ira-main .bg-white\/95,
+.ira-main .bg-white\/90 {
+  background: var(--ira-surface-light) !important;
+  border-color: var(--ira-line-light) !important;
+  box-shadow: 0 1px 2px rgba(16,24,40,.025), 0 8px 28px rgba(16,24,40,.035) !important;
+}
+.ira-main .bg-slate-50 {
+  background: var(--ira-surface-2-light) !important;
+}
+.ira-main .border-slate-100 {
+  border-color: #edf0f4 !important;
+}
+.ira-main .border-slate-200 {
+  border-color: var(--ira-line-light) !important;
+}
+
+:root[data-theme="dark"] .ira-main .bg-white,
+:root[data-theme="dark"] .ira-main .bg-white\/95,
+:root[data-theme="dark"] .ira-main .bg-white\/90,
+:root:not([data-theme="light"]) .ira-main .bg-white,
+:root:not([data-theme="light"]) .ira-main .bg-white\/95,
+:root:not([data-theme="light"]) .ira-main .bg-white\/90 {
+  background: var(--ira-surface-dark) !important;
+  border-color: var(--ira-line-dark) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 14px 38px rgba(0,0,0,.14) !important;
+}
+:root[data-theme="dark"] .ira-main .bg-slate-50,
+:root:not([data-theme="light"]) .ira-main .bg-slate-50 {
+  background: var(--ira-surface-2-dark) !important;
+}
+:root[data-theme="dark"] .ira-main .border-slate-100,
+:root:not([data-theme="light"]) .ira-main .border-slate-100 {
+  border-color: rgba(255,255,255,.055) !important;
+}
+:root[data-theme="dark"] .ira-main .border-slate-200,
+:root:not([data-theme="light"]) .ira-main .border-slate-200 {
+  border-color: var(--ira-line-dark) !important;
+}
+
+/* Avoid the 'every card has a glow' look. Only important KPI/primary cards get an accent. */
+.ira-main .bg-white::after,
+.ira-main .bg-slate-50::after {
+  display: none !important;
+}
+
+/* ---------- KPI CARDS: one focal accent, not four competing gradients ---------- */
+.ira-main .grid > .bg-white:first-child,
+.ira-main .grid > .bg-white:nth-child(2),
+.ira-main .grid > .bg-white:nth-child(3),
+.ira-main .grid > .bg-white:nth-child(4) {
+  position: relative;
+  overflow: hidden;
+}
+.ira-main .grid > .bg-white:first-child::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--ira-brand);
+  opacity: .9;
+}
+
+/* ---------- TABLES: product-grade density ---------- */
+.ira-main table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.ira-main table thead {
+  background: #f8fafc !important;
+}
+.ira-main table th {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: .055em;
+  color: #667085 !important;
+}
+.ira-main table td {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+.ira-main table tbody tr {
+  transition: background .16s ease;
+}
+.ira-main table tbody tr:hover {
+  background: rgba(0,51,255,.025) !important;
+}
+:root[data-theme="dark"] .ira-main table thead,
+:root:not([data-theme="light"]) .ira-main table thead {
+  background: rgba(255,255,255,.025) !important;
+}
+:root[data-theme="dark"] .ira-main table th,
+:root:not([data-theme="light"]) .ira-main table th {
+  color: #8f98aa !important;
+}
+:root[data-theme="dark"] .ira-main table tbody tr:hover,
+:root:not([data-theme="light"]) .ira-main table tbody tr:hover {
+  background: rgba(0,51,255,.055) !important;
+}
+
+/* ---------- BUTTON LANGUAGE ---------- */
+.ira-app-bg button.rounded-xl,
+.ira-app-bg button.rounded-2xl {
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease !important;
+}
+.ira-app-bg button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.ira-app-bg button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Brand buttons stay branded; secondary buttons stay neutral. */
+.ira-app-bg .bg-blue-600,
+.ira-app-bg .bg-blue-700 {
+  background: var(--ira-brand) !important;
+}
+
+/* ---------- DARK TEXT HIERARCHY ---------- */
+:root[data-theme="dark"] .ira-app-bg .text-slate-950,
+:root[data-theme="dark"] .ira-app-bg .text-slate-900,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-950,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-900 { color: #f4f7fb !important; }
+
+:root[data-theme="dark"] .ira-app-bg .text-slate-800,
+:root[data-theme="dark"] .ira-app-bg .text-slate-700,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-800,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-700 { color: #d9dee8 !important; }
+
+:root[data-theme="dark"] .ira-app-bg .text-slate-600,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-600 { color: #aeb6c5 !important; }
+
+:root[data-theme="dark"] .ira-app-bg .text-slate-500,
+:root[data-theme="dark"] .ira-app-bg .text-slate-400,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-500,
+:root:not([data-theme="light"]) .ira-app-bg .text-slate-400 { color: #8f98aa !important; }
+
+/* ---------- INPUTS / CONTROLS ---------- */
+.ira-main input,
+.ira-main select,
+.ira-main textarea {
+  border-radius: 10px !important;
+  min-height: 40px;
+}
+:root[data-theme="dark"] .ira-main input,
+:root[data-theme="dark"] .ira-main select,
+:root[data-theme="dark"] .ira-main textarea,
+:root:not([data-theme="light"]) .ira-main input,
+:root:not([data-theme="light"]) .ira-main select,
+:root:not([data-theme="light"]) .ira-main textarea {
+  background: #0b0e14 !important;
+  border-color: rgba(255,255,255,.10) !important;
+  color: #f4f7fb !important;
+}
+.ira-main input:focus,
+.ira-main select:focus,
+.ira-main textarea:focus {
+  outline: none !important;
+  border-color: rgba(0,51,255,.62) !important;
+  box-shadow: 0 0 0 3px rgba(0,51,255,.10) !important;
+}
+
+/* ---------- STATUS COLORS REMAIN SEMANTIC ---------- */
+.ira-main .text-emerald-600,
+.ira-main .text-green-600 { color: #079455 !important; }
+.ira-main .text-rose-600,
+.ira-main .text-red-600 { color: #d92d20 !important; }
+.ira-main .text-amber-600,
+.ira-main .text-yellow-600 { color: #b54708 !important; }
+
+/* ---------- MOBILE NAV: compact product chrome ---------- */
+.ira-mobile-bottom-nav {
+  height: 68px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  background: rgba(255,255,255,.92) !important;
+  border-top-color: var(--ira-line-light) !important;
+  box-shadow: 0 -8px 24px rgba(16,24,40,.06) !important;
+}
+.ira-mobile-bottom-nav::before {
+  height: 1px !important;
+  opacity: .45;
+}
+.ira-mobile-bottom-nav .ira-bottom-active {
+  background: rgba(0,51,255,.10) !important;
+  color: #0033ff !important;
+  box-shadow: none !important;
+}
+:root[data-theme="dark"] .ira-mobile-bottom-nav,
+:root:not([data-theme="light"]) .ira-mobile-bottom-nav {
+  background: rgba(8,10,15,.94) !important;
+  border-top-color: rgba(255,255,255,.08) !important;
+  box-shadow: 0 -10px 28px rgba(0,0,0,.30) !important;
+}
+:root[data-theme="dark"] .ira-mobile-bottom-nav .ira-bottom-active,
+:root:not([data-theme="light"]) .ira-mobile-bottom-nav .ira-bottom-active {
+  background: rgba(0,51,255,.16) !important;
+  color: #9bb2ff !important;
+}
+
+/* ---------- DARK MOBILE DRAWER ---------- */
+.ira-mobile-drawer {
+  background: #0b0e14 !important;
+}
+.ira-mobile-drawer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(420px 300px at 0 0, rgba(0,51,255,.13), transparent 68%);
+}
+.ira-mobile-nav-active {
+  background: rgba(0,51,255,.18) !important;
+  box-shadow: inset 2px 0 0 #0033ff !important;
+}
+
+/* ---------- BRAND: use Gradient 4 as a signature, not wallpaper ---------- */
+.ira-theme-toggle:hover,
+.ira-login-submit:hover:not(:disabled) {
+  background: var(--ira-brand) !important;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ira-app-bg button,
+  .ira-main table tbody tr {
+    transition: none !important;
+  }
+}
