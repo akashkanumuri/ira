@@ -904,3 +904,427 @@ input, select, textarea { color-scheme: light; }
 @media (prefers-reduced-motion: reduce) {
   .ira-section-transition { animation: none !important; }
 }
+
+
+/* Login v3 — mobile-first reference composition */
+.ira-login {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  display: block;
+  padding: 0 24px;
+  background: #111214;
+  color: #f4f4f5;
+  isolation: isolate;
+}
+
+.ira-login-top {
+  position: absolute;
+  top: max(24px, env(safe-area-inset-top));
+  right: 24px;
+  left: 24px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 10;
+}
+
+.ira-login-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #303136;
+  border-radius: 15px;
+  background: #17181c;
+  box-shadow: 0 8px 28px rgba(0,0,0,.22);
+}
+
+.ira-login-mode-switch button {
+  width: 54px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #777a84;
+  background: transparent;
+  transition: background .18s ease, color .18s ease, transform .16s ease;
+}
+
+.ira-login-mode-switch button svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.8;
+}
+
+.ira-login-mode-switch button.active {
+  color: #f5f5f6;
+  background: #292a30;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 4px 12px rgba(0,0,0,.2);
+}
+
+.ira-login-mode-switch button:active {
+  transform: scale(.96);
+}
+
+.ira-login-frame {
+  position: relative;
+  z-index: 5;
+  width: min(100%, 433px);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding-top: clamp(180px, 31vh, 360px);
+  padding-bottom: 48px;
+}
+
+.ira-login-panel {
+  width: 100%;
+}
+
+.ira-login-heading {
+  margin: 0 0 48px;
+  text-align: left;
+}
+
+.ira-login-heading h1 {
+  margin: 0;
+  color: #f5f5f6;
+  font-size: clamp(30px, 8vw, 40px);
+  line-height: .98;
+  font-weight: 750;
+  letter-spacing: -.055em;
+}
+
+.ira-login-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ira-login-field {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+
+.ira-login-field > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ira-login-field-box {
+  position: relative;
+  width: 100%;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  border: 1px solid #303136;
+  border-radius: 7px;
+  background: #303033;
+  box-shadow: none;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.ira-login-field-box:hover {
+  background: #333336;
+}
+
+.ira-login-field-box:focus-within {
+  border-color: #4b4c52;
+  background: #333336;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.04);
+}
+
+.ira-login-field-box > svg {
+  flex: 0 0 auto;
+  width: 21px;
+  height: 21px;
+  margin-left: 18px;
+  color: #f1f1f3;
+  stroke-width: 1.9;
+}
+
+.ira-login-field-box input {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0 16px 0 13px;
+  background: transparent;
+  color: #f4f4f5;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+
+.ira-login-field-box input::placeholder {
+  color: #b9bac0;
+  opacity: 1;
+}
+
+.ira-login-eye {
+  width: 54px;
+  height: 100%;
+  flex: 0 0 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-left: 1px solid rgba(255,255,255,.025);
+  border-radius: 0 7px 7px 0;
+  background: transparent;
+  color: #8b8d95;
+}
+
+.ira-login-eye svg {
+  width: 21px;
+  height: 21px;
+}
+
+.ira-login-submit {
+  width: 100%;
+  height: 58px;
+  margin-top: 4px;
+  padding: 0 22px;
+  border: 1px solid #25262a;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #f4f4f5;
+  background: #151619;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  transition: transform .18s ease, background .18s ease, border-color .18s ease;
+}
+
+.ira-login-submit svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.9;
+}
+
+.ira-login-submit:hover:not(:disabled) {
+  background: #1b1c20;
+  border-color: #3a3b40;
+  transform: translateY(-1px);
+  box-shadow: none;
+  filter: none;
+}
+
+.ira-login-submit:active:not(:disabled) {
+  transform: scale(.99);
+}
+
+.ira-login-submit:disabled {
+  opacity: .65;
+}
+
+.ira-login-forgot {
+  display: block;
+  width: fit-content;
+  margin: 38px auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b8b9bf;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.ira-login-forgot:hover {
+  color: #f2f2f3;
+}
+
+.ira-login-help {
+  margin: 38px auto 0;
+  max-width: 330px;
+  color: #8f9199;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.ira-login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin: -26px 0 22px;
+  padding: 10px 12px;
+  border: 1px solid rgba(248,113,113,.20);
+  border-radius: 7px;
+  background: rgba(91,24,24,.24);
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ira-login-error svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.ira-login-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,.28);
+  border-top-color: #fff;
+  border-radius: 999px;
+  animation: ira-spin .7s linear infinite;
+}
+
+.ira-login-shape {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  background: #1b1c21;
+}
+
+.ira-login-shape-a {
+  width: 560px;
+  height: 245px;
+  top: -120px;
+  left: -175px;
+  border-radius: 0 0 58% 45%;
+  opacity: .92;
+}
+
+.ira-login-shape-b {
+  width: 310px;
+  height: 500px;
+  top: 145px;
+  right: -250px;
+  border-radius: 54% 0 0 48%;
+  opacity: .34;
+}
+
+.ira-login-shape-c {
+  width: 350px;
+  height: 250px;
+  bottom: -185px;
+  left: -175px;
+  border-radius: 55% 45% 0 0;
+  opacity: .34;
+}
+
+@media (max-width: 699px) {
+  .ira-login {
+    padding: 0 24px;
+  }
+
+  .ira-login-top {
+    top: max(22px, env(safe-area-inset-top));
+    right: 24px;
+    left: 24px;
+  }
+
+  .ira-login-frame {
+    width: 100%;
+    max-width: 433px;
+    padding-top: clamp(175px, 30vh, 330px);
+    padding-bottom: 42px;
+  }
+
+  .ira-login-heading {
+    margin-bottom: 44px;
+  }
+
+  .ira-login-form-stack {
+    gap: 24px;
+  }
+}
+
+@media (max-width: 380px) {
+  .ira-login {
+    padding: 0 20px;
+  }
+
+  .ira-login-top {
+    right: 20px;
+    left: 20px;
+  }
+
+  .ira-login-mode-switch button {
+    width: 48px;
+    height: 42px;
+  }
+
+  .ira-login-frame {
+    padding-top: 178px;
+  }
+
+  .ira-login-heading {
+    margin-bottom: 38px;
+  }
+
+  .ira-login-field-box {
+    height: 60px;
+  }
+
+  .ira-login-form-stack {
+    gap: 20px;
+  }
+
+  .ira-login-submit {
+    height: 56px;
+  }
+
+  .ira-login-forgot {
+    margin-top: 32px;
+  }
+
+  .ira-login-help {
+    margin-top: 32px;
+  }
+}
+
+@media (max-height: 720px) {
+  .ira-login-frame {
+    padding-top: 150px;
+  }
+
+  .ira-login-heading {
+    margin-bottom: 32px;
+  }
+
+  .ira-login-field-box {
+    height: 58px;
+  }
+
+  .ira-login-form-stack {
+    gap: 18px;
+  }
+
+  .ira-login-submit {
+    height: 54px;
+  }
+
+  .ira-login-forgot {
+    margin-top: 26px;
+  }
+
+  .ira-login-help {
+    margin-top: 26px;
+  }
+}
