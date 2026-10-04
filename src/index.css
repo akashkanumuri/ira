@@ -75,6 +75,190 @@ input, select, textarea { color-scheme: light; }
   -webkit-backdrop-filter: none;
 }
 
+.ira-section-transition {
+  animation: ira-section-in .34s cubic-bezier(.2,.75,.2,1) both;
+  will-change: opacity, transform;
+}
+
+.ira-login {
+  background:
+    radial-gradient(700px 360px at 8% 8%, rgba(37,99,235,.08), transparent 60%),
+    radial-gradient(620px 340px at 92% 92%, rgba(99,102,241,.07), transparent 62%),
+    #f4f6fa;
+}
+
+.ira-login-shell {
+  display: grid;
+  grid-template-columns: minmax(360px,.9fr) minmax(500px,1.1fr);
+  min-height: 650px;
+  background: #fff;
+  border: 1px solid rgba(148,163,184,.18);
+  box-shadow: 0 32px 90px rgba(15,23,42,.13);
+}
+
+.ira-login-brand {
+  background: #050b1c;
+  color: #fff;
+}
+
+.ira-login-grid {
+  position: absolute;
+  inset: 0;
+  opacity: .32;
+  background-image: radial-gradient(rgba(148,163,184,.28) 1px, transparent 1px);
+  background-size: 20px 20px;
+  mask-image: linear-gradient(to bottom, black, transparent 92%);
+}
+
+.ira-login-glow {
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 999px;
+  filter: blur(70px);
+  pointer-events: none;
+}
+.ira-login-glow-a { left: -180px; top: -170px; background: rgba(37,99,235,.15); }
+.ira-login-glow-b { right: -190px; bottom: -190px; background: rgba(205,185,142,.07); }
+
+.ira-login-form { background: #fff; }
+
+.ira-portal-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.ira-portal-switch button {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: #94a3b8;
+  transition: color .2s ease, background .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.ira-portal-switch button:hover { color: #475569; }
+.ira-portal-switch button.active {
+  color: #2563eb;
+  background: #fff;
+  box-shadow: 0 5px 14px rgba(15,23,42,.08), 0 0 0 1px rgba(226,232,240,.8);
+}
+.ira-portal-switch button:active { transform: scale(.96); }
+
+.ira-login-label {
+  display: block;
+  margin-bottom: .55rem;
+  color: #334155;
+  font-size: .82rem;
+  font-weight: 650;
+}
+.ira-login-input-wrap { position: relative; }
+.ira-login-input-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+.ira-login-input {
+  width: 100%;
+  height: 54px;
+  padding: 0 16px 0 48px;
+  border: 1px solid #d7dee9;
+  border-radius: 15px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: .92rem;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.ira-login-input:hover { background: #fff; border-color: #c5cfdd; }
+.ira-login-input:focus {
+  background: #fff;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 4px rgba(79,70,229,.09);
+}
+.ira-login-input::placeholder { color: #9aa7b8; }
+.ira-password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #94a3b8;
+  transition: color .2s ease, background .2s ease;
+}
+.ira-password-toggle svg { width: 18px; height: 18px; }
+.ira-password-toggle:hover { color: #475569; background: #eef2f7; }
+.ira-login-submit {
+  width: 100%;
+  height: 54px;
+  border: 0;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 700;
+  background: linear-gradient(135deg,#101827,#1e293b);
+  box-shadow: 0 15px 30px rgba(15,23,42,.15);
+  transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+}
+.ira-login-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 20px 36px rgba(15,23,42,.20); filter: brightness(1.04); }
+.ira-login-submit:active:not(:disabled) { transform: scale(.99); }
+.ira-login-submit:disabled { opacity: .72; }
+.ira-login-submit:focus-visible,
+.ira-portal-switch button:focus-visible,
+.ira-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(37,99,235,.13);
+}
+.ira-login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .75rem .9rem;
+  border: 1px solid #fecdd3;
+  border-radius: 14px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: .82rem;
+  line-height: 1.35rem;
+  animation: ira-error-in .22s ease-out both;
+}
+.ira-login-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  border-radius: 999px;
+  animation: ira-spin .7s linear infinite;
+}
+
+@keyframes ira-section-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ira-error-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ira-spin { to { transform: rotate(360deg); } }
+
 .ira-page {
   animation: ira-page-in .42s cubic-bezier(.2,.75,.2,1) both;
 }
@@ -355,5 +539,46 @@ input, select, textarea { color-scheme: light; }
 }
 
 @media (max-width: 1023px) {
-  .ira-topbar { background: rgba(255,255,255,.86); }
+  .ira-topbar { background: #ffffff; }
+  .ira-login {
+    padding: 0;
+    align-items: stretch;
+  }
+  .ira-login-shell {
+    grid-template-columns: 1fr;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .ira-login-brand {
+    min-height: 300px;
+  }
+  .ira-login-form {
+    min-height: 0;
+    padding-top: 42px;
+    padding-bottom: 42px;
+  }
+}
+@media (max-width: 639px) {
+  .ira-login-brand {
+    min-height: 280px;
+    padding: 30px 26px 28px;
+  }
+  .ira-login-brand > .relative {
+    min-height: 224px;
+  }
+  .ira-login-form {
+    padding: 34px 26px 40px;
+  }
+  .ira-login-shell {
+    width: 100%;
+  }
+  .ira-portal-switch button {
+    width: 36px;
+    height: 36px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ira-section-transition { animation: none !important; }
 }
