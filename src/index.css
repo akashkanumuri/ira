@@ -1328,3 +1328,138 @@ input, select, textarea { color-scheme: light; }
     margin-top: 26px;
   }
 }
+
+
+/* Login v4 — centered mobile composition */
+@media (max-width: 699px) {
+  .ira-login {
+    padding: 0 22px;
+    display: block;
+  }
+
+  .ira-login-frame {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: 0 0 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ira-login-panel {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .ira-login-heading {
+    width: 100%;
+    margin: 0 0 56px;
+    text-align: center;
+  }
+
+  .ira-login-heading h1 {
+    font-size: 42px;
+    line-height: 1;
+    letter-spacing: -.055em;
+    text-align: center;
+  }
+
+  .ira-login-form-stack {
+    width: min(100%, 400px);
+    gap: 24px;
+    align-items: center;
+  }
+
+  .ira-login-field {
+    width: 100%;
+  }
+
+  .ira-login-field-box {
+    width: 100%;
+    height: 68px;
+    border: 1px solid #303136;
+    border-radius: 7px;
+    background: #303033;
+    overflow: hidden;
+  }
+
+  .ira-login-field-box > svg {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    flex: 0 0 64px;
+    padding: 0 21px;
+    box-sizing: content-box;
+    color: #f2f2f4;
+  }
+
+  .ira-login-field-box input {
+    padding: 0 18px;
+    font-size: 16px;
+    text-align: left;
+  }
+
+  .ira-login-eye {
+    width: 64px;
+    flex: 0 0 64px;
+    border-left: 1px solid rgba(255,255,255,.025);
+  }
+
+  .ira-login-eye svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .ira-login-submit {
+    width: 100%;
+    height: 60px;
+    margin-top: 2px;
+    border-radius: 16px;
+  }
+
+  .ira-login-forgot {
+    margin: 30px auto 0;
+    text-align: center;
+    font-size: 14px;
+  }
+
+  .ira-login-error {
+    width: min(100%, 400px);
+    margin: -34px 0 24px;
+  }
+}
+
+@media (min-width: 700px) {
+  .ira-login-frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ira-login-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .ira-login-heading {
+    text-align: center;
+  }
+
+  .ira-login-form-stack {
+    width: min(100%, 400px);
+  }
+
+  .ira-login-forgot {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .ira-login-help {
+    display: none;
+  }
+}
