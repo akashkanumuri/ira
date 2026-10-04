@@ -60,7 +60,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
         <div className="ira-fluid-blob ira-fluid-blob-two" />
       </div>
 
-      <header className="ira-login-top">
+      <div className="ira-login-frame">
         <div className="ira-login-mode-switch" role="tablist" aria-label="Choose portal">
           <button
             type="button"
@@ -71,6 +71,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             className={isEmployee ? 'active' : ''}
           >
             <UserRound />
+            <span>Employee</span>
           </button>
           <button
             type="button"
@@ -81,11 +82,10 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             className={!isEmployee ? 'active' : ''}
           >
             <ShieldCheck />
+            <span>Admin</span>
           </button>
         </div>
-      </header>
 
-      <div className="ira-login-frame">
         <section className="ira-login-panel">
           <div className="ira-login-heading">
             <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="ira-login-brand-logo" />
@@ -101,9 +101,9 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
 
           <form onSubmit={submit} className="ira-login-form-stack" noValidate>
             <label className="ira-login-field">
-              <span>{isEmployee ? 'Login ID' : 'Admin ID'}</span>
+              <span className="sr-only">{isEmployee ? 'Login ID' : 'Admin ID'}</span>
               <div className="ira-login-field-box">
-                <UserRound />
+                <UserRound aria-hidden="true" />
                 <input
                   value={identifier}
                   onChange={e => { setIdentifier(e.target.value); if (error) setError(''); }}
@@ -115,9 +115,9 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             </label>
 
             <label className="ira-login-field">
-              <span>Password</span>
+              <span className="sr-only">Password</span>
               <div className="ira-login-field-box">
-                <LockKeyhole />
+                <LockKeyhole aria-hidden="true" />
                 <input
                   value={password}
                   onChange={e => { setPassword(e.target.value); if (error) setError(''); }}
