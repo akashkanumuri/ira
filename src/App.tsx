@@ -507,9 +507,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <header className="ira-topbar h-16 shrink-0 sticky top-0 z-20 flex items-center px-4 sm:px-6 gap-3">
           <button type="button" className="lg:hidden p-2 rounded-xl hover:bg-slate-100 shrink-0" onClick={() => setMobileOpen(v => !v)} aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={mobileOpen} aria-controls="mobile-navigation"><Menu className="w-5 h-5" /></button>
-          <div className="min-w-0 flex-1 flex items-center">
-            <h1 className="text-base sm:text-sm font-bold text-slate-900 truncate">{getPageTitle(activeTab)}</h1>
-          </div>
+          <div className="flex-1 min-w-0" aria-hidden="true" />
           <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/55 border border-slate-200/75 text-[11px] font-semibold text-slate-600 backdrop-blur-xl">
             <span className="ira-live-dot" />
             <span>{headerNow.toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}</span>
