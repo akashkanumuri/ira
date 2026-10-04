@@ -65,7 +65,6 @@ input, select, textarea { color-scheme: light; }
 
 .ira-main {
   scroll-behavior: smooth;
-  overscroll-behavior: contain;
 }
 
 .ira-topbar {
