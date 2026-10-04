@@ -3994,3 +3994,285 @@ body {
     min-height: 56px !important;
   }
 }
+
+
+/* SUPPLIED LOGIN REFERENCE — static IRA brand treatment */
+.ira-login {
+  position: relative !important;
+  isolation: isolate !important;
+  min-height: 100vh !important;
+  color: #ffffff !important;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(0,51,255,.42) 0%, rgba(0,51,255,0) 34%),
+    radial-gradient(circle at 88% 88%, rgba(6,0,171,.48) 0%, rgba(6,0,171,0) 38%),
+    linear-gradient(135deg, #00033D 0%, #0600AB 52%, #0033FF 100%) !important;
+}
+
+.ira-login > .ira-fluid-background {
+  display: none !important;
+}
+
+.ira-login-frame {
+  width: min(100%, 448px) !important;
+  margin: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  z-index: 2 !important;
+}
+
+.ira-login-panel {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 32px 8px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.ira-login-heading {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 22px !important;
+  margin: 0 0 38px !important;
+  text-align: left !important;
+}
+
+.ira-login-brand-logo {
+  display: block !important;
+  width: 150px !important;
+  height: 46px !important;
+  max-width: 150px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  filter: brightness(0) invert(1) !important;
+  opacity: 1 !important;
+}
+
+.ira-login-heading h1 {
+  margin: 0 !important;
+  color: #ffffff !important;
+  font-size: 32px !important;
+  line-height: 1.1 !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em !important;
+}
+
+.ira-login-form-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+}
+
+.ira-login-field {
+  display: block !important;
+  width: 100% !important;
+}
+
+.ira-login-field-box {
+  width: 100% !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: rgba(0,3,61,.58) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.ira-login-field-box > svg {
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-left: 16px !important;
+  color: rgba(255,255,255,.82) !important;
+}
+
+.ira-login-field-box input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 14px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #ffffff !important;
+  font: 500 14px/1 "Poppins", sans-serif !important;
+}
+
+.ira-login-field-box input::placeholder {
+  color: rgba(255,255,255,.58) !important;
+  opacity: 1 !important;
+}
+
+.ira-login-field-box:focus-within {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28) !important;
+  background: rgba(0,3,61,.66) !important;
+}
+
+.ira-login-eye {
+  width: 46px !important;
+  height: 46px !important;
+  flex: 0 0 46px !important;
+  margin-right: 4px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  color: rgba(255,255,255,.60) !important;
+  background: transparent !important;
+}
+
+.ira-login-eye:hover {
+  color: #ffffff !important;
+  background: rgba(255,255,255,.06) !important;
+}
+
+.ira-login-submit {
+  width: 100% !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  margin: 4px 0 0 !important;
+  padding: 0 20px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #0033FF 0%, #0600AB 55%, #0033FF 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 24px rgba(0,3,61,.24) !important;
+  font: 700 14px/1 "Poppins", sans-serif !important;
+  letter-spacing: .03em !important;
+}
+
+.ira-login-submit:hover:not(:disabled) {
+  background: linear-gradient(90deg, #0600AB 0%, #0033FF 52%, #0600AB 100%) !important;
+  transform: translateY(-1px) !important;
+}
+
+.ira-login-forgot {
+  display: block !important;
+  margin: 18px 0 0 !important;
+  padding: 4px 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: rgba(255,255,255,.66) !important;
+  font: 500 12px/1.4 "Poppins", sans-serif !important;
+  text-align: left !important;
+}
+
+.ira-login-forgot:hover {
+  color: #ffffff !important;
+}
+
+.ira-login-account-switch {
+  margin-top: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+  color: rgba(255,255,255,.62) !important;
+  font: 400 12px/1.5 "Poppins", sans-serif !important;
+  text-align: center !important;
+}
+
+.ira-login-account-switch button {
+  margin: 0 !important;
+  padding: 2px 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #ffffff !important;
+  font: 700 12px/1.5 "Poppins", sans-serif !important;
+  letter-spacing: .02em !important;
+  cursor: pointer !important;
+}
+
+.ira-login-account-switch button:hover {
+  text-decoration: underline !important;
+}
+
+.ira-login-error {
+  color: #ffffff !important;
+  background: rgba(0,3,61,.36) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+}
+
+@media (min-width: 700px) {
+  .ira-login {
+    padding: 48px 32px !important;
+  }
+
+  .ira-login-panel {
+    padding: 40px 40px 34px !important;
+    border-radius: 28px !important;
+    background: rgba(0,3,61,.66) !important;
+    box-shadow: 0 26px 70px rgba(0,0,0,.24) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+  }
+
+  .ira-login-brand-logo {
+    width: 170px !important;
+    height: 50px !important;
+    max-width: 170px !important;
+  }
+}
+
+@media (max-width: 699px) {
+  .ira-login {
+    padding: 24px 20px 28px !important;
+  }
+
+  .ira-login-frame {
+    width: min(100%, 390px) !important;
+  }
+
+  .ira-login-panel {
+    padding: 24px 4px 20px !important;
+  }
+
+  .ira-login-heading {
+    gap: 20px !important;
+    margin-bottom: 34px !important;
+  }
+
+  .ira-login-brand-logo {
+    width: 138px !important;
+    height: 44px !important;
+    max-width: 138px !important;
+  }
+
+  .ira-login-heading h1 {
+    font-size: 32px !important;
+  }
+
+  .ira-login-form-stack {
+    gap: 18px !important;
+  }
+
+  .ira-login-field-box,
+  .ira-login-submit {
+    height: 56px !important;
+    min-height: 56px !important;
+  }
+
+  .ira-login-account-switch {
+    margin-top: 38px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ira-login,
+  .ira-login * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
