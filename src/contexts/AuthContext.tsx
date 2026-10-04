@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { getKolkataDateString } from '../lib/workingDays';
 import type { UserRole } from '../types/attendance';
 
 export interface AuthUser {
@@ -192,7 +193,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
     employee.manager_id
       ? db.from('employees').select('name').eq('id', employee.manager_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    db.from('salary_history').select('monthly_salary').eq('employee_id', employee.id).lte('effective_from', new Date().toISOString().slice(0, 10)).order('effective_from', { ascending: false }).limit(1).maybeSingle(),
+    db.from('salary_history').select('monthly_salary').eq('employee_id', employee.id).lte('effective_from', getKolkataDateString()).order('effective_from', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   return {
