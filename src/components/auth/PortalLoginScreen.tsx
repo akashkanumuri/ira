@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { notify } from '../../lib/toast';
-import { ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck, UserRound, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 type Portal = 'employee' | 'admin';
 
@@ -24,6 +23,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   }, [portal]);
 
   const switchPortal = (next: Portal) => {
+    if (next === activePortal) return;
     setActivePortal(next);
     setIdentifier('');
     setPassword('');
@@ -35,74 +35,90 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     e.preventDefault();
     setError('');
     if (!identifier.trim() || !password) {
-      const message=isEmployee ? 'Enter your Login ID and password.' : 'Enter your Admin ID and password.';
-      setError(message); notify(message,'error'); return;
+      setError(isEmployee ? 'Enter your Login ID and password.' : 'Enter your Admin ID and password.');
+      return;
     }
     setLoading(true);
-    const result = await signIn(identifier, password, activePortal);
-    if (result.error) { setError(result.error); notify(result.error,'error'); }
+    const result = await signIn(identifier.trim(), password, activePortal);
+    if (result.error) setError(result.error);
     setLoading(false);
   }
 
   return (
-    <main className="min-h-[100dvh] bg-slate-100 px-0 sm:px-5 lg:px-8 flex items-center justify-center">
-      <div className="w-full max-w-6xl min-h-[100dvh] sm:min-h-[640px] bg-white sm:rounded-[28px] border border-slate-200 overflow-hidden shadow-[0_30px_100px_rgba(15,23,42,.14)] grid md:grid-cols-12">
-        <aside className="md:col-span-5 bg-[#030817] text-white relative overflow-hidden px-7 py-8 sm:px-9 sm:py-10 min-h-[255px] md:min-h-[640px] flex flex-col justify-between">
-          <div className="absolute inset-0 opacity-45 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:18px_18px]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(96,165,250,.12),transparent_28%),radial-gradient(circle_at_85%_85%,rgba(148,163,184,.08),transparent_28%)]" />
-          <div className="relative z-10">
-            <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="w-[175px] sm:w-[205px] md:w-[215px] h-auto object-contain" />
-            <div className="mt-6 text-[11px] uppercase tracking-[0.32em] text-slate-300 font-semibold">Workforce portal</div>
-          </div>
-          <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-[11px] uppercase tracking-[0.12em] font-semibold text-slate-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              {isEmployee ? 'Employee portal' : 'Admin portal'}
+    <main className="ira-login min-h-[100dvh] flex items-center justify-center px-4 py-5 sm:px-6 lg:px-8">
+      <div className="ira-login-shell w-full max-w-[1120px] overflow-hidden rounded-[28px] lg:rounded-[34px]">
+        <aside className="ira-login-brand relative overflow-hidden px-7 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12">
+          <div className="ira-login-grid" />
+          <div className="ira-login-glow ira-login-glow-a" />
+          <div className="ira-login-glow ira-login-glow-b" />
+          <div className="relative z-10 flex h-full flex-col justify-between min-h-[330px] sm:min-h-[380px] lg:min-h-[610px]">
+            <div>
+              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-auto w-[150px] sm:w-[175px] lg:w-[190px] object-contain object-left" />
+              <div className="mt-8 h-px w-12 bg-[#cdb98e]/70" />
             </div>
-            <p className="mt-4 text-xs leading-5 text-slate-400 max-w-sm">Attendance, leave, assignments and payroll in one place.</p>
+            <div className="max-w-[360px]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-slate-400">Workforce portal</p>
+              <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white sm:text-3xl lg:text-[34px] lg:leading-[1.1]">One secure place for your workday.</h2>
+              <p className="mt-4 max-w-[310px] text-sm leading-6 text-slate-400">Attendance, assignments, requests and payroll — designed to stay simple.</p>
+            </div>
+            <div className="pt-8">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.04] px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,.08)]" />
+                {isEmployee ? 'Employee access' : 'Admin access'}
+              </div>
+            </div>
           </div>
         </aside>
 
-        <section className="md:col-span-7 px-6 py-8 sm:px-10 md:px-12 lg:px-16 flex items-center">
-          <div className="w-full max-w-[520px] mx-auto">
-            <div className="flex items-start justify-between gap-6 mb-8">
+        <section className="ira-login-form flex items-center px-6 py-9 sm:px-10 sm:py-12 lg:px-16 lg:py-14">
+          <div className="mx-auto w-full max-w-[440px]">
+            <div className="flex items-start justify-between gap-6">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-600">{isEmployee ? 'Employee sign in' : 'Admin sign in'}</p>
-                <h1 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-slate-950">Welcome back</h1>
-                <p className="mt-3 text-sm text-slate-500">{isEmployee ? 'Use the Login ID created by your administrator.' : 'Use your administrator credentials.'}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-blue-600">{isEmployee ? 'Employee sign in' : 'Admin sign in'}</p>
+                <h1 className="mt-2.5 text-[30px] font-semibold leading-tight tracking-[-0.03em] text-slate-950 sm:text-[34px]">Welcome back</h1>
+                <p className="mt-2.5 text-sm leading-6 text-slate-500">{isEmployee ? 'Sign in with the Login ID created for you.' : 'Sign in with your administrator credentials.'}</p>
               </div>
-              <div className="shrink-0 flex items-center gap-1 p-1 rounded-2xl border border-slate-200 bg-slate-50">
-                <button type="button" onClick={() => switchPortal('employee')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${isEmployee ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400'}`} aria-label="Employee portal"><UserRound className="w-5 h-5" /></button>
-                <button type="button" onClick={() => switchPortal('admin')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${!isEmployee ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400'}`} aria-label="Admin portal"><ShieldCheck className="w-5 h-5" /></button>
+              <div className="ira-portal-switch shrink-0" role="tablist" aria-label="Portal type">
+                <button type="button" role="tab" aria-selected={isEmployee} onClick={() => switchPortal('employee')} className={isEmployee ? 'active' : ''} aria-label="Employee portal"><UserRound className="h-4.5 w-4.5" /></button>
+                <button type="button" role="tab" aria-selected={!isEmployee} onClick={() => switchPortal('admin')} className={!isEmployee ? 'active' : ''} aria-label="Admin portal"><ShieldCheck className="h-4.5 w-4.5" /></button>
               </div>
             </div>
 
-            {error && <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{error}</div>}
+            {error && (
+              <div className="ira-login-error mt-7" role="alert">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>{error}</p>
+              </div>
+            )}
 
-            <form onSubmit={submit} className="space-y-5">
+            <form onSubmit={submit} className="mt-7 space-y-5" noValidate>
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">{isEmployee ? 'Login ID' : 'Admin ID'}</span>
-                <div className="relative mt-2">
-                  <UserRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input value={identifier} onChange={e => setIdentifier(e.target.value)} autoComplete="username" placeholder={isEmployee ? 'Enter Login ID' : 'Enter Admin ID'} className="w-full rounded-2xl border border-slate-300 bg-white pl-12 pr-4 py-4 text-[15px] outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
+                <span className="ira-login-label">{isEmployee ? 'Login ID' : 'Admin ID'}</span>
+                <div className="ira-login-input-wrap">
+                  <UserRound className="ira-login-input-icon" />
+                  <input value={identifier} onChange={e => { setIdentifier(e.target.value); if (error) setError(''); }} autoComplete="username" placeholder={isEmployee ? 'Enter your Login ID' : 'Enter your Admin ID'} className="ira-login-input" />
                 </div>
               </label>
 
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">Password</span>
-                <div className="relative mt-2">
-                  <LockKeyhole className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" className="w-full rounded-2xl border border-slate-300 bg-white pl-12 pr-12 py-4 text-[15px] outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" />
-                  <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+                <span className="ira-login-label">Password</span>
+                <div className="ira-login-input-wrap">
+                  <LockKeyhole className="ira-login-input-icon" />
+                  <input value={password} onChange={e => { setPassword(e.target.value); if (error) setError(''); }} type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" className="ira-login-input pr-12" />
+                  <button type="button" onClick={() => setShowPassword(v => !v)} className="ira-password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff /> : <Eye />}</button>
                 </div>
               </label>
 
-              <button disabled={loading} className="btn-login w-full min-h-14 rounded-2xl text-white font-bold flex items-center justify-center gap-2 shadow-[0_12px_30px_rgba(15,23,42,.14)]">
-                {loading ? 'Signing in…' : 'Sign in'} {!loading && <ArrowRight className="w-5 h-5" />}
+              <button disabled={loading} className="ira-login-submit" type="submit">
+                <span>{loading ? 'Signing in…' : 'Sign in'}</span>
+                {!loading ? <ArrowRight className="h-4.5 w-4.5" /> : <span className="ira-login-spinner" aria-hidden="true" />}
               </button>
             </form>
+
+            <div className="mt-6 flex items-center gap-2 text-[11px] text-slate-400">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              <span>Secure access to the IRA workforce portal</span>
+            </div>
           </div>
         </section>
       </div>
