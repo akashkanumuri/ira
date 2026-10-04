@@ -3103,3 +3103,42 @@ body {
     animation: none !important;
   }
 }
+
+/* FINAL LAYOUT FIX — remove the legacy in-app animation layer.
+   The supplied fluid animation lives only in .ira-fluid-background.
+   Keeping one animation layer avoids nested fixed/filter stacking contexts
+   obscuring the mobile content. */
+.ira-theme-canvas,
+.ira-theme-orb {
+  display: none !important;
+}
+
+.ira-portal-root {
+  position: relative !important;
+  min-height: 100vh !important;
+  isolation: isolate !important;
+  background: #f7f8fb !important;
+}
+
+.ira-fluid-background {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  min-height: 100% !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+.ira-fluid-blob {
+  pointer-events: none !important;
+}
+
+.ira-app-bg {
+  position: relative !important;
+  z-index: 1 !important;
+  isolation: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  min-height: 100vh !important;
+}
