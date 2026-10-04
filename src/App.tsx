@@ -11,7 +11,7 @@ import {
   Activity, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight,
   Clock3, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
-  Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Moon, Sun
+  Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, Department, Designation, Employee, EmployeeDocument,
@@ -488,7 +488,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             <span className="ira-live-dot" />
             <span>{headerNow.toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}</span>
           </div>
-          <ThemeToggle />
           <NotificationBell activeTab={activeTab} />
           <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200/70">
             <div className="w-8 h-8 rounded-full bg-slate-950 text-white flex items-center justify-center text-[11px] font-bold">{(user.name || 'U').charAt(0).toUpperCase()}</div>
@@ -541,36 +540,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       </div>
       <ToastHost />
     </div>
-  );
-}
-
-function ThemeToggle() {
-  const [dark, setDark] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('ira-theme');
-      if (stored === 'dark' || stored === 'light') return stored === 'dark';
-    } catch {}
-    return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    const theme = dark ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.style.colorScheme = theme;
-    try { localStorage.setItem('ira-theme', theme); } catch {}
-  }, [dark]);
-
-  return (
-    <button
-      type="button"
-      className="ira-theme-toggle"
-      onClick={() => setDark(value => !value)}
-      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={dark ? 'Light mode' : 'Dark mode'}
-    >
-      {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-      <span className="hidden sm:inline">{dark ? 'Light' : 'Dark'}</span>
-    </button>
   );
 }
 
