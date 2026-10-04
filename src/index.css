@@ -3001,3 +3001,125 @@ body {
     opacity: .16 !important;
   }
 }
+
+
+/* FINAL — stable fluid background implementation.
+   The supplied login animation is recreated with app-level pseudo-elements.
+   This avoids the animated layer ever covering or reflowing the application. */
+.ira-app-bg {
+  position: relative !important;
+  isolation: isolate !important;
+  min-height: 100vh !important;
+  overflow: hidden !important;
+  background: #f7f8fb !important;
+}
+
+.ira-app-bg::before,
+.ira-app-bg::after {
+  content: "" !important;
+  position: fixed !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  display: block !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  will-change: transform, border-radius !important;
+}
+
+.ira-app-bg::before {
+  width: 60vw !important;
+  height: 60vw !important;
+  max-width: 500px !important;
+  max-height: 500px !important;
+  left: -20% !important;
+  top: -15% !important;
+  background: #0033FF !important;
+  filter: blur(85px) !important;
+  opacity: .17 !important;
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50% !important;
+  animation: ira-login-blob-one 25s ease-in-out infinite alternate !important;
+}
+
+.ira-app-bg::after {
+  width: 70vw !important;
+  height: 70vw !important;
+  max-width: 600px !important;
+  max-height: 600px !important;
+  right: -10% !important;
+  bottom: -20% !important;
+  background: #0600AB !important;
+  filter: blur(85px) !important;
+  opacity: .17 !important;
+  border-radius: 50% 50% 40% 60% / 50% 40% 50% 60% !important;
+  animation: ira-login-blob-two 22s ease-in-out infinite alternate-reverse !important;
+}
+
+.ira-app-bg > *:not(.ira-theme-canvas) {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Old canvas implementation is completely disabled. */
+.ira-theme-canvas {
+  display: none !important;
+}
+
+@keyframes ira-login-blob-one {
+  0% {
+    transform: rotate(0deg) scale(1) translate3d(0,0,0);
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+  50% {
+    transform: rotate(55deg) scale(1.08) translate3d(3vw,2vh,0);
+    border-radius: 50% 50% 40% 60% / 50% 40% 50% 60%;
+  }
+  100% {
+    transform: rotate(135deg) scale(.96) translate3d(0,5vh,0);
+    border-radius: 30% 70% 60% 40% / 50% 60% 40% 50%;
+  }
+}
+
+@keyframes ira-login-blob-two {
+  0% {
+    transform: rotate(0deg) scale(1) translate3d(0,0,0);
+    border-radius: 50% 50% 40% 60% / 50% 40% 50% 60%;
+  }
+  50% {
+    transform: rotate(-55deg) scale(1.06) translate3d(-3vw,-2vh,0);
+    border-radius: 60% 40% 50% 50% / 60% 50% 40% 50%;
+  }
+  100% {
+    transform: rotate(-135deg) scale(.95) translate3d(-2vw,0,0);
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+}
+
+@media (max-width: 767px) {
+  .ira-app-bg::before {
+    width: 125vw !important;
+    height: 125vw !important;
+    max-width: 500px !important;
+    max-height: 500px !important;
+    left: -42% !important;
+    top: 4% !important;
+    opacity: .19 !important;
+  }
+
+  .ira-app-bg::after {
+    width: 135vw !important;
+    height: 135vw !important;
+    max-width: 600px !important;
+    max-height: 600px !important;
+    right: -48% !important;
+    bottom: 2% !important;
+    opacity: .19 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ira-app-bg::before,
+  .ira-app-bg::after {
+    animation: none !important;
+  }
+}
