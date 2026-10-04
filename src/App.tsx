@@ -497,11 +497,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         <div className="ira-fluid-blob ira-fluid-blob-two" />
       </div>
       <div className="min-h-screen text-slate-900 flex ira-app-bg">
-      <div className="ira-theme-canvas" aria-hidden="true">
-        <span className="ira-theme-orb ira-theme-orb-a" />
-        <span className="ira-theme-orb ira-theme-orb-b" />
-        <span className="ira-theme-orb ira-theme-orb-c" />
-      </div>
       <Sidebar
         activeRole={user.role} activeTab={activeTab} onSelectTab={navigate} currentUser={user}
         pendingTaskCount={user.role === 'admin' ? adminSubmittedTasks : employeeOpenTasks}
