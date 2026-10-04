@@ -4276,3 +4276,89 @@ body {
     transition: none !important;
   }
 }
+
+
+/* FINAL MOBILE LOGIN FIXES — logo scale, autofill, fixed application header */
+.ira-login-heading {
+  align-items: flex-start !important;
+  text-align: left !important;
+}
+
+.ira-login-brand-logo {
+  width: 220px !important;
+  max-width: 220px !important;
+  height: 66px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  margin-left: 0 !important;
+  transform: translateX(-2px) !important;
+}
+
+.ira-login-heading h1 {
+  align-self: flex-start !important;
+  text-align: left !important;
+}
+
+/* Keep browser autofill from replacing the branded field surface with white. */
+.ira-login-field-box input:-webkit-autofill,
+.ira-login-field-box input:-webkit-autofill:hover,
+.ira-login-field-box input:-webkit-autofill:focus,
+.ira-login-field-box input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  -webkit-box-shadow: inset 0 0 0 1000px rgba(0,3,61,.66) !important;
+  box-shadow: inset 0 0 0 1000px rgba(0,3,61,.66) !important;
+  background-color: transparent !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+}
+
+.ira-login-field-box input:-moz-autofill {
+  color: #ffffff !important;
+  background-color: rgba(0,3,61,.66) !important;
+}
+
+.ira-login-field-box input:-webkit-autofill::first-line {
+  color: #ffffff !important;
+}
+
+.ira-login-field-box:has(input:-webkit-autofill) {
+  background: rgba(0,3,61,.66) !important;
+}
+
+.ira-login-field-box > svg {
+  color: #ffffff !important;
+}
+
+.ira-login-eye {
+  color: rgba(255,255,255,.78) !important;
+}
+
+.ira-login-eye:hover {
+  color: #ffffff !important;
+  background: rgba(255,255,255,.07) !important;
+}
+
+/* Application top bar stays visible while the page scrolls. */
+.ira-topbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 80 !important;
+}
+
+/* The login screen itself has no application three-dot menu. */
+
+@media (max-width: 699px) {
+  .ira-login-brand-logo {
+    width: 210px !important;
+    max-width: 210px !important;
+    height: 62px !important;
+  }
+
+  .ira-login-heading {
+    gap: 14px !important;
+  }
+
+  .ira-login-heading h1 {
+    font-size: 34px !important;
+  }
+}
