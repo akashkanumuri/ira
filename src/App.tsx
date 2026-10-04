@@ -443,7 +443,14 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const employeeOpenTasks = tasks.filter(t => t.assignedTo === user.employeeDbId && t.status === 'assigned').length;
   const adminSubmittedTasks = tasks.filter(t => t.status === 'completed').length;
 
-  const navigate = (tab: string) => { setActiveTab(tab); setMobileOpen(false); };
+  const navigate = (tab: string) => {
+    if (tab === activeTab) {
+      setMobileOpen(false);
+      return;
+    }
+    setActiveTab(tab);
+    setMobileOpen(false);
+  };
   const selectedComponent = user.role === 'admin'
     ? <AdminContent
         user={user} activeTab={activeTab} employees={employees} departments={departments} designations={designations}
@@ -490,18 +497,20 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           </div>
         </header>
 
-        {mobileOpen && (
-          <div className="lg:hidden fixed inset-0 z-40 bg-slate-950/35" onClick={() => setMobileOpen(false)}>
-            <div className="w-72 h-full bg-slate-950 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between text-white"><img src="/icon-192.png" alt="IRA" className="w-9 h-9 rounded-xl object-contain bg-white p-1" /><button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu"><X className="w-5 h-5" /></button></div>
-              <nav id="mobile-navigation" aria-label="Mobile navigation" className="p-3 space-y-1">
-                {(user.role === 'admin' ? adminNav : employeeNav).map(([id, label, Icon]) => (
-                  <button key={id} onClick={() => navigate(id)} className={`w-full text-left px-3 py-3 rounded-2xl flex items-center gap-3 text-sm transition-all ${activeTab === id ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_12px_30px_rgba(37,99,235,.20)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className="w-4 h-4" />{label}</button>
-                ))}
-              </nav>
+        <div className={`lg:hidden fixed inset-0 z-40 transition-opacity duration-300 ease-out ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} aria-hidden={!mobileOpen}>
+          <button type="button" aria-label="Close navigation menu" className="absolute inset-0 w-full h-full bg-slate-950/40 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
+          <aside id="mobile-navigation" className={`relative w-[min(84vw,320px)] h-full bg-slate-950 shadow-[24px_0_70px_rgba(2,6,23,.30)] transition-transform duration-300 ease-[cubic-bezier(.2,.75,.2,1)] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`} aria-label="Mobile navigation">
+            <div className="p-5 border-b border-slate-800/90 flex items-center justify-between text-white">
+              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-9 w-auto max-w-[132px] object-contain object-left" />
+              <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu" className="icon-btn !text-slate-300 hover:!bg-white/10 hover:!text-white"><X className="w-5 h-5" /></button>
             </div>
-          </div>
-        )}
+            <nav className="p-3.5 space-y-1.5">
+              {(user.role === 'admin' ? adminNav : employeeNav).map(([id, label, Icon]) => (
+                <button key={id} onClick={() => navigate(id)} className={`w-full text-left px-3.5 py-3 rounded-2xl flex items-center gap-3 text-sm transition-all duration-200 ${activeTab === id ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_12px_30px_rgba(37,99,235,.20)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className="w-4 h-4" />{label}</button>
+              ))}
+            </nav>
+          </aside>
+        </div>
 
         {dataError && (
           <div className="mx-4 sm:mx-6 mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 flex items-center justify-between gap-3">
@@ -510,7 +519,11 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         )}
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 overflow-y-auto ira-main">
-          {loadingData ? <LoadingScreen label="Loading workspace…" /> : selectedComponent}
+          {loadingData ? <LoadingScreen label="Loading workspace…" /> : (
+            <div key={activeTab} className="ira-section-transition">
+              {selectedComponent}
+            </div>
+          )}
         </main>
 
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-2 py-2 grid grid-cols-4">
