@@ -3235,3 +3235,138 @@ body {
     animation: none !important;
   }
 }
+
+
+/* FINAL ARCHITECTURE: fluid brand animation belongs to the document background,
+   not inside the application stacking context. */
+html, body, #root {
+  min-height: 100%;
+}
+
+html {
+  background: #f7f8fb !important;
+}
+
+body {
+  position: relative !important;
+  overflow-x: hidden !important;
+  background: #f7f8fb !important;
+}
+
+body::before,
+body::after {
+  content: "" !important;
+  position: fixed !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  width: 60vw !important;
+  height: 60vw !important;
+  max-width: 500px !important;
+  max-height: 500px !important;
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50% !important;
+  filter: blur(85px) !important;
+  will-change: transform, border-radius !important;
+}
+
+body::before {
+  top: -15% !important;
+  left: -20% !important;
+  background: #0033ff !important;
+  opacity: .16 !important;
+  animation: ira-body-fluid-one 25s ease-in-out infinite alternate !important;
+}
+
+body::after {
+  right: -10% !important;
+  bottom: -20% !important;
+  width: 70vw !important;
+  height: 70vw !important;
+  max-width: 600px !important;
+  max-height: 600px !important;
+  background: #0600ab !important;
+  opacity: .16 !important;
+  animation: ira-body-fluid-two 22s ease-in-out infinite alternate-reverse !important;
+}
+
+/* Critical: the product shell is transparent to the document background.
+   Its cards/components provide their own surfaces. */
+.ira-app-bg {
+  position: relative !important;
+  isolation: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+
+.ira-app-bg::before,
+.ira-app-bg::after {
+  display: none !important;
+  content: none !important;
+}
+
+.ira-app-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes ira-body-fluid-one {
+  0% {
+    transform: rotate(0deg) scale(1) translate(0,0);
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+  33% {
+    transform: rotate(45deg) scale(1.05) translate(2%,2%);
+    border-radius: 50% 50% 40% 60% / 50% 40% 50% 60%;
+  }
+  66% {
+    transform: rotate(90deg) scale(.95) translate(-2%,5%);
+    border-radius: 60% 40% 50% 50% / 60% 50% 40% 50%;
+  }
+  100% {
+    transform: rotate(135deg) scale(1) translate(0,0);
+    border-radius: 30% 70% 60% 40% / 50% 60% 40% 50%;
+  }
+}
+
+@keyframes ira-body-fluid-two {
+  0% {
+    transform: rotate(0deg) scale(1) translate(0,0);
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+  33% {
+    transform: rotate(-45deg) scale(1.05) translate(-2%,-2%);
+    border-radius: 50% 50% 40% 60% / 50% 40% 50% 60%;
+  }
+  66% {
+    transform: rotate(-90deg) scale(.95) translate(2%,-5%);
+    border-radius: 60% 40% 50% 50% / 60% 50% 40% 50%;
+  }
+  100% {
+    transform: rotate(-135deg) scale(1) translate(0,0);
+    border-radius: 30% 70% 60% 40% / 50% 60% 40% 50%;
+  }
+}
+
+@media (max-width: 767px) {
+  body::before {
+    width: 125vw !important;
+    height: 125vw !important;
+    max-width: 500px !important;
+    max-height: 500px !important;
+    opacity: .18 !important;
+  }
+
+  body::after {
+    width: 135vw !important;
+    height: 135vw !important;
+    max-width: 600px !important;
+    max-height: 600px !important;
+    opacity: .18 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none !important;
+  }
+}
