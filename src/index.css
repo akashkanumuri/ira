@@ -3142,3 +3142,47 @@ body {
   background: transparent !important;
   min-height: 100vh !important;
 }
+
+/* FINAL LAYER CLEANUP — supplied fluid animation only */
+.ira-theme-canvas,
+.ira-theme-orb,
+.ira-app-bg::before,
+.ira-app-bg::after {
+  display: none !important;
+}
+
+.ira-portal-root {
+  position: relative !important;
+  min-height: 100vh !important;
+  isolation: isolate !important;
+  background: #f7f8fb !important;
+}
+
+.ira-fluid-background {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
+.ira-fluid-blob {
+  z-index: 0 !important;
+  pointer-events: none !important;
+}
+
+.ira-app-bg {
+  position: relative !important;
+  z-index: 1 !important;
+  isolation: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+
+.ira-main {
+  position: relative !important;
+  z-index: 1 !important;
+  background: transparent !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
