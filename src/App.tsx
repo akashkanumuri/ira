@@ -6,7 +6,7 @@ import { useAuth, type AuthUser, loginIdToAuthEmail } from './contexts/AuthConte
 import { AdminLoginScreen, EmployeeLoginScreen } from './components/auth/PortalLoginScreen';
 import { Sidebar } from './components/common/Sidebar';
 import { ToastHost } from './components/common/ToastHost';
-import { notify } from './lib/toast';
+import { notify, type NotificationCategory } from './lib/toast';
 import {
   Activity, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight,
   Clock3, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
@@ -339,7 +339,25 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           const now = Date.now();
           window.setTimeout(() => { if (lastRealtimeEvent.current === eventKey && Date.now() - now > 800) lastRealtimeEvent.current = ''; }, 900);
 
-          if (table === 'tasks') {
+          if (user.role === 'admin' && table === 'attendance') {
+            const next = payload.new ?? {};
+            const previous = payload.old ?? {};
+            const employeeName = dataSnapshot.current.employees.find(employee => employee.id === next.employee_id)?.name ?? 'An employee';
+            if (payload.eventType === 'INSERT') {
+              notify(employeeName + ' checked in.', 'info', 4200, 'attendance');
+            } else if (payload.eventType === 'UPDATE' && next.current_state === 'completed' && previous.current_state !== 'completed') {
+              notify(employeeName + ' checked out.', 'info', 4200, 'attendance');
+            }
+          } else if (user.role === 'admin' && table === 'break_events') {
+            const next = payload.new ?? {};
+            const previous = payload.old ?? {};
+            const employeeName = dataSnapshot.current.employees.find(employee => employee.id === next.employee_id)?.name ?? 'An employee';
+            if (payload.eventType === 'INSERT') {
+              notify(employeeName + ' started a break.', 'info', 4200, 'attendance');
+            } else if (payload.eventType === 'UPDATE' && next.break_end && !previous.break_end) {
+              notify(employeeName + ' resumed work.', 'info', 4200, 'attendance');
+            }
+          } else if (table === 'tasks') {
             const next = payload.new ?? {};
             const previous = payload.old ?? {};
             if (
@@ -366,10 +384,15 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           } else if ((table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') && user.role === 'employee') {
             if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
               const label = table === 'leave_requests' ? 'Leave request' : table === 'wfh_requests' ? 'WFH request' : 'Correction request';
-              notify(`${label} ${payload.new?.status ?? 'updated'}.`, payload.new?.status === 'approved' ? 'success' : payload.new?.status === 'rejected' ? 'error' : 'info');
+              const category: NotificationCategory | undefined = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'wfh' : undefined;
+              notify(`${label} ${payload.new?.status ?? 'updated'}.`, payload.new?.status === 'approved' ? 'success' : payload.new?.status === 'rejected' ? 'error' : 'info', 4200, category);
             }
           } else if (table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') {
-            if (user.role === 'admin' && payload.eventType === 'INSERT') notify('New employee request needs review.', 'info');
+            if (user.role === 'admin' && payload.eventType === 'INSERT') {
+              const label = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'WFH' : 'attendance correction';
+              const category: NotificationCategory | undefined = table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'wfh' : undefined;
+              notify('New ' + label + ' request needs review.', 'info', 4200, category);
+            }
           } else if (table === 'holidays' && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
             notify('Holiday calendar updated.', 'info');
           } else if (table === 'payroll_records' && user.role === 'employee' && payload.eventType === 'UPDATE' && payload.new?.finalized_at) {
@@ -454,7 +477,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             <span className="ira-live-dot" />
             <span>{headerNow.toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}</span>
           </div>
-          <NotificationBell />
+          <NotificationBell activeTab={activeTab} />
           <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200/70">
             <div className="w-8 h-8 rounded-full bg-slate-950 text-white flex items-center justify-center text-[11px] font-bold">{(user.name || 'U').charAt(0).toUpperCase()}</div>
             <div className="hidden md:block">
@@ -794,7 +817,7 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], lo
         notify(message, 'error');
         return;
       }
-      notify(successMessage, 'success');
+      notify(successMessage, 'success', 4200, 'attendance');
       await refreshRecord();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Action failed.';
@@ -1137,7 +1160,7 @@ function AttendanceAdmin({attendance,employees,leaveRequests,wfhRequests,holiday
 function RequestsAdmin({leaveRequests,wfhRequests,corrections,onRefresh}:any){
   const [tab,setTab]=useState<'leave'|'wfh'|'corrections'>('leave');
   const [busyKey,setBusyKey]=useState<string|null>(null);
-  async function review(table:string,id:string,status:'approved'|'rejected'){const key=table+':'+id;if(busyKey)return;setBusyKey(key);try{const {data,error}=await(supabase as any).from(table).update({status,reviewed_at:new Date().toISOString()}).eq('id',id).eq('status','pending').select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('This request was already reviewed. Refresh the list.');notify(status==='approved'?'Request approved.':'Request rejected.',status==='approved'?'success':'info');await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to review request.','error')}finally{setBusyKey(null);}}
+  async function review(table:string,id:string,status:'approved'|'rejected'){const key=table+':'+id;if(busyKey)return;setBusyKey(key);try{const {data,error}=await(supabase as any).from(table).update({status,reviewed_at:new Date().toISOString()}).eq('id',id).eq('status','pending').select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('This request was already reviewed. Refresh the list.');notify(status==='approved'?'Request approved.':'Request rejected.',status==='approved'?'success':'info',4200,table==='leave_requests'?'leave':table==='wfh_requests'?'wfh':undefined);await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to review request.','error')}finally{setBusyKey(null);}}
   return <PageShell title="Requests" subtitle="Review employee leave, WFH and attendance correction requests."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['leave','Leave'],['wfh','WFH'],['corrections','Corrections']].map(([id,l])=><button key={id} onClick={()=>setTab(id as any)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab===id?'bg-white shadow-sm text-slate-900':'text-slate-500'}`}>{l}</button>)}</div>{tab==='leave'&&<RequestTable type="leave" rows={leaveRequests} onReview={(id,s)=>void review('leave_requests',id,s)} busyKey={busyKey} />}{tab==='wfh'&&<RequestTable type="wfh" rows={wfhRequests} onReview={(id,s)=>void review('wfh_requests',id,s)} busyKey={busyKey} />}{tab==='corrections'&&<RequestTable type="corrections" rows={corrections} onReview={(id,s)=>void review('regularization_requests',id,s)} busyKey={busyKey} />}</PageShell>;
 }
 
@@ -1247,7 +1270,7 @@ function HolidaysEmployee({holidays}:any){
 function LeaveEmployee({user,leaveRequests,ledgers,holidays,onRefresh}:any){
   const [open,setOpen]=useState(false); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
   const current=ledgers.find((l:LeaveLedger)=>l.periodStart===`${today().slice(0,7)}-01`);
-  async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setError('');setBusy(true);try{const fd=new FormData(e.currentTarget);const start=String(fd.get('startDate')||'');const end=String(fd.get('endDate')||'');if(end<start)throw new Error('End date cannot be before start date.');if(start.slice(0,7)!==end.slice(0,7))throw new Error('A leave request must stay within one calendar month.');const leaveDuration=String(fd.get('duration'));if(leaveDuration==='half'&&start!==end)throw new Error('Half-day leave must use one date.');const {error:err}=await(supabase as any).from('leave_requests').insert({employee_id:user.employeeDbId,leave_type:String(fd.get('leaveType')),start_date:start,end_date:end,duration:leaveDuration,reason:String(fd.get('reason')||'').trim()});if(err)throw err;notify('Leave request submitted.','success');e.currentTarget.reset();setOpen(false);await onRefresh();}catch(error){const message=error instanceof Error?error.message:'Unable to submit leave request.';setError(message);notify(message,'error')}finally{setBusy(false);}}
+  async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setError('');setBusy(true);try{const fd=new FormData(e.currentTarget);const start=String(fd.get('startDate')||'');const end=String(fd.get('endDate')||'');if(end<start)throw new Error('End date cannot be before start date.');if(start.slice(0,7)!==end.slice(0,7))throw new Error('A leave request must stay within one calendar month.');const leaveDuration=String(fd.get('duration'));if(leaveDuration==='half'&&start!==end)throw new Error('Half-day leave must use one date.');const {error:err}=await(supabase as any).from('leave_requests').insert({employee_id:user.employeeDbId,leave_type:String(fd.get('leaveType')),start_date:start,end_date:end,duration:leaveDuration,reason:String(fd.get('reason')||'').trim()});if(err)throw err;notify('Leave request submitted.','success',4200,'leave');e.currentTarget.reset();setOpen(false);await onRefresh();}catch(error){const message=error instanceof Error?error.message:'Unable to submit leave request.';setError(message);notify(message,'error')}finally{setBusy(false);}}
   return <PageShell title="Leave" subtitle="Paid leave accrues at 1.5 days/month and unused balance carries forward.">{error&&<Notice type="error" text={error}/>}<div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Summary label="Available" value={current?.closingBalance??'—'}/><Summary label="Carry forward" value={current?.openingBalance??'—'}/><Summary label="Added" value={current?.accrual??1.5}/><Summary label="Unpaid used" value={current?.unpaidUsed??0}/></div><div className="mt-4 flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Apply leave</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Leave type"><select name="leaveType" className="input"><option value="casual">Casual</option><option value="sick">Sick</option><option value="earned">Earned</option><option value="unpaid">Unpaid</option></select></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Start date"><input name="startDate" type="date" min={today()} className="input" required/></Field><Field label="End date"><input name="endDate" type="date" min={today()} className="input" required/></Field><Field label="Reason"><input name="reason" className="input md:col-span-2" required/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Dates</Th><Th>Type</Th><Th>Days</Th><Th>Paid / Unpaid</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{leaveRequests.map((r:LeaveRequest)=><tr key={r.id}><Td>{dateLabel(r.startDate)} → {dateLabel(r.endDate)}</Td><Td>{r.leaveType}</Td><Td>{r.days}</Td><Td>{r.paidDays??0} / {r.unpaidDays??0}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!leaveRequests.length&&<EmptyRow colSpan={6} text="No leave requests yet."/>}</tbody></table></div></div></PageShell>;
 }
 
@@ -1329,7 +1352,7 @@ function CorrectionEmployee({user,corrections,onRefresh}:any){
 function WfhEmployee({user,wfhRequests,onRefresh}:any){
   const [open,setOpen]=useState(false);const [error,setError]=useState('');const remote=user.workMode==='remote';
   const [busy,setBusy]=useState(false);
-  async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setError('');setBusy(true);try{const fd=new FormData(e.currentTarget);const date=String(fd.get('date')||'');if(date<=today())throw new Error('WFH requests must be for a future working day.');const {error:err}=await(supabase as any).from('wfh_requests').insert({employee_id:user.employeeDbId,date,duration:String(fd.get('duration')),reason:String(fd.get('reason')||'').trim(),note:clean(fd.get('note'))});if(err)throw err;notify('WFH request submitted.','success');e.currentTarget.reset();setOpen(false);await onRefresh();}catch(error){const message=error instanceof Error?error.message:'Unable to submit WFH request.';setError(message);notify(message,'error')}finally{setBusy(false);}}
+  async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setError('');setBusy(true);try{const fd=new FormData(e.currentTarget);const date=String(fd.get('date')||'');if(date<=today())throw new Error('WFH requests must be for a future working day.');const {error:err}=await(supabase as any).from('wfh_requests').insert({employee_id:user.employeeDbId,date,duration:String(fd.get('duration')),reason:String(fd.get('reason')||'').trim(),note:clean(fd.get('note'))});if(err)throw err;notify('WFH request submitted.','success',4200,'wfh');e.currentTarget.reset();setOpen(false);await onRefresh();}catch(error){const message=error instanceof Error?error.message:'Unable to submit WFH request.';setError(message);notify(message,'error')}finally{setBusy(false);}}
   return <PageShell title="WFH" subtitle="Temporary WFH requests are for office-based employees.">{remote?<div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 text-sm text-sky-900"><b>Permanent remote employee</b><p className="text-xs mt-1">You do not need a daily WFH request. Your attendance check-in is automatically treated as WFH.</p></div>:<>{error&&<Notice type="error" text={error}/>}<div className="flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Request WFH</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Date"><input type="date" name="date" min={tomorrow()} className="input" required/></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Reason"><input name="reason" className="input" required/></Field><Field label="Note"><input name="note" className="input"/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full min-w-[560px] text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Date</Th><Th>Duration</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{wfhRequests.map((r:WfhRequest)=><tr key={r.id}><Td>{dateLabel(r.date)}</Td><Td>{r.duration}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!wfhRequests.length&&<EmptyRow colSpan={4} text="No WFH requests yet."/>}</tbody></table></div></div></>}</PageShell>;
 }
 
@@ -1384,17 +1407,22 @@ function SettingsAdmin({designations,departments,rules,onRefresh}:any){
 
 function PageShell({title,subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){return <div className="ira-page max-w-[1440px] mx-auto"><div className="mb-6 sm:mb-7"><div className="flex items-end justify-between gap-4"><div><h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-950">{title}</h2>{subtitle&&<p className="text-xs sm:text-sm text-slate-500 mt-1.5 max-w-3xl">{subtitle}</p>}</div><span className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/65 px-3 py-1.5 text-[10px] font-semibold text-slate-500 backdrop-blur-xl"><span className="ira-live-dot"/>Live data</span></div></div>{children}</div>}
 
-function NotificationBell(){
-  type NotificationItem = {id:string;type:'success'|'error'|'info';message:string;at:number;count:number};
+function NotificationBell({activeTab}:{activeTab:string}){
+  type NotificationItem = {id:string;type:'success'|'error'|'info';category:NotificationCategory;message:string;at:number;count:number};
   const [items,setItems]=useState<NotificationItem[]>([]);
   const [open,setOpen]=useState(false);
+  const rootRef=useRef<HTMLDivElement>(null);
+  const buttonRef=useRef<HTMLButtonElement>(null);
+  const panelRef=useRef<HTMLDivElement>(null);
+  const previousTab=useRef(activeTab);
+
   useEffect(()=>{
     const onToast=(event:Event)=>{
       const detail=(event as CustomEvent<any>).detail;
-      if(!detail?.message)return;
-      const item:NotificationItem={id:detail.id??crypto.randomUUID(),type:detail.type??'info',message:String(detail.message),at:Date.now(),count:1};
+      if(!detail?.message || !['attendance','leave','wfh'].includes(detail.notificationCategory))return;
+      const item:NotificationItem={id:detail.id??crypto.randomUUID(),type:detail.type??'info',category:detail.notificationCategory,message:String(detail.message),at:Date.now(),count:1};
       setItems(current=>{
-        const duplicate=current.find(x=>x.type===item.type&&x.message===item.message);
+        const duplicate=current.find(x=>x.type===item.type&&x.category===item.category&&x.message===item.message);
         if(!duplicate)return [item,...current].slice(0,8);
         return [{...duplicate,at:item.at,count:duplicate.count+1},...current.filter(x=>x.id!==duplicate.id)].slice(0,8);
       });
@@ -1402,13 +1430,42 @@ function NotificationBell(){
     window.addEventListener('ira:toast',onToast as EventListener);
     return()=>window.removeEventListener('ira:toast',onToast as EventListener);
   },[]);
+
+  useEffect(()=>{
+    if(previousTab.current!==activeTab){
+      previousTab.current=activeTab;
+      setOpen(false);
+    }
+  },[activeTab]);
+
+  useEffect(()=>{
+    if(!open)return;
+    const onPointerDown=(event:PointerEvent)=>{
+      const target=event.target;
+      if(!(target instanceof Node))return;
+      if(rootRef.current?.contains(target)||panelRef.current?.contains(target))return;
+      setOpen(false);
+    };
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if(event.key!=='Escape')return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener('pointerdown',onPointerDown);
+    window.addEventListener('keydown',onKeyDown);
+    return()=>{
+      document.removeEventListener('pointerdown',onPointerDown);
+      window.removeEventListener('keydown',onKeyDown);
+    };
+  },[open]);
+
   const unread=items.reduce((total,item)=>total+item.count,0);
-  return <div className="relative">
-    <button type="button" onClick={()=>setOpen(v=>!v)} className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-white/70 transition-all" aria-label={unread?String(unread)+' notifications':'Notifications'} aria-expanded={open}>
+  return <div ref={rootRef} className="relative">
+    <button ref={buttonRef} type="button" onClick={()=>setOpen(v=>!v)} className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-white/70 transition-all" aria-label={unread?String(unread)+' notifications':'Notifications'} aria-expanded={open} aria-controls="notification-panel">
       <Bell className="w-4.5 h-4.5"/>
       {unread>0&&<span className="absolute -right-0.5 -top-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">{unread>9?'9+':unread}</span>}
     </button>
-    {open&&createPortal(<div className="fixed left-3 right-3 top-16 max-h-[min(70dvh,24rem)] rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.16)] overflow-hidden z-[70] sm:left-auto sm:right-4 sm:w-[min(88vw,360px)]">
+    {createPortal(<div ref={panelRef} id="notification-panel" role="region" aria-label="Notifications" aria-hidden={!open} className={"fixed left-3 right-3 top-16 max-h-[min(70dvh,24rem)] rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.16)] overflow-hidden z-[70] sm:left-auto sm:right-4 sm:w-[min(88vw,360px)] origin-top transition-all duration-200 ease-out " + (open?"visible opacity-100 translate-y-0 scale-100":"invisible pointer-events-none opacity-0 -translate-y-1 scale-95")}>
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <div><p className="text-xs font-bold text-slate-900">Notifications</p><p className="text-[10px] text-slate-400">{unread?unread+' recent update'+(unread===1?'':'s'):'All caught up'}</p></div>
         {unread>0&&<button type="button" onClick={()=>setItems([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700">Clear</button>}
