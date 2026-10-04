@@ -1601,9 +1601,14 @@ body {
 }
 
 /* Dark mode: same fluid/morphing language as the supplied login source */
-:root[data-theme="dark"] .ira-theme-orb,
+:root[data-theme="dark"] .ira-theme-orb {
+  filter: blur(10px);
+  opacity: .52;
+  background: #1f202b;
+  box-shadow: none;
+}
 @media (prefers-color-scheme: dark) {
-  .ira-theme-orb {
+  :root:not([data-theme="light"]) .ira-theme-orb {
     filter: blur(10px);
     opacity: .52;
     background: #1f202b;
