@@ -55,9 +55,10 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
 
   return (
     <main className="ira-login">
-      <div className="ira-login-shape ira-login-shape-a" aria-hidden="true" />
-      <div className="ira-login-shape ira-login-shape-b" aria-hidden="true" />
-      <div className="ira-login-shape ira-login-shape-c" aria-hidden="true" />
+      <div className="ira-fluid-background" aria-hidden="true">
+        <div className="ira-fluid-blob ira-fluid-blob-one" />
+        <div className="ira-fluid-blob ira-fluid-blob-two" />
+      </div>
 
       <header className="ira-login-top">
         <div className="ira-login-mode-switch" role="tablist" aria-label="Choose portal">
