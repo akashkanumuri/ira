@@ -2967,3 +2967,37 @@ body {
     animation: none !important;
   }
 }
+
+
+/* Critical layering fix: fluid blobs are a background, never a foreground overlay. */
+.ira-app-bg {
+  position: relative !important;
+  isolation: isolate !important;
+  overflow: hidden !important;
+}
+
+.ira-app-bg > .ira-theme-canvas {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+}
+
+.ira-app-bg > *:not(.ira-theme-canvas) {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Preserve the supplied fluid animation while making it visible but not washing out the UI. */
+.ira-theme-orb {
+  filter: blur(85px) !important;
+  opacity: .13 !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 767px) {
+  .ira-theme-orb {
+    filter: blur(85px) !important;
+    opacity: .16 !important;
+  }
+}
