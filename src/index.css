@@ -3001,3 +3001,105 @@ body {
     opacity: .16 !important;
   }
 }
+
+
+/* IRA — supplied fluid_dark_theme_login.html animation, adapted only for brand color.
+   The DOM architecture mirrors the source: a background layer with two animated blobs,
+   behind the application shell. */
+.ira-portal-root {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  background: #f7f8fb;
+}
+
+.ira-fluid-background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ira-fluid-blob {
+  position: absolute;
+  filter: blur(85px);
+  opacity: 0.22;
+  animation: ira-fluid-move-and-morph 20s ease-in-out infinite alternate;
+  will-change: transform, border-radius;
+}
+
+/* Source .blob-1 — top left. */
+.ira-fluid-blob-one {
+  top: -15%;
+  left: -20%;
+  width: 60vw;
+  height: 60vw;
+  max-width: 500px;
+  max-height: 500px;
+  background-color: #0033ff;
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  animation-duration: 25s;
+}
+
+/* Source .blob-2 — bottom right. */
+.ira-fluid-blob-two {
+  bottom: -20%;
+  right: -10%;
+  width: 70vw;
+  height: 70vw;
+  max-width: 600px;
+  max-height: 600px;
+  background-color: #0600ab;
+  border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  animation-duration: 22s;
+  animation-direction: alternate-reverse;
+}
+
+/* Keep every app pixel above the animation. */
+.ira-app-bg,
+.ira-portal-root > .ira-app-bg + .ira-fluid-background {
+  position: relative;
+}
+.ira-app-bg {
+  z-index: 1;
+  background: transparent !important;
+}
+
+@keyframes ira-fluid-move-and-morph {
+  0% {
+    transform: rotate(0deg) scale(1) translate(0, 0);
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+  33% {
+    transform: rotate(45deg) scale(1.05) translate(2%, 2%);
+    border-radius: 50% 50% 40% 60% / 50% 40% 50% 60%;
+  }
+  66% {
+    transform: rotate(90deg) scale(0.95) translate(-2%, 5%);
+    border-radius: 60% 40% 50% 50% / 60% 50% 40% 50%;
+  }
+  100% {
+    transform: rotate(135deg) scale(1) translate(0, 0);
+    border-radius: 30% 70% 60% 40% / 50% 60% 40% 50%;
+  }
+}
+
+@media (max-width: 767px) {
+  .ira-fluid-blob-one {
+    width: 125vw;
+    height: 125vw;
+  }
+  .ira-fluid-blob-two {
+    width: 135vw;
+    height: 135vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ira-fluid-blob {
+    animation: none !important;
+  }
+}
