@@ -214,11 +214,17 @@ export async function performResumeWork(record: AttendanceRecord): Promise<Resul
   }
 
   const db = supabase as any;
+  const activeBreak = (record.breaks ?? []).find((item) => !item.breakEnd);
+  if (!activeBreak?.id) {
+    return { success: false, error: 'Active break could not be identified. Please refresh and try again.' };
+  }
+
   const { data, error } = await db
     .from('break_events')
     .update({ break_end: new Date().toISOString() })
+    .eq('id', activeBreak.id)
     .eq('attendance_id', record.id)
-    .eq('break_start', record.activeBreakStartIso)
+    .eq('employee_id', record.employeeId)
     .is('break_end', null)
     .select('*')
     .maybeSingle();
