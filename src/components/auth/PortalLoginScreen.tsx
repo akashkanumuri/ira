@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, ShieldCheck, Clock3, BriefcaseBusiness } from 'lucide-react';
 
 type Portal = 'employee' | 'admin';
 
@@ -54,83 +54,179 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   }
 
   return (
-    <main className="ira-login">
+    <main className="ira-login-page">
+      {/* Ambient background glow (from fluid login reference, adapted to IRA palette) */}
       <div className="ira-fluid-background" aria-hidden="true">
         <div className="ira-fluid-blob ira-fluid-blob-one" />
         <div className="ira-fluid-blob ira-fluid-blob-two" />
       </div>
 
-      <div className="ira-login-frame">
-        <section className="ira-login-panel">
-          <div className="ira-login-heading">
-            <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="ira-login-brand-logo" />
-            <h1>SIGN IN</h1>
-          </div>
-
-          {error && (
-            <div className="ira-login-error" role="alert">
-              <AlertCircle />
-              <span>{error}</span>
+      {/* Two-column container on desktop; single form on mobile */}
+      <div className="ira-login-container">
+        {/* LEFT COLUMN: Visual Brand Environment (Desktop only) */}
+        <section className="ira-login-brand-panel" aria-label="About IRA Hospitality">
+          <div className="ira-brand-panel-inner">
+            <div className="ira-brand-panel-header">
+              <img
+                src="/ira-hospitality-logo.png"
+                alt="IRA Hospitality"
+                className="ira-brand-logo-desktop"
+              />
+              <span className="ira-brand-badge">Enterprise V2</span>
             </div>
-          )}
 
-          <form onSubmit={submit} className="ira-login-form-stack" noValidate>
-            <label className="ira-login-field">
-              <span className="sr-only">{isEmployee ? 'Login ID' : 'Admin ID'}</span>
-              <div className="ira-login-field-box">
-                <UserRound aria-hidden="true" />
-                <input
-                  value={identifier}
-                  onChange={e => { setIdentifier(e.target.value); if (error) setError(''); }}
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  inputMode="text"
-                  enterKeyHint="next"
-                  placeholder={isEmployee ? 'Username' : 'Admin ID'}
-                  aria-label={isEmployee ? 'Login ID' : 'Admin ID'}
-                />
+            <div className="ira-brand-panel-body">
+              <h2 className="ira-brand-heading">
+                Intelligent Workforce &amp; Operations
+              </h2>
+              <p className="ira-brand-subtext">
+                Streamlined attendance tracking, shift scheduling, real-time leaves, and administrative control built for hospitality excellence.
+              </p>
+
+              {/* Milestone workflow cards */}
+              <div className="ira-milestones-list">
+                <div className="ira-milestone-item">
+                  <div className="ira-milestone-icon">
+                    <ShieldCheck className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="ira-milestone-title">1. Verified Identity</h3>
+                    <p className="ira-milestone-desc">Role-based security for staff and administrative portals.</p>
+                  </div>
+                </div>
+
+                <div className="ira-milestone-item">
+                  <div className="ira-milestone-icon">
+                    <Clock3 className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="ira-milestone-title">2. Realtime IST Attendance</h3>
+                    <p className="ira-milestone-desc">Authoritative check-in, breaks, checkout, and work mode tracking.</p>
+                  </div>
+                </div>
+
+                <div className="ira-milestone-item">
+                  <div className="ira-milestone-icon">
+                    <BriefcaseBusiness className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="ira-milestone-title">3. Operations &amp; Payroll</h3>
+                    <p className="ira-milestone-desc">Task delegation, monthly leaves, and salary snapshot finalized safely.</p>
+                  </div>
+                </div>
               </div>
-            </label>
+            </div>
 
-            <label className="ira-login-field">
-              <span className="sr-only">Password</span>
-              <div className="ira-login-field-box">
-                <LockKeyhole aria-hidden="true" />
-                <input
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); if (error) setError(''); }}
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  enterKeyHint="done"
-                  placeholder="Password"
-                  aria-label="Password"
-                />
-                <button
-                  type="button"
-                  className="ira-login-eye"
-                  onClick={() => setShowPassword(v => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff /> : <Eye />}
-                </button>
+            <div className="ira-brand-panel-footer">
+              <span className="ira-panel-footer-text">© {new Date().getFullYear()} IRA Hospitality · Internal Platform</span>
+            </div>
+          </div>
+        </section>
+
+        {/* RIGHT COLUMN: The Auth Form (Desktop and Mobile) */}
+        <section className="ira-login-form-panel" aria-label="Sign In">
+          <div className="ira-login-form-box">
+            {/* Header: Logo & Title */}
+            <div className="ira-form-header">
+              <img
+                src="/ira-hospitality-logo.png"
+                alt="IRA Hospitality"
+                className="ira-form-logo"
+              />
+              <h1 className="ira-form-title">SIGN IN</h1>
+              <p className="ira-form-subtitle">
+                {isEmployee ? 'Employee Attendance & Work Portal' : 'Administration & HR Management'}
+              </p>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="ira-login-error" role="alert">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{error}</span>
               </div>
-            </label>
+            )}
 
-            <button type="submit" disabled={loading} className="ira-login-submit">
-              {loading ? 'SIGNING IN…' : 'SIGN IN'}
-            </button>
-          </form>
+            {/* Form */}
+            <form onSubmit={submit} className="ira-login-form" noValidate>
+              <label className="ira-form-field">
+                <span className="sr-only">{isEmployee ? 'Login ID' : 'Admin ID'}</span>
+                <div className="ira-input-wrapper">
+                  <UserRound className="ira-input-icon" aria-hidden="true" />
+                  <input
+                    id="ira-login-identifier"
+                    value={identifier}
+                    onChange={e => {
+                      setIdentifier(e.target.value);
+                      if (error) setError('');
+                    }}
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    inputMode="text"
+                    enterKeyHint="next"
+                    placeholder={isEmployee ? 'Username / Login ID' : 'Admin ID'}
+                    aria-label={isEmployee ? 'Login ID' : 'Admin ID'}
+                    className="ira-input"
+                  />
+                </div>
+              </label>
 
-          <div className="ira-login-account-switch">
-            <span>{isEmployee ? 'Have an admin account?' : 'Have an employee account?'}</span>
-            <button type="button" onClick={() => switchPortal(isEmployee ? 'admin' : 'employee')}>
-              {isEmployee ? 'ADMIN LOGIN' : 'EMPLOYEE LOGIN'}
-            </button>
+              <label className="ira-form-field">
+                <span className="sr-only">Password</span>
+                <div className="ira-input-wrapper">
+                  <LockKeyhole className="ira-input-icon" aria-hidden="true" />
+                  <input
+                    id="ira-login-password"
+                    value={password}
+                    onChange={e => {
+                      setPassword(e.target.value);
+                      if (error) setError('');
+                    }}
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="done"
+                    placeholder="Password"
+                    aria-label="Password"
+                    className="ira-input pr-12"
+                  />
+                  <button
+                    type="button"
+                    className="ira-password-toggle"
+                    onClick={() => setShowPassword(v => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </label>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="ira-submit-btn"
+              >
+                {loading ? 'SIGNING IN…' : 'SIGN IN'}
+              </button>
+            </form>
+
+            {/* Portal Switcher */}
+            <div className="ira-portal-switch">
+              <span className="ira-switch-prompt">
+                {isEmployee ? 'Have an admin account?' : 'Have an employee account?'}
+              </span>
+              <button
+                type="button"
+                className="ira-switch-btn"
+                onClick={() => switchPortal(isEmployee ? 'admin' : 'employee')}
+              >
+                {isEmployee ? 'ADMIN LOGIN' : 'EMPLOYEE LOGIN'}
+              </button>
+            </div>
           </div>
         </section>
       </div>

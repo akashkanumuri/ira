@@ -38,6 +38,7 @@ export const LeaveRequestView: React.FC<LeaveRequestViewProps> = ({
       employeeName: currentUser.name,
       department: currentUser.department,
       leaveType,
+      duration: 'full',
       startDate,
       endDate,
       days: Math.max(1, Math.floor((new Date(`${endDate}T12:00:00`).getTime() - new Date(`${startDate}T12:00:00`).getTime()) / 86400000) + 1),

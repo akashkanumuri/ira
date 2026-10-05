@@ -67,6 +67,20 @@ export default function App() {
   return <Portal user={user} onLogout={signOut} />;
 }
 
+function LiveClockDisplay() {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700 shadow-xs">
+      <span className="ira-live-dot" />
+      <span>{time.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
+    </div>
+  );
+}
+
 function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }) {
   const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -149,8 +163,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
 
         const departmentsData = depR.error ? fallbackDepartments : (depR.data ?? []).map((d: any) => ({ id: d.id, name: d.name }));
         const designationsData = desR.error ? fallbackDesignations : (desR.data ?? []).map((d: any) => ({ id: d.id, name: d.name, canAssignTasks: Boolean(d.can_assign_tasks) }));
-        const departmentsMap = new Map(departmentsData.map(d => [d.id, d.name]));
-        const designationsMap = new Map(designationsData.map(d => [d.id, d.name]));
+        const departmentsMap = new Map<string, string>(departmentsData.map((d: any) => [d.id, d.name]));
+        const designationsMap = new Map<string, string>(designationsData.map((d: any) => [d.id, d.name]));
 
         if (!depR.error) {
           dataSnapshot.current.departments = departmentsData;
@@ -167,7 +181,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         let mappedEmployees = fallbackEmployees;
         if (!empR.error) {
           const rawEmployees = empR.data ?? [];
-          const managersMap = new Map(rawEmployees.map((e: any) => [e.id, e.name]));
+          const managersMap = new Map<string, string>(rawEmployees.map((e: any) => [e.id, e.name]));
           mappedEmployees = rawEmployees.map((e: any) => mapEmployee(e, {
             departments: departmentsMap,
             designations: designationsMap,
@@ -237,7 +251,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           dataSnapshot.current.designations = desData;
           setDesignations(desData);
         }
-        const desMap = new Map(desData.map(d => [d.id, d.name]));
+        const desMap = new Map<string, string>(desData.map((d: any) => [d.id, d.name]));
         const visibleSalary = new Map<string, number>();
         for (const salary of salaryR.data ?? []) if (!visibleSalary.has(salary.employee_id)) visibleSalary.set(salary.employee_id, Number(salary.monthly_salary));
 
@@ -246,7 +260,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           for (const employee of fallbackEmployees) employeeMap.set(employee.id, employee);
         } else {
           const visibleRaw = visibleEmpR.data ?? [];
-          const managerNames = new Map(visibleRaw.map((row: any) => [row.id, row.name]));
+          const managerNames = new Map<string, string>(visibleRaw.map((row: any) => [row.id, row.name]));
           for (const row of visibleRaw) {
             employeeMap.set(row.id, mapEmployee(row, { designations: desMap, managers: managerNames, salary: visibleSalary }));
           }
@@ -508,37 +522,77 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         pendingCorrectionCount={user.role === 'admin' ? corrections.filter(x => x.status === 'pending').length : undefined}
       />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        <header className="ira-topbar h-16 shrink-0 sticky top-0 z-20 flex items-center px-4 sm:px-6 gap-3">
-          <button type="button" className="lg:hidden p-2 rounded-xl hover:bg-slate-100 shrink-0" onClick={() => setMobileOpen(v => !v)} aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={mobileOpen} aria-controls="mobile-navigation"><Menu className="w-5 h-5" /></button>
+        <header className="ira-topbar h-16 shrink-0 sticky top-0 z-[80] flex items-center px-4 sm:px-6 gap-3 bg-white border-b border-slate-200">
+          <button
+            type="button"
+            className="lg:hidden p-2 rounded-xl hover:bg-slate-100 shrink-0 text-slate-700"
+            onClick={() => setMobileOpen(v => !v)}
+            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-navigation"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
           <div className="flex-1 min-w-0" aria-hidden="true" />
-          <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/55 border border-slate-200/75 text-[11px] font-semibold text-slate-600 backdrop-blur-xl">
-            <span className="ira-live-dot" />
-            <LiveClockDisplay />
-          </div>
+          <LiveClockDisplay />
           <NotificationBell activeTab={activeTab} />
-          <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200/70">
-            <div className="w-8 h-8 rounded-full bg-slate-950 text-white flex items-center justify-center text-[11px] font-bold">{(user.name || 'U').charAt(0).toUpperCase()}</div>
+          <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200">
+            <div className="w-8 h-8 rounded-full bg-[#00033D] text-white flex items-center justify-center text-[11px] font-bold">
+              {(user.name || 'U').charAt(0).toUpperCase()}
+            </div>
             <div className="hidden md:block">
               <p className="text-xs font-semibold text-slate-900 leading-none">{user.name || 'User'}</p>
               <p className="text-[10px] text-slate-500 mt-1">{user.role === 'admin' ? 'Administrator' : (user.designation || 'Employee')}</p>
             </div>
-            <button type="button" onClick={()=>void onLogout()} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all" title="Sign out" aria-label="Sign out">
+            <button
+              type="button"
+              onClick={() => void onLogout()}
+              className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all"
+              title="Sign out"
+              aria-label="Sign out"
+            >
               <LogOut className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </header>
 
-        <div className={`ira-mobile-nav-layer lg:hidden fixed inset-x-0 bottom-0 z-[70] transition-opacity duration-200 ease-out ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} aria-hidden={!mobileOpen}>
-          <button type="button" aria-label="Close navigation menu" className="absolute inset-0 w-full h-full bg-slate-950/35 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
-          <aside id="mobile-navigation" className={`ira-mobile-drawer absolute inset-y-0 left-0 shadow-[24px_0_70px_rgba(2,6,23,.30)] transition-transform duration-300 ease-[cubic-bezier(.2,.75,.2,1)] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`} aria-label="Mobile navigation">
-            <div className="p-5 border-b border-slate-800/90 flex items-center justify-between text-white">
-              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-11 w-auto max-w-[160px] object-contain object-left" />
-              <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu" className="icon-btn !text-slate-300 hover:!bg-white/10 hover:!text-white"><X className="w-5 h-5" /></button>
+        <div
+          className={`ira-mobile-nav-layer lg:hidden fixed top-16 inset-x-0 bottom-0 z-[70] transition-opacity duration-200 ease-out ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+          aria-hidden={!mobileOpen}
+        >
+          <button
+            type="button"
+            aria-label="Close navigation menu"
+            className="absolute inset-0 w-full h-full bg-slate-950/45 backdrop-blur-[2px]"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside
+            id="mobile-navigation"
+            className={`ira-mobile-drawer absolute inset-y-0 left-0 w-[270px] max-w-[280px] bg-[#00033D] text-slate-200 shadow-[24px_0_70px_rgba(2,6,23,.40)] flex flex-col z-[71] transition-transform duration-300 ease-[cubic-bezier(.2,.75,.2,1)] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            aria-label="Mobile navigation"
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between text-white shrink-0">
+              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-9 w-auto max-w-[150px] object-contain object-left" />
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close navigation menu"
+                className="p-2 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <nav className="p-3.5 space-y-1.5">
+            <nav className="p-3 space-y-1 overflow-y-auto flex-1">
               {(user.role === 'admin' ? adminNav : employeeNav).map(([id, label, Icon]) => (
-                <button key={id} onClick={() => navigate(id)} className={`w-full text-left px-3.5 py-3 rounded-2xl flex items-center gap-3 text-sm transition-all duration-200 ${activeTab === id ? 'ira-mobile-nav-active text-white shadow-[0_12px_30px_rgba(0,51,255,.20)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon className="w-4 h-4" />{label}</button>
+                <button
+                  key={id}
+                  onClick={() => navigate(id)}
+                  className={`w-full text-left px-3.5 py-3 min-h-[44px] rounded-xl flex items-center gap-3 text-sm transition-all duration-200 ${activeTab === id ? 'ira-mobile-nav-active text-white bg-[#0033FF] font-semibold' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{label}</span>
+                </button>
               ))}
             </nav>
           </aside>
@@ -558,19 +612,27 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           )}
         </main>
 
-        <nav className={`ira-mobile-bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-30 px-2 py-2 grid grid-cols-5 ${mobileOpen ? 'pointer-events-none opacity-0 translate-y-full' : 'opacity-100 translate-y-0'}`}>
-          {(user.role === 'admin' ? adminNav.slice(0,4) : employeeNav.slice(0,4)).map(([id,label,Icon]) => (
-            <button key={id} onClick={() => navigate(id)} className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-[10px] rounded-xl transition-all ${activeTab === id ? 'ira-bottom-active font-bold' : 'ira-bottom-idle'}`}><Icon className="w-4 h-4" />{label}</button>
+        <nav className={`ira-mobile-bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-30 px-2 py-1.5 grid grid-cols-5 bg-white border-t border-slate-200 shadow-lg ${mobileOpen ? 'pointer-events-none opacity-0 translate-y-full' : 'opacity-100 translate-y-0'}`}>
+          {(user.role === 'admin' ? adminNav.slice(0, 4) : employeeNav.slice(0, 4)).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => navigate(id)}
+              className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 min-h-[48px] text-[10px] rounded-xl transition-all ${activeTab === id ? 'ira-bottom-active text-blue-600 font-bold bg-blue-50/80' : 'ira-bottom-idle text-slate-500 hover:text-slate-900'}`}
+              aria-label={label}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="truncate max-w-full">{label.split(' ')[0]}</span>
+            </button>
           ))}
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 text-[10px] rounded-xl transition-all ${mobileOpen || activeTab === 'admin-requests' || activeTab === 'admin-payroll' || activeTab === 'admin-holidays' || activeTab === 'admin-export' || activeTab === 'admin-settings' || activeTab === 'emp-wfh' || activeTab === 'emp-payroll' || activeTab === 'emp-corrections' || activeTab === 'emp-holidays' || activeTab === 'emp-profile' ? 'ira-bottom-active font-bold' : 'ira-bottom-idle'}`}
+            className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 min-h-[48px] text-[10px] rounded-xl transition-all ${mobileOpen || ['admin-requests', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'emp-wfh', 'emp-payroll', 'emp-corrections', 'emp-holidays', 'emp-profile'].includes(activeTab) ? 'ira-bottom-active text-blue-600 font-bold bg-blue-50/80' : 'ira-bottom-idle text-slate-500 hover:text-slate-900'}`}
             aria-label="Open more navigation"
             aria-expanded={mobileOpen}
           >
-            <Menu className="w-4 h-4" />
-            More
+            <Menu className="w-4 h-4 shrink-0" />
+            <span>More</span>
           </button>
         </nav>
         <div className="hidden">{pendingCount}</div>
@@ -968,6 +1030,21 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], wf
           </div>
         )}
       </section>
+
+      {checkoutOpen && current && (
+        <Modal title="Confirm check-out" onClose={() => setCheckoutOpen(false)} closeDisabled={busy}>
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-slate-900">Are you sure you want to check out?</p>
+            <p className="text-xs text-slate-500">This completes today's attendance. You will not be able to check in again for today.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setCheckoutOpen(false)} className="btn-secondary">Cancel</button>
+              <button type="button" disabled={busy} onClick={() => { setCheckoutOpen(false); void run(() => performCheckOut(current), 'Checked out successfully.'); }} className="btn-primary disabled:opacity-60">
+                {busy ? 'Saving…' : 'Check out'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <section className="mt-5 bg-white rounded-2xl border border-slate-200 p-5">
         <div className="flex items-center justify-between gap-4"><div><h3 className="font-bold text-sm">Monthly calendar</h3><p className="text-xs text-slate-500 mt-1">Sunday is weekly off. Public and company holidays are paid non-working days.</p></div><div className="flex items-center gap-1"><button type="button" onClick={() => setMonthOffset(v=>v-1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button><span className="px-3 text-xs font-bold min-w-28 text-center">{base.toLocaleDateString('en-IN',{month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}</span><button type="button" onClick={() => setMonthOffset(v=>v+1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button></div></div>
@@ -1527,7 +1604,17 @@ function SettingsAdmin({designations,departments,rules,onRefresh}:any){
   return <PageShell title="Settings" subtitle="Configure designations, assignment rules, departments and the payroll divisor policy."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['rules','Assignment rules'],['designations','Designations'],['departments','Departments'],['payroll','Payroll policy']].map(([id,l])=><button key={id} onClick={()=>setTab(id)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab===id?'bg-white shadow-sm text-slate-900':'text-slate-500'}`}>{l}</button>)}</div>{tab==='rules'&&<section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add assignment rule</h3><div className="space-y-4 mt-4"><Field label="Assigner designation"><select value={assigner} onChange={e=>setAssigner(e.target.value)} className="input"><option value="">Select</option>{designations.map((d:Designation)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Assignee designation"><select value={assignee} onChange={e=>setAssignee(e.target.value)} className="input"><option value="">Any designation</option>{designations.map((d:Designation)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Scope"><select value={scope} onChange={e=>setScope(e.target.value as any)} className="input"><option value="direct_reports">Direct reports</option><option value="any">Any employee</option></select></Field><button onClick={()=>void addRule()} className="btn-primary">Add rule</button></div></div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-5 border-b border-slate-100"><h3 className="font-bold text-sm">Current rules</h3></div>{rules.map((r:AssignmentRule)=><div key={r.id} className="p-4 border-b border-slate-100 flex items-center justify-between gap-3"><p className="text-xs"><b>{r.assignerDesignation}</b> → {r.assigneeDesignation} <span className="text-slate-400">· {r.scope}</span></p><button onClick={()=>void deleteRule(r.id)} className="icon-btn text-rose-500"><Trash2 className="w-4 h-4"/></button></div>)}{!rules.length&&<EmptyCard text="No assignment rules."/>}</div></section>}{tab==='designations'&&<section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add designation</h3><div className="space-y-4 mt-4"><Field label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="input"/></Field><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={canAssign} onChange={e=>setCanAssign(e.target.checked)}/>Can assign tasks</label><button onClick={()=>void addDesignation()} className="btn-primary">Add designation</button></div></div><div className="bg-white rounded-2xl border border-slate-200 p-5">{designations.map((d:Designation)=><div key={d.id} className="flex justify-between p-3 border-b border-slate-100 last:border-0 text-xs"><b>{d.name}</b><span className="text-slate-500">{d.canAssignTasks?'Assigns tasks':'Receives tasks'}</span></div>)}</div></section>}{tab==='departments'&&<section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add department</h3><div className="flex gap-2 mt-4"><input value={name} onChange={e=>setName(e.target.value)} className="input"/><button onClick={()=>void addDepartment()} className="btn-primary">Add</button></div></div><div className="bg-white rounded-2xl border border-slate-200 p-5">{departments.map((d:Department)=><div key={d.id} className="p-3 border-b border-slate-100 last:border-0 text-xs font-bold">{d.name}</div>)}</div></section>}{tab==='payroll'&&<section className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 max-w-xl"><p className="text-sm font-bold">Payroll divisor</p><p className="text-xs text-slate-500 mt-1">Keep this configurable until the company confirms the final payroll policy.</p>{payrollPolicyStatus==='loading'&&<p role="status" className="text-xs text-slate-500 mt-3">Loading current payroll policy…</p>}{payrollPolicyStatus==='error'&&<div role="alert" className="mt-3 text-xs text-rose-700">Could not load the current payroll policy. Saving is disabled until it can be reloaded. <button type="button" onClick={()=>setPayrollPolicyLoadKey(value=>value+1)} className="font-bold underline ml-1">Retry</button></div>}<select id="payroll-divisor" value={payrollDivisor} disabled={payrollPolicyStatus!=='ready'} onChange={e=>setPayrollDivisor(e.target.value as 'calendar_days'|'working_days')} className="input mt-4 disabled:opacity-50"><option value="calendar_days">Calendar days</option><option value="working_days">Working days</option></select><button onClick={()=>void savePayroll()} disabled={payrollPolicyStatus!=='ready'} className="btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed">Save policy</button><p className="text-[11px] text-slate-400 mt-3">Paid leave accrual remains 1.5 days per month and carries forward.</p></section>}</PageShell>;
 }
 
-function PageShell({title,subtitle: _subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){return <div className="ira-page max-w-[1440px] mx-auto"><div className="mb-5 sm:mb-6"><h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-950">{title}</h2></div>{children}</div>}
+function PageShell({title,subtitle,children}:{title:string;subtitle?:string;children:React.ReactNode}){
+  return (
+    <div className="ira-page max-w-[1220px] mx-auto w-full">
+      <div className="mb-5 sm:mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-950">{title}</h2>
+        {subtitle && <p className="text-xs sm:text-sm text-slate-500 mt-1">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function NotificationBell({activeTab}:{activeTab:string}){
   type NotificationItem = {id:string;type:'success'|'error'|'info';category:NotificationCategory;message:string;at:number;count:number};
@@ -1587,7 +1674,7 @@ function NotificationBell({activeTab}:{activeTab:string}){
       <Bell className="w-4.5 h-4.5"/>
       {unread>0&&<span className="absolute -right-0.5 -top-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">{unread>9?'9+':unread}</span>}
     </button>
-    {createPortal(<div ref={panelRef} id="notification-panel" role="region" aria-label="Notifications" aria-hidden={!open} className={"fixed left-3 right-3 top-16 max-h-[min(70dvh,24rem)] rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.16)] overflow-hidden z-[70] sm:left-auto sm:right-4 sm:w-[min(88vw,360px)] origin-top transition-all duration-200 ease-out " + (open?"visible opacity-100 translate-y-0 scale-100":"invisible pointer-events-none opacity-0 -translate-y-1 scale-95")}>
+    {createPortal(<div ref={panelRef} id="notification-panel" role="region" aria-label="Notifications" aria-hidden={!open} className={"fixed left-3 right-3 top-16 max-h-[min(70dvh,24rem)] rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.16)] overflow-hidden z-[85] sm:left-auto sm:right-4 sm:w-[min(88vw,360px)] origin-top transition-all duration-200 ease-out " + (open?"visible opacity-100 translate-y-0 scale-100":"invisible pointer-events-none opacity-0 -translate-y-1 scale-95")}>
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <div><p className="text-xs font-bold text-slate-900">Notifications</p><p className="text-[10px] text-slate-400">{unread?unread+' recent update'+(unread===1?'':'s'):'All caught up'}</p></div>
         {unread>0&&<button type="button" onClick={()=>setItems([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700">Clear</button>}
@@ -1599,14 +1686,7 @@ function NotificationBell({activeTab}:{activeTab:string}){
     </div>,document.body)}
   </div>
 }
-function LiveClockDisplay(){
-  const [now,setNow]=useState(new Date());
-  useEffect(()=>{
-    const timer=window.setInterval(()=>setNow(new Date()),1000);
-    return()=>window.clearInterval(timer);
-  },[]);
-  return <span>{now.toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}</span>;
-}
+
 function LoadingScreen({label='Loading IRA…'}:{label?:string}){return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin"/>{label}</div></div>}
 
 function Modal({title,onClose,children,wide=false,closeDisabled=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean;closeDisabled?:boolean}){
