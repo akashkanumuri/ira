@@ -83,6 +83,11 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
                   value={identifier}
                   onChange={e => { setIdentifier(e.target.value); if (error) setError(''); }}
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="text"
+                  enterKeyHint="next"
                   placeholder={isEmployee ? 'Username' : 'Admin ID'}
                   aria-label={isEmployee ? 'Login ID' : 'Admin ID'}
                 />
@@ -98,6 +103,10 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
                   onChange={e => { setPassword(e.target.value); if (error) setError(''); }}
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
                   placeholder="Password"
                   aria-label="Password"
                 />
