@@ -529,7 +529,7 @@ body {
 }
 
 .ira-brand-logo-desktop {
-  height: 36px;
+  height: 54px;
   width: auto;
   object-fit: contain;
 }
@@ -632,10 +632,10 @@ body {
 }
 
 .ira-form-logo {
-  height: 44px;
+  height: 66px;
   width: auto;
   object-fit: contain;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .ira-form-title {
@@ -839,7 +839,7 @@ body {
   }
 
   .ira-form-logo {
-    height: 40px;
+    height: 60px;
   }
 
   .ira-input {
