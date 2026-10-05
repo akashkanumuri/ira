@@ -4362,3 +4362,27 @@ body {
     font-size: 34px !important;
   }
 }
+
+
+/* ORIGINAL IRA LOGO — preserve source asset, enlarge only */
+.ira-login-brand-logo {
+  width: 220px !important;
+  max-width: 220px !important;
+  height: 66px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  margin: 0 !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+@media (max-width: 699px) {
+  .ira-login-brand-logo {
+    width: 210px !important;
+    max-width: 210px !important;
+    height: 62px !important;
+    object-fit: contain !important;
+    object-position: left center !important;
+    filter: none !important;
+  }
+}
