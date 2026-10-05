@@ -4454,3 +4454,105 @@ body {
     font-size: 11px !important;
   }
 }
+
+
+/* MOBILE FORM STABILITY — keep focused fields usable while the virtual keyboard is open. */
+@media (max-width: 699px) {
+  html, body, #root {
+    min-height: 100%;
+  }
+
+  /* Native mobile inputs should not zoom/pan when focused. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ira-modal-overlay {
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding:
+      max(12px, env(safe-area-inset-top))
+      12px
+      max(12px, env(safe-area-inset-bottom)) !important;
+    height: var(--ira-visual-vh, 100dvh) !important;
+    min-height: 320px !important;
+    overflow: hidden !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ira-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(var(--ira-visual-vh, 100dvh) - 24px) !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border-radius: 20px !important;
+    transform: translateZ(0);
+  }
+
+  .ira-modal-body {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .ira-modal input,
+  .ira-modal select,
+  .ira-modal textarea {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .ira-modal input:focus,
+  .ira-modal select:focus,
+  .ira-modal textarea:focus {
+    scroll-margin-top: 76px;
+    scroll-margin-bottom: 140px;
+  }
+
+  .ira-modal .btn-primary,
+  .ira-modal .btn-secondary,
+  .ira-modal .icon-btn {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  /* Both employee and admin login share this component; keep focus stable on mobile. */
+  .ira-login {
+    min-height: 100svh !important;
+  }
+
+  .ira-login-field-box input {
+    min-width: 0 !important;
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    touch-action: manipulation !important;
+  }
+
+  .ira-login-field-box {
+    touch-action: manipulation !important;
+  }
+
+  .ira-login-submit,
+  .ira-login-account-switch button,
+  .ira-login-eye {
+    touch-action: manipulation !important;
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-width: 699px) {
+    .ira-login {
+      min-height: 100dvh !important;
+    }
+  }
+}
