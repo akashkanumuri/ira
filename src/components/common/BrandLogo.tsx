@@ -13,14 +13,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   variant = 'auto',
   showSubtitle = false,
 }) => {
-  const width = { sm: 'w-24', md: 'w-32', lg: 'w-40' }[size];
+  const width = { sm: 'w-44', md: 'w-56', lg: 'w-72' }[size];
 
   return (
     <div className={`flex items-center select-none min-w-0 ${className}`}>
       <img
         src="/ira-hospitality-logo.png"
         alt="IRA Hospitality"
-        className={`${width} h-auto max-h-9 object-contain object-left shrink-0`}
+        className={`${width} h-auto max-h-16 object-contain object-left shrink-0`}
       />
       {showSubtitle && (
         <div className="sr-only">Attendance</div>

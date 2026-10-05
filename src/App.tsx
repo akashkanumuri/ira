@@ -573,7 +573,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             aria-label="Mobile navigation"
           >
             <div className="p-4 border-b border-white/10 flex items-center justify-between text-white shrink-0">
-              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-9 w-auto max-w-[150px] object-contain object-left" />
+              <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-16 w-auto max-w-[200px] object-contain object-left" />
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}

@@ -43,7 +43,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
     <aside className="ira-sidebar hidden lg:flex w-64 text-slate-300 flex-col shrink-0 sticky top-0 h-screen border-r border-white/10 shadow-[12px_0_50px_rgba(15,23,42,.12)] backdrop-blur-2xl relative overflow-hidden">
       <div className="px-4 py-5 border-b border-white/10">
         <div className="flex items-center">
-          <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-9 w-auto max-w-[150px] object-contain object-left" />
+          <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-16 w-auto max-w-[210px] object-contain object-left" />
         </div>
       </div>
 
