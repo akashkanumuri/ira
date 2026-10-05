@@ -634,11 +634,11 @@ body {
 }
 
 .ira-form-logo {
-  height: 119px;
+  height: 66px;
   width: auto;
   object-fit: contain;
   margin-top: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .ira-form-title {
@@ -842,8 +842,9 @@ body {
   }
 
   .ira-form-logo {
-    height: 108px;
+    height: 56px;
     margin-top: 10px;
+    margin-bottom: 12px;
   }
 
   .ira-input {
