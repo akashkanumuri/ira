@@ -4845,3 +4845,530 @@ body {
   background-color: transparent !important;
   transition: background-color 9999s ease-in-out 0s !important;
 }
+
+
+/* =========================================================
+   IRA V2 — CANONICAL RESPONSIVE SHELL + AUTH
+   Based on supplied fluid_dark_theme_login.html and current
+   Vercel / Fluent / Atlassian responsive guidance.
+   This block is intentionally last so older style experiments
+   cannot win the cascade.
+   ========================================================= */
+
+/* ---------- GLOBAL WIDTH / OVERFLOW ---------- */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden !important;
+}
+
+.ira-portal-root,
+.ira-app-bg {
+  width: 100% !important;
+  max-width: 100vw !important;
+  min-width: 0 !important;
+  overflow-x: clip !important;
+}
+
+.ira-main {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: clip !important;
+  overscroll-behavior-x: none !important;
+}
+
+.ira-section-transition {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.ira-page {
+  width: 100% !important;
+  max-width: 1180px !important;
+  min-width: 0 !important;
+  margin-inline: auto !important;
+  box-sizing: border-box !important;
+}
+
+@media (min-width: 1024px) {
+  .ira-main {
+    padding: 24px clamp(20px, 2.4vw, 40px) 32px !important;
+  }
+
+  .ira-page {
+    max-width: 1180px !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  .ira-page {
+    max-width: 1200px !important;
+  }
+}
+
+/* ---------- MOBILE NAVIGATION LAYER ----------
+   The app header remains a separate, fully opaque layer.
+   The drawer begins below that header instead of dimming it. */
+@media (max-width: 1023px) {
+  .ira-topbar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 80 !important;
+    opacity: 1 !important;
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-bottom: 1px solid #e8ebf1 !important;
+    box-shadow: 0 1px 0 rgba(16,24,40,.04) !important;
+  }
+
+  .ira-mobile-nav-layer {
+    position: fixed !important;
+    top: 64px !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 70 !important;
+    overflow: hidden !important;
+    isolation: isolate !important;
+  }
+
+  .ira-mobile-nav-layer > button {
+    position: absolute !important;
+    inset: 0 !important;
+    opacity: 1 !important;
+    background: rgba(2,6,23,.32) !important;
+    backdrop-filter: blur(2px) !important;
+    -webkit-backdrop-filter: blur(2px) !important;
+  }
+
+  .ira-mobile-drawer {
+    position: absolute !important;
+    inset: 0 auto 0 0 !important;
+    width: min(280px, calc(100vw - 48px)) !important;
+    max-width: 280px !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    z-index: 71 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    opacity: 1 !important;
+    background: #0b0e14 !important;
+    border-right: 1px solid rgba(255,255,255,.07) !important;
+    box-shadow: 22px 0 60px rgba(2,6,23,.28) !important;
+    isolation: isolate !important;
+  }
+
+  .ira-mobile-drawer::before {
+    z-index: 0 !important;
+    opacity: 1 !important;
+  }
+
+  .ira-mobile-drawer > * {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  .ira-mobile-drawer > div:first-child {
+    flex: 0 0 auto !important;
+    min-height: 64px !important;
+  }
+
+  .ira-mobile-drawer nav {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding: 12px !important;
+  }
+
+  .ira-mobile-drawer nav button {
+    min-height: 44px !important;
+    width: 100% !important;
+    touch-action: manipulation !important;
+  }
+
+  .ira-mobile-nav-active {
+    background: rgba(0,51,255,.16) !important;
+    box-shadow: inset 2px 0 0 #0033FF !important;
+  }
+
+  .ira-mobile-bottom-nav {
+    z-index: 60 !important;
+  }
+}
+
+/* ---------- LOGIN ----------
+   Keep the supplied template's geometry: one focused column,
+   400px maximum width, simple fields, restrained spacing.
+   No app header, no mode switch, no decorative card wall. */
+.ira-login {
+  position: relative !important;
+  isolation: isolate !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-height: 100svh !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+  padding: 48px 24px !important;
+  color: #ffffff !important;
+  background:
+    radial-gradient(620px 480px at 12% 8%, rgba(0,51,255,.28), transparent 70%),
+    radial-gradient(700px 560px at 92% 92%, rgba(6,0,171,.34), transparent 72%),
+    linear-gradient(135deg, #00033D 0%, #0600AB 52%, #0033FF 100%) !important;
+}
+
+.ira-login > .ira-fluid-background {
+  display: none !important;
+}
+
+.ira-login-frame {
+  position: relative !important;
+  z-index: 2 !important;
+  width: min(100%, 400px) !important;
+  max-width: 400px !important;
+  min-width: 0 !important;
+  margin: auto !important;
+  padding: 12px 0 !important;
+}
+
+.ira-login-panel {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.ira-login-heading {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 14px !important;
+  margin: 0 0 34px !important;
+  text-align: center !important;
+}
+
+.ira-login-brand-logo {
+  display: block !important;
+  width: 220px !important;
+  max-width: min(220px, 78vw) !important;
+  height: 66px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  margin: 0 auto !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+.ira-login-heading h1 {
+  align-self: center !important;
+  margin: 0 !important;
+  color: #ffffff !important;
+  text-align: center !important;
+  font-size: 34px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  letter-spacing: -.045em !important;
+}
+
+.ira-login-form-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  gap: 16px !important;
+  margin: 0 !important;
+}
+
+.ira-login-field {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+.ira-login-field-box {
+  position: relative !important;
+  width: 100% !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  background: rgba(0,3,61,.72) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease !important;
+}
+
+.ira-login-field-box:hover {
+  background: rgba(0,3,61,.78) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+
+.ira-login-field-box:focus-within {
+  background: rgba(0,3,61,.82) !important;
+  border-color: rgba(255,255,255,.28) !important;
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.08),
+    inset 0 0 0 1px rgba(255,255,255,.045) !important;
+}
+
+.ira-login-field-box > svg {
+  flex: 0 0 auto !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-left: 16px !important;
+  color: #ffffff !important;
+  stroke-width: 2 !important;
+}
+
+.ira-login-field-box input {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  border: 0 !important;
+  outline: 0 !important;
+  padding: 0 14px 0 11px !important;
+  background: transparent !important;
+  color: #ffffff !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  letter-spacing: -.01em !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+}
+
+.ira-login-field-box input::placeholder {
+  color: rgba(255,255,255,.60) !important;
+  opacity: 1 !important;
+}
+
+.ira-login-eye {
+  flex: 0 0 44px !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 100% !important;
+  min-height: 44px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: rgba(255,255,255,.72) !important;
+  touch-action: manipulation !important;
+}
+
+.ira-login-eye:hover,
+.ira-login-eye:focus-visible {
+  color: #ffffff !important;
+  background: rgba(255,255,255,.06) !important;
+}
+
+.ira-login-eye:focus-visible,
+.ira-login-submit:focus-visible,
+.ira-login-account-switch button:focus-visible {
+  outline: 3px solid rgba(255,255,255,.22) !important;
+  outline-offset: 2px !important;
+}
+
+.ira-login-submit {
+  width: 100% !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  margin: 4px 0 0 !important;
+  padding: 0 20px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #ffffff !important;
+  background: linear-gradient(90deg, #0033FF 0%, #0600AB 52%, #0033FF 100%) !important;
+  box-shadow: 0 12px 28px rgba(0,51,255,.20) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: .01em !important;
+  transition: transform .16s ease, filter .16s ease !important;
+  touch-action: manipulation !important;
+}
+
+.ira-login-submit:hover:not(:disabled) {
+  filter: brightness(1.08) !important;
+  transform: translateY(-1px) !important;
+}
+
+.ira-login-submit:active:not(:disabled) {
+  transform: scale(.99) !important;
+}
+
+.ira-login-submit:disabled {
+  opacity: .68 !important;
+  cursor: wait !important;
+}
+
+.ira-login-account-switch {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  width: 100% !important;
+  margin: 30px 0 0 !important;
+  color: rgba(255,255,255,.58) !important;
+  text-align: center !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.ira-login-account-switch button {
+  min-height: 24px !important;
+  padding: 2px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  font-weight: 700 !important;
+  touch-action: manipulation !important;
+}
+
+.ira-login-error {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 0 16px !important;
+  padding: 10px 12px !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  border-radius: 12px !important;
+  background: rgba(0,3,61,.42) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.ira-login-error svg {
+  width: 15px !important;
+  height: 15px !important;
+  flex: 0 0 auto !important;
+  margin-top: 1px !important;
+}
+
+/* Never let an old experimental forgot-password element reappear. */
+.ira-login-forgot {
+  display: none !important;
+}
+
+/* Autofill: keep browser-managed fields inside the IRA surface. */
+.ira-login-field-box input:-webkit-autofill,
+.ira-login-field-box input:-webkit-autofill:hover,
+.ira-login-field-box input:-webkit-autofill:focus,
+.ira-login-field-box input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  -webkit-box-shadow: inset 0 0 0 1000px rgba(0,3,61,.78) !important;
+  box-shadow: inset 0 0 0 1000px rgba(0,3,61,.78) !important;
+  background-color: transparent !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+}
+
+@media (max-width: 699px) {
+  .ira-login {
+    align-items: center !important;
+    padding: 28px 20px 34px !important;
+  }
+
+  .ira-login-frame {
+    width: min(100%, 360px) !important;
+    max-width: 360px !important;
+    padding: 8px 0 !important;
+  }
+
+  .ira-login-heading {
+    gap: 12px !important;
+    margin-bottom: 30px !important;
+  }
+
+  .ira-login-brand-logo {
+    width: 200px !important;
+    max-width: 200px !important;
+    height: 60px !important;
+  }
+
+  .ira-login-heading h1 {
+    font-size: 32px !important;
+  }
+
+  .ira-login-form-stack {
+    gap: 14px !important;
+  }
+
+  .ira-login-field-box,
+  .ira-login-submit {
+    height: 56px !important;
+    min-height: 56px !important;
+  }
+
+  .ira-login-account-switch {
+    margin-top: 28px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .ira-login {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .ira-login-frame {
+    max-width: 340px !important;
+  }
+
+  .ira-login-brand-logo {
+    width: 190px !important;
+    max-width: 190px !important;
+    height: 58px !important;
+  }
+}
+
+/* Login should stay calm at narrow/short mobile heights and remain scrollable. */
+@media (max-height: 680px) {
+  .ira-login {
+    align-items: flex-start !important;
+  }
+
+  .ira-login-frame {
+    margin-top: 8px !important;
+    margin-bottom: 8px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ira-login *,
+  .ira-login *::before,
+  .ira-login *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
