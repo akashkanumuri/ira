@@ -1284,3 +1284,74 @@ body {
     font-size: 34px !important;
   }
 }
+
+/* FINAL LOGIN SIZE CORRECTION — preserve the existing page scale; only restore the outer composition size. */
+
+.ira-login-container {
+  width: 100% !important;
+  max-width: 920px !important;
+  min-height: 0 !important;
+}
+
+.ira-login-welcome-panel {
+  min-height: 560px !important;
+}
+
+.ira-login-form-panel {
+  flex: 0 0 420px !important;
+  width: 420px !important;
+  max-width: 420px !important;
+  padding: 56px 36px !important;
+}
+
+.ira-login-form-box {
+  max-width: 360px !important;
+}
+
+.ira-welcome-copy {
+  position: relative !important;
+  z-index: 5 !important;
+  opacity: 1 !important;
+}
+
+.ira-welcome-title {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.ira-welcome-title span {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0) !important;
+  animation: ira-welcome-reveal .65s cubic-bezier(.2,.8,.2,1) both !important;
+}
+
+.ira-welcome-title span:nth-child(2) {
+  animation-delay: .12s !important;
+}
+
+@media (max-width: 1023px) {
+  .ira-login-container {
+    width: min(100%, 430px) !important;
+    max-width: 430px !important;
+    min-height: auto !important;
+  }
+
+  .ira-login-form-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+    padding: 34px 24px 30px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .ira-login-container {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .ira-login-form-panel {
+    padding: 28px 18px 26px !important;
+  }
+}
