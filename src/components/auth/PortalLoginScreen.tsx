@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, ShieldCheck, Clock3, BriefcaseBusiness } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle } from 'lucide-react';
 
 type Portal = 'employee' | 'admin';
 
@@ -63,63 +63,13 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
 
       {/* Two-column container on desktop; single form on mobile */}
       <div className="ira-login-container">
-        {/* LEFT COLUMN: Visual Brand Environment (Desktop only) */}
-        <section className="ira-login-brand-panel" aria-label="About IRA Hospitality">
-          <div className="ira-brand-panel-inner">
-            <div className="ira-brand-panel-header">
-              <img
-                src="/ira-hospitality-logo.png"
-                alt="IRA Hospitality"
-                className="ira-brand-logo-desktop"
-              />
-              <span className="ira-brand-badge">Enterprise V2</span>
-            </div>
-
-            <div className="ira-brand-panel-body">
-              <h2 className="ira-brand-heading">
-                Intelligent Workforce &amp; Operations
-              </h2>
-              <p className="ira-brand-subtext">
-                Streamlined attendance tracking, shift scheduling, real-time leaves, and administrative control built for hospitality excellence.
-              </p>
-
-              {/* Milestone workflow cards */}
-              <div className="ira-milestones-list">
-                <div className="ira-milestone-item">
-                  <div className="ira-milestone-icon">
-                    <ShieldCheck className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="ira-milestone-title">1. Verified Identity</h3>
-                    <p className="ira-milestone-desc">Role-based security for staff and administrative portals.</p>
-                  </div>
-                </div>
-
-                <div className="ira-milestone-item">
-                  <div className="ira-milestone-icon">
-                    <Clock3 className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="ira-milestone-title">2. Realtime IST Attendance</h3>
-                    <p className="ira-milestone-desc">Authoritative check-in, breaks, checkout, and work mode tracking.</p>
-                  </div>
-                </div>
-
-                <div className="ira-milestone-item">
-                  <div className="ira-milestone-icon">
-                    <BriefcaseBusiness className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="ira-milestone-title">3. Operations &amp; Payroll</h3>
-                    <p className="ira-milestone-desc">Task delegation, monthly leaves, and salary snapshot finalized safely.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="ira-brand-panel-footer">
-              <span className="ira-panel-footer-text">© {new Date().getFullYear()} IRA Hospitality · Internal Platform</span>
-            </div>
+        {/* LEFT COLUMN: Clean, middle-aligned animated Welcome Back (Desktop only) */}
+        <section className="ira-login-brand-panel" aria-label="Welcome Back">
+          <div className="ira-welcome-container">
+            <div className="ira-welcome-glow" aria-hidden="true" />
+            <h2 className="ira-welcome-title">
+              Welcome Back
+            </h2>
           </div>
         </section>
 
