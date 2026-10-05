@@ -53,16 +53,32 @@ type StatusInput = {
 
 type Input = CreateEmployeeInput | UpdateEmployeeInput | ResetPasswordInput | StatusInput
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://ira-eta-two.vercel.app',
+const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-function json(body: unknown, status = 200) {
+function allowedOrigin(origin: string | null): string | null {
+  if (!origin) return null
+  if (origin === 'https://ira-eta-two.vercel.app') return origin
+  if (/^https:\/\/ira-[a-z0-9-]+-satisfyinginventior-1459s-projects\.vercel\.app$/i.test(origin)) return origin
+  if (/^https:\/\/ira-[a-z0-9-]+\.vercel\.app$/i.test(origin)) return origin
+  if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)) return origin
+  return null
+}
+
+function corsHeaders(origin: string | null) {
+  const allowed = allowedOrigin(origin)
+  return {
+    ...BASE_CORS_HEADERS,
+    ...(allowed ? { 'Access-Control-Allow-Origin': allowed, 'Vary': 'Origin' } : {}),
+  }
+}
+
+function json(body: unknown, status = 200, origin: string | null = null) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
   })
 }
 
@@ -510,12 +526,13 @@ async function setStatus(input: StatusInput, admin: ReturnType<typeof createClie
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+  const origin = req.headers.get('origin')
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(origin) })
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405, origin)
 
   const { data: ctx, error: authError } = await createSupabaseContext(req, { auth: 'user' })
   if (authError || !ctx?.userClaims?.id) {
-    return json({ error: 'Authentication required' }, authError?.status ?? 401)
+    return json({ error: 'Authentication required' }, authError?.status ?? 401, origin)
   }
 
   try {
@@ -532,29 +549,29 @@ Deno.serve(async (req: Request) => {
 
     if (profileError) {
       console.error('[employee-admin] profile lookup failed', profileError)
-      return json({ error: 'Unable to verify administrator account.' }, 500)
+      return json({ error: 'Unable to verify administrator account.' }, 500, origin)
     }
 
     if (profile?.role !== 'admin') {
-      return json({ error: 'Admin access required' }, 403)
+      return json({ error: 'Admin access required' }, 403, origin)
     }
 
     const input = await req.json() as Input
 
     switch (input.action) {
       case 'create_employee':
-        return json(await createEmployee(input, admin, actorId), 201)
+        return json(await createEmployee(input, admin, actorId), 201, origin)
       case 'update_employee':
-        return json(await updateEmployee(input, admin, actorId))
+        return json(await updateEmployee(input, admin, actorId), 200, origin)
       case 'reset_password':
-        return json(await resetPassword(input, admin))
+        return json(await resetPassword(input, admin), 200, origin)
       case 'set_status':
-        return json(await setStatus(input, admin))
+        return json(await setStatus(input, admin), 200, origin)
       default:
-        return json({ error: 'Unsupported action' }, 400)
+        return json({ error: 'Unsupported action' }, 400, origin)
     }
   } catch (error) {
     console.error('[employee-admin]', error)
-    return json({ error: error instanceof Error ? error.message : 'Request failed' }, 400)
+    return json({ error: error instanceof Error ? error.message : 'Request failed' }, 400, origin)
   }
 })
