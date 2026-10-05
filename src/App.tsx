@@ -101,6 +101,15 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
+
   const reload = useCallback(async () => {
     if (!user) return;
     setLoadingData(prev => prev);
@@ -526,9 +535,9 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           </div>
         </header>
 
-        <div className={`lg:hidden fixed inset-0 z-40 transition-opacity duration-300 ease-out ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} aria-hidden={!mobileOpen}>
+        <div className={`lg:hidden fixed inset-0 z-[90] transition-opacity duration-200 ease-out ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} aria-hidden={!mobileOpen}>
           <button type="button" aria-label="Close navigation menu" className="absolute inset-0 w-full h-full bg-slate-950/40 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
-          <aside id="mobile-navigation" className={`ira-mobile-drawer relative w-[min(84vw,320px)] h-full shadow-[24px_0_70px_rgba(2,6,23,.30)] transition-transform duration-300 ease-[cubic-bezier(.2,.75,.2,1)] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`} aria-label="Mobile navigation">
+          <aside id="mobile-navigation" className={`ira-mobile-drawer relative z-[91] w-[min(84vw,320px)] h-full shadow-[24px_0_70px_rgba(2,6,23,.30)] transition-transform duration-300 ease-[cubic-bezier(.2,.75,.2,1)] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`} aria-label="Mobile navigation">
             <div className="p-5 border-b border-slate-800/90 flex items-center justify-between text-white">
               <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-12 w-auto max-w-[170px] object-contain object-left" />
               <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu" className="icon-btn !text-slate-300 hover:!bg-white/10 hover:!text-white"><X className="w-5 h-5" /></button>
