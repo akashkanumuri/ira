@@ -1523,14 +1523,32 @@ function LoadingScreen({label='Loading IRA…'}:{label?:string}){return <div cla
 
 function Modal({title,onClose,children,wide=false,closeDisabled=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean;closeDisabled?:boolean}){
   const dialogRef=useRef<HTMLDivElement>(null);
-  const requestClose=useCallback(()=>{if(!closeDisabled)onClose()},[closeDisabled,onClose]);
+  const closeStateRef=useRef({closeDisabled,onClose});
+  closeStateRef.current={closeDisabled,onClose};
+  const requestClose=useCallback(()=>{const state=closeStateRef.current;if(!state.closeDisabled)state.onClose()},[]);
+
   useEffect(()=>{
     const previousOverflow=document.body.style.overflow;
     const previousFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    const viewport=window.visualViewport;
+    const root=document.documentElement;
+    const previousVisualVh=root.style.getPropertyValue('--ira-visual-vh');
+
+    const updateVisualViewport=()=>{
+      const height=Math.max(320, Math.round(viewport?.height ?? window.innerHeight));
+      root.style.setProperty('--ira-visual-vh',`${height}px`);
+    };
+
     document.body.style.overflow='hidden';
+    updateVisualViewport();
+    viewport?.addEventListener('resize',updateVisualViewport);
+    viewport?.addEventListener('scroll',updateVisualViewport);
+
+    // Do not focus the first form control on mobile. That can summon the keyboard
+    // as soon as the dialog opens and can cause the browser to pan/blur the form.
+    requestAnimationFrame(()=>dialogRef.current?.focus({preventScroll:true}));
+
     const getFocusable=()=>Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')??[]);
-    const focusable=getFocusable();
-    (focusable[0]??dialogRef.current)?.focus();
     const onKey=(event:KeyboardEvent)=>{
       if(event.key==='Escape'){requestClose();return}
       if(event.key!=='Tab')return;
@@ -1541,13 +1559,22 @@ function Modal({title,onClose,children,wide=false,closeDisabled=false}:{title:st
       else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
     };
     window.addEventListener('keydown',onKey);
-    return()=>{document.body.style.overflow=previousOverflow;window.removeEventListener('keydown',onKey);previousFocus?.focus()};
+    return()=>{
+      document.body.style.overflow=previousOverflow;
+      viewport?.removeEventListener('resize',updateVisualViewport);
+      viewport?.removeEventListener('scroll',updateVisualViewport);
+      if(previousVisualVh)root.style.setProperty('--ira-visual-vh',previousVisualVh);
+      else root.style.removeProperty('--ira-visual-vh');
+      window.setTimeout(()=>previousFocus?.focus({preventScroll:true}),0);
+      window.removeEventListener('keydown',onKey);
+    };
   },[requestClose]);
+
   return createPortal(
-    <div className="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center overflow-y-auto overscroll-contain" role="presentation" onMouseDown={event=>{if(event.currentTarget===event.target)requestClose()}}>
+    <div className="ira-modal-overlay fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center overflow-y-auto overscroll-contain" role="presentation" onMouseDown={event=>{if(event.currentTarget===event.target)requestClose()}}>
       <div ref={dialogRef} tabIndex={-1} className={`ira-modal w-full ${wide?'max-w-5xl':'max-w-lg'} max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] my-auto flex flex-col`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="shrink-0 px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 flex items-center justify-between bg-white"><h3 className="font-bold text-slate-950 truncate pr-3">{title}</h3><button type="button" disabled={closeDisabled} onClick={requestClose} className="icon-btn shrink-0 disabled:opacity-50" aria-label="Close"><X className="w-5 h-5"/></button></div>
-        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5">{children}</div>
+        <div className="ira-modal-body min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5">{children}</div>
       </div>
     </div>,
     document.body
