@@ -117,13 +117,6 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             </button>
           </form>
 
-          <button
-            type="button"
-            className="ira-login-forgot"
-            onClick={() => setError('Please contact your administrator to reset your password.')}
-          >
-            Forgot Password?
-          </button>
           <div className="ira-login-account-switch">
             <span>{isEmployee ? 'Have an admin account?' : 'Have an employee account?'}</span>
             <button type="button" onClick={() => switchPortal(isEmployee ? 'admin' : 'employee')}>
