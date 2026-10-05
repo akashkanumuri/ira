@@ -1,5 +1,5 @@
 export type ToastType = 'success' | 'error' | 'info';
-export type NotificationCategory = 'attendance' | 'leave' | 'wfh';
+export type NotificationCategory = 'attendance' | 'leave' | 'wfh' | 'correction' | 'task' | 'payroll' | 'holiday' | 'system';
 
 export interface ToastPayload {
   id?: string;
