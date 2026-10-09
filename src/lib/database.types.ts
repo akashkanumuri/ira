@@ -60,6 +60,60 @@ export interface Database {
         Insert: { id?: string; user_id: string; login_at?: string; logout_at?: string | null; session_duration_seconds?: number | null; user_agent?: string | null; status?: 'active' | 'ended' | 'expired'; created_at?: string };
         Update: Partial<Database['public']['Tables']['auth_sessions']['Insert']>;
       };
+      notifications: {
+        Row: {
+          id: string;
+          recipient_id: string;
+          employee_id: string | null;
+          actor_id: string | null;
+          type: 'attendance' | 'leave' | 'wfh' | 'task' | 'holiday' | 'payroll' | 'system';
+          title: string;
+          message: string;
+          action_url: string | null;
+          read_at: string | null;
+          idempotency_key: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recipient_id: string;
+          employee_id?: string | null;
+          actor_id?: string | null;
+          type: 'attendance' | 'leave' | 'wfh' | 'task' | 'holiday' | 'payroll' | 'system';
+          title: string;
+          message: string;
+          action_url?: string | null;
+          read_at?: string | null;
+          idempotency_key?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['notifications']['Insert']>;
+      };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['push_subscriptions']['Insert']>;
+      };
     };
     Views: {};
     Functions: {

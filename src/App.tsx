@@ -8,10 +8,35 @@ import { Sidebar } from './components/common/Sidebar';
 import { ToastHost } from './components/common/ToastHost';
 import { notify, type NotificationCategory } from './lib/toast';
 import {
+  fetchUserNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification,
+  notifyLeaveSubmitted,
+  notifyLeaveReviewed,
+  notifyWfhSubmitted,
+  notifyWfhReviewed,
+  notifyTaskAssigned,
+  notifyTaskSubmitted,
+  notifyHolidayAdded,
+  type NotificationRecord,
+  type NotificationType
+} from './lib/notifications';
+import {
+  isPushSupported,
+  getPushPermissionState,
+  isIosNeedsHomeScreen,
+  subscribeToPush,
+  unsubscribeFromPush,
+  getExistingSubscription,
+  sendLocalTestPushNotification,
+  type PushPermissionStatus
+} from './lib/pushSubscription';
+import {
   Activity, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight,
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
-  Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus
+  Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -533,7 +558,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           </button>
           <div className="flex-1 min-w-0" aria-hidden="true" />
           <LiveClockDisplay />
-          <NotificationBell activeTab={activeTab} />
+          <NotificationBell activeTab={activeTab} user={user} onSelectTab={setActiveTab} />
           <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200">
             <div className="w-8 h-8 rounded-full bg-[#00033D] text-white flex items-center justify-center text-[11px] font-bold">
               {(user.name || 'U').charAt(0).toUpperCase()}
@@ -2162,6 +2187,16 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
       const { error } = await (supabase as any).rpc('submit_task', { p_task_id: submitId, p_submitted_link: cleanLink });
       if (error) throw error;
       notify('Work submitted successfully.', 'success');
+
+      // Dispatch recipient notification to the assigner / admin
+      const targetTask = (tasks as Task[]).find((t: Task) => t.id === submitId);
+      void notifyTaskSubmitted({
+        assignerEmployeeId: targetTask?.assignedBy ?? null,
+        taskTitle: targetTask?.title ?? 'Task',
+        taskId: submitId,
+        actorUserId: user.id,
+      });
+
       setSubmitId(''); setLink('');
       await onRefresh();
     } catch (error) {
@@ -2190,6 +2225,16 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
       const { error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: clean(fd.get('description')), p_assigned_to: to, p_start_date: start, p_due_date: due, p_priority: String(fd.get('priority') ?? 'medium'), p_client_request_id: assignRequestRef.current });
       if (error) throw error;
       notify('Task assigned successfully.', 'success');
+
+      // Dispatch recipient notification to assigned employee
+      void notifyTaskAssigned({
+        assigneeEmployeeId: to,
+        taskTitle: title,
+        dueDate: due,
+        taskId: assignRequestRef.current ?? crypto.randomUUID(),
+        actorUserId: user.id,
+      });
+
       form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
     finally { assignRequestRef.current = null; setAssignBusy(false); }
@@ -2225,7 +2270,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   </PageShell>;
 }
 
-function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
+function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
   const [from, setFrom] = useState(''); const [to, setTo] = useState(''); const [employee, setEmployee] = useState('all'); const [designation, setDesignation] = useState('all'); const [status, setStatus] = useState('all'); const [priority, setPriority] = useState('all'); const [assignOpen, setAssignOpen] = useState(false); const [showRemoved, setShowRemoved] = useState(false); const [archiveTarget, setArchiveTarget] = useState<Task | null>(null); const [archiveBusy, setArchiveBusy] = useState(false); const [message, setMessage] = useState(''); const [assignBusy, setAssignBusy] = useState(false); const assignRequestRef = useRef<{ signature: string; id: string } | null>(null);
   const activeEmployees = (employees as Employee[]).filter(e => e.status === 'active');
   const filtered = (tasks as Task[]).filter(t => (showRemoved ? Boolean(t.archivedAt) : !t.archivedAt) && (!from || t.startDate >= from) && (!to || t.startDate <= to) && (employee === 'all' || t.assignedTo === employee) && (designation === 'all' || t.assignedToDesignation === designation) && (status === 'all' || t.status === status) && (priority === 'all' || t.priority === priority)).sort((a: Task, b: Task) => b.updatedAt.localeCompare(a.updatedAt));
@@ -2243,6 +2288,16 @@ function TasksAdmin({ tasks, employees, designations, onRefresh }: any) {
     try {
       const { error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: description, p_assigned_to: toId, p_start_date: start, p_due_date: due, p_priority: priorityValue, p_client_request_id: assignRequestRef.current.id });
       if (error) throw error;
+
+      // Dispatch recipient notification to assigned employee
+      void notifyTaskAssigned({
+        assigneeEmployeeId: toId,
+        taskTitle: title,
+        dueDate: due,
+        taskId: assignRequestRef.current?.id ?? crypto.randomUUID(),
+        actorUserId: user?.id ?? '',
+      });
+
       assignRequestRef.current = null; notify('Task assigned successfully.', 'success'); form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
     finally { setAssignBusy(false); }
@@ -2530,10 +2585,53 @@ function AttendanceAdmin({attendance,employees,leaveRequests,wfhRequests,holiday
   return <PageShell title="Attendance" subtitle="Daily attendance with explicit login/check-in/break/check-out separation."><div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row gap-3"><label className="flex-1"><span className="label">Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)} className="input"/></label><label className="flex-1"><span className="label">Search</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search employee…" className="input"/></label></div><div className="mt-4 bg-white border border-slate-200 rounded-2xl p-4 text-xs flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600"/><b>{dateLabel(date,{weekday:'long'})}</b><span className="text-slate-500">· {cl.label}</span></div><div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{cl.isWorkingDay?rows.map(({e,record,leave}:any)=><tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td>{leave?'Leave':record?.mode==='wfh'?'WFH':record?'Office':e.workMode==='remote'?'WFH':'—'}</Td><Td mono>{record?.checkIn??'—'}</Td><Td mono>{record?duration(record.breakSeconds):'—'}</Td><Td mono>{record?.checkOut??'—'}</Td><Td mono>{record?duration(record.workingSeconds):'—'}</Td><Td><StatusBadge label={leave?'Leave':record?.status??(e.joinDate&&date<e.joinDate?'Not joined':date>today()?'Upcoming':date===today()?'Not checked-in':'Not recorded')}/></Td></tr>):<tr><td colSpan={7} className="p-10 text-center text-sm text-slate-500">{cl.label}. No check-in required.</td></tr>}{cl.isWorkingDay&&!rows.length&&<EmptyRow colSpan={7} text="No active employees."/ >}</tbody></table></div></div></PageShell>;
 }
 
-function RequestsAdmin({leaveRequests,wfhRequests,onRefresh}:any){
+function RequestsAdmin({leaveRequests,wfhRequests,user,onRefresh}:any){
   const [tab,setTab]=useState<'leave'|'wfh'>('leave');
   const [busyKey,setBusyKey]=useState<string|null>(null);
-  async function review(table:string,id:string,status:'approved'|'rejected'){const key=table+':'+id;if(busyKey)return;setBusyKey(key);try{const {data,error}=await(supabase as any).from(table).update({status,reviewed_at:new Date().toISOString()}).eq('id',id).eq('status','pending').select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('This request was already reviewed. Refresh the list.');notify(status==='approved'?'Request approved.':'Request rejected.',status==='approved'?'success':'info',4200,table==='leave_requests'?'leave':'wfh');await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to review request.','error')}finally{setBusyKey(null);}}
+  async function review(table:string,id:string,status:'approved'|'rejected'){
+    const key=table+':'+id;
+    if(busyKey)return;
+    setBusyKey(key);
+    try{
+      const selectFields = table === 'leave_requests' ? 'id, employee_id, start_date, end_date' : 'id, employee_id, date';
+      const {data,error}=await(supabase as any)
+        .from(table)
+        .update({status,reviewed_at:new Date().toISOString()})
+        .eq('id',id)
+        .eq('status','pending')
+        .select(selectFields)
+        .maybeSingle();
+      if(error)throw error;
+      if(!data)throw new Error('This request was already reviewed. Refresh the list.');
+      notify(status==='approved'?'Request approved.':'Request rejected.',status==='approved'?'success':'info',4200,table==='leave_requests'?'leave':'wfh');
+
+      // Generate recipient notification for requesting employee
+      if (table === 'leave_requests') {
+        void notifyLeaveReviewed({
+          employeeDbId: data.employee_id,
+          status,
+          startDate: data.start_date,
+          endDate: data.end_date,
+          leaveId: id,
+          actorUserId: user?.id ?? '',
+        });
+      } else if (table === 'wfh_requests') {
+        void notifyWfhReviewed({
+          employeeDbId: data.employee_id,
+          status,
+          date: data.date,
+          wfhId: id,
+          actorUserId: user?.id ?? '',
+        });
+      }
+
+      await onRefresh();
+    }catch(error){
+      notify(error instanceof Error?error.message:'Unable to review request.','error')
+    }finally{
+      setBusyKey(null);
+    }
+  }
   return <PageShell title="Requests" subtitle="Review employee leave and WFH requests."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['leave','Leave'],['wfh','WFH']].map(([id,l])=><button key={id} onClick={()=>setTab(id as any)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab===id?'bg-white shadow-sm text-slate-900':'text-slate-500'}`}>{l}</button>)}</div>{tab==='leave'&&<RequestTable type="leave" rows={leaveRequests} onReview={(id,s)=>void review('leave_requests',id,s)} busyKey={busyKey} />}{tab==='wfh'&&<RequestTable type="wfh" rows={wfhRequests} onReview={(id,s)=>void review('wfh_requests',id,s)} busyKey={busyKey} />}</PageShell>;
 }
 
@@ -2628,9 +2726,43 @@ function PayrollAdmin({employees,payrollPeriods,payrollRecords,onRefresh}:any){
   </PageShell>;
 }
 
-function HolidaysAdmin({holidays,onRefresh}:any){
+function HolidaysAdmin({holidays,user,onRefresh}:any){
   const [open,setOpen]=useState(false);const [busy,setBusy]=useState(false);
-  async function add(e:React.FormEvent<HTMLFormElement>){e.preventDefault(); const form=e.currentTarget;setBusy(true);try{const {data:auth}=await supabase.auth.getUser();const fd=new FormData(e.currentTarget);const date=String(fd.get('date')||'');if(!date)throw new Error('Choose a holiday date.');const {data:existing}=await(supabase as any).from('holidays').select('id,name,holiday_type').eq('date',date).maybeSingle();if(existing)throw new Error(`A holiday is already scheduled for ${date} (${existing.name}).`);const {error}=await(supabase as any).from('holidays').insert({name:String(fd.get('name')||'').trim(),date,description:clean(fd.get('description')),created_by:auth.user?.id??null,holiday_type:'company'});if(error)throw error;notify('Company holiday added.','success');form.reset();setOpen(false);await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to add holiday.','error')}finally{setBusy(false);}}
+  async function add(e:React.FormEvent<HTMLFormElement>){
+    e.preventDefault(); const form=e.currentTarget;setBusy(true);
+    try{
+      const {data:auth}=await supabase.auth.getUser();
+      const fd=new FormData(e.currentTarget);
+      const date=String(fd.get('date')||'');
+      if(!date)throw new Error('Choose a holiday date.');
+      const {data:existing}=await(supabase as any).from('holidays').select('id,name,holiday_type').eq('date',date).maybeSingle();
+      if(existing)throw new Error(`A holiday is already scheduled for ${date} (${existing.name}).`);
+      const holidayName = String(fd.get('name')||'').trim();
+      const {data:newH,error}=await(supabase as any).from('holidays').insert({
+        name:holidayName,
+        date,
+        description:clean(fd.get('description')),
+        created_by:auth.user?.id??null,
+        holiday_type:'company'
+      }).select('id').maybeSingle();
+      if(error)throw error;
+      notify('Company holiday added.','success');
+
+      // Dispatch recipient notification to active employees
+      void notifyHolidayAdded({
+        holidayName,
+        date,
+        holidayId: newH?.id ?? crypto.randomUUID(),
+        actorUserId: auth.user?.id ?? user?.id ?? '',
+      });
+
+      form.reset();setOpen(false);await onRefresh();
+    }catch(error){
+      notify(error instanceof Error?error.message:'Unable to add holiday.','error')
+    }finally{
+      setBusy(false);
+    }
+  }
   async function del(id:string){const item=(holidays as Holiday[]).find((h:Holiday)=>h.id===id);if(item?.holidayType==='public'){notify('Public calendar holidays are protected.','info');return;}if(!confirm('Delete this company holiday?'))return;try{const {error}=await(supabase as any).from('holidays').delete().eq('id',id);if(error)throw error;notify('Company holiday removed.','success');await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to remove holiday.','error')}}
   return <PageShell title="Holidays" subtitle="All admin-added holidays are paid company non-working days."><div className="flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Add holiday</button></div>{open&&<form onSubmit={add} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-3 gap-4"><Field label="Holiday name"><input name="name" className="input" required/></Field><Field label="Date"><input name="date" type="date" className="input" required/></Field><Field label="Description"><input name="description" className="input"/></Field><div className="md:col-span-3 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Saving…':'Add holiday'}</button></div></form>}<div className="mt-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">{holidays.map((h:Holiday)=><div key={h.id} className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase font-bold tracking-wider text-indigo-600">{dateLabel(h.date,{weekday:'long'})}</p><div className="flex items-center gap-2 mt-1"><h3 className="font-bold">{h.name}</h3>{h.holidayType==='public'&&<span className="text-[9px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 font-bold">Public</span>}</div><p className="text-xs text-slate-500 mt-1">{h.description||'Company holiday'}</p></div>{h.holidayType!=='public'&&<button onClick={()=>void del(h.id)} className="icon-btn text-rose-500" title="Delete company holiday"><Trash2 className="w-4 h-4"/></button>}</div></div>)}{!holidays.length&&<EmptyCard text="No company holidays added yet."/>}</div></PageShell>;
 }
@@ -2643,16 +2775,87 @@ function HolidaysEmployee({holidays}:any){
 function LeaveEmployee({user,leaveRequests,ledgers,holidays,onRefresh}:any){
   const [open,setOpen]=useState(false); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
   const current=ledgers.find((l:LeaveLedger)=>l.periodStart===`${today().slice(0,7)}-01`);
-  async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault(); const form=e.currentTarget;setError('');setBusy(true);try{const fd=new FormData(e.currentTarget);const start=String(fd.get('startDate')||'');const end=String(fd.get('endDate')||'');if(end<start)throw new Error('End date cannot be before start date.');if(start.slice(0,7)!==end.slice(0,7))throw new Error('A leave request must stay within one calendar month.');const leaveDuration=String(fd.get('duration'));if(leaveDuration==='half'&&start!==end)throw new Error('Half-day leave must use one date.');const {error:err}=await(supabase as any).from('leave_requests').insert({employee_id:user.employeeDbId,leave_type:String(fd.get('leaveType')),start_date:start,end_date:end,duration:leaveDuration,reason:String(fd.get('reason')||'').trim()});if(err)throw err;notify('Leave request submitted.','success',4200,'leave');form.reset();setOpen(false);await onRefresh();}catch(error){const message=error instanceof Error?error.message:'Unable to submit leave request.';setError(message);notify(message,'error')}finally{setBusy(false);}}
+  async function submit(e:React.FormEvent<HTMLFormElement>){
+    e.preventDefault(); const form=e.currentTarget;setError('');setBusy(true);
+    try{
+      const fd=new FormData(e.currentTarget);
+      const start=String(fd.get('startDate')||'');
+      const end=String(fd.get('endDate')||'');
+      if(end<start)throw new Error('End date cannot be before start date.');
+      if(start.slice(0,7)!==end.slice(0,7))throw new Error('A leave request must stay within one calendar month.');
+      const leaveDuration=String(fd.get('duration'));
+      if(leaveDuration==='half'&&start!==end)throw new Error('Half-day leave must use one date.');
+      const {data:newLeave,error:err}=await(supabase as any).from('leave_requests').insert({
+        employee_id:user.employeeDbId,
+        leave_type:String(fd.get('leaveType')),
+        start_date:start,
+        end_date:end,
+        duration:leaveDuration,
+        reason:String(fd.get('reason')||'').trim()
+      }).select('id').maybeSingle();
+      if(err)throw err;
+      notify('Leave request submitted.','success',4200,'leave');
+
+      // Dispatch recipient notification to approvers (admins)
+      void notifyLeaveSubmitted({
+        employeeName: user.name,
+        days: leaveDuration==='half'?0.5:1,
+        leaveType: String(fd.get('leaveType')),
+        startDate: start,
+        endDate: end,
+        leaveId: newLeave?.id ?? crypto.randomUUID(),
+        employeeDbId: user.employeeDbId,
+        actorUserId: user.id,
+      });
+
+      form.reset();setOpen(false);await onRefresh();
+    }catch(error){
+      const message=error instanceof Error?error.message:'Unable to submit leave request.';
+      setError(message);notify(message,'error')
+    }finally{
+      setBusy(false);
+    }
+  }
   return <PageShell title="Leave" subtitle="Paid leave accrues at 1.5 days/month and unused balance carries forward.">{error&&<Notice type="error" text={error}/>}<div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Summary label="Available" value={current?.closingBalance??'—'}/><Summary label="Carry forward" value={current?.openingBalance??'—'}/><Summary label="Added" value={current?.accrual??1.5}/><Summary label="Unpaid used" value={current?.unpaidUsed??0}/></div><div className="mt-4 flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Apply leave</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Leave type"><select name="leaveType" className="input"><option value="casual">Casual</option><option value="sick">Sick</option><option value="earned">Earned</option><option value="unpaid">Unpaid</option></select></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Start date"><input name="startDate" type="date" min={today()} className="input" required/></Field><Field label="End date"><input name="endDate" type="date" min={today()} className="input" required/></Field><Field label="Reason"><input name="reason" className="input md:col-span-2" required/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Dates</Th><Th>Type</Th><Th>Days</Th><Th>Paid / Unpaid</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{leaveRequests.map((r:LeaveRequest)=><tr key={r.id}><Td>{dateLabel(r.startDate)} → {dateLabel(r.endDate)}</Td><Td>{r.leaveType}</Td><Td>{r.days}</Td><Td>{r.paidDays??0} / {r.unpaidDays??0}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!leaveRequests.length&&<EmptyRow colSpan={6} text="No leave requests yet."/>}</tbody></table></div></div></PageShell>;
 }
-
-
 
 function WfhEmployee({user,wfhRequests,onRefresh}:any){
   const [open,setOpen]=useState(false);const [error,setError]=useState('');const remote=user.workMode==='remote';
   const [busy,setBusy]=useState(false);
-  async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault(); const form=e.currentTarget;setError('');setBusy(true);try{const fd=new FormData(e.currentTarget);const date=String(fd.get('date')||'');if(date<=today())throw new Error('WFH requests must be for a future working day.');const {error:err}=await(supabase as any).from('wfh_requests').insert({employee_id:user.employeeDbId,date,duration:String(fd.get('duration')),reason:String(fd.get('reason')||'').trim(),note:clean(fd.get('note'))});if(err)throw err;notify('WFH request submitted.','success',4200,'wfh');form.reset();setOpen(false);await onRefresh();}catch(error){const message=error instanceof Error?error.message:'Unable to submit WFH request.';setError(message);notify(message,'error')}finally{setBusy(false);}}
+  async function submit(e:React.FormEvent<HTMLFormElement>){
+    e.preventDefault(); const form=e.currentTarget;setError('');setBusy(true);
+    try{
+      const fd=new FormData(e.currentTarget);
+      const date=String(fd.get('date')||'');
+      if(date<=today())throw new Error('WFH requests must be for a future working day.');
+      const {data:newWfh,error:err}=await(supabase as any).from('wfh_requests').insert({
+        employee_id:user.employeeDbId,
+        date,
+        duration:String(fd.get('duration')),
+        reason:String(fd.get('reason')||'').trim(),
+        note:clean(fd.get('note'))
+      }).select('id').maybeSingle();
+      if(err)throw err;
+      notify('WFH request submitted.','success',4200,'wfh');
+
+      // Dispatch recipient notification to approvers (admins)
+      void notifyWfhSubmitted({
+        employeeName: user.name,
+        date,
+        duration: String(fd.get('duration')),
+        wfhId: newWfh?.id ?? crypto.randomUUID(),
+        employeeDbId: user.employeeDbId,
+        actorUserId: user.id,
+      });
+
+      form.reset();setOpen(false);await onRefresh();
+    }catch(error){
+      const message=error instanceof Error?error.message:'Unable to submit WFH request.';
+      setError(message);notify(message,'error')
+    }finally{
+      setBusy(false);
+    }
+  }
   return <PageShell title="WFH" subtitle="Temporary WFH requests are for office-based employees.">{remote?<div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 text-sm text-sky-900"><b>Permanent remote employee</b><p className="text-xs mt-1">You do not need a daily WFH request. Your attendance check-in is automatically treated as WFH.</p></div>:<>{error&&<Notice type="error" text={error}/>}<div className="flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Request WFH</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Date"><input type="date" name="date" min={tomorrow()} className="input" required/></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Reason"><input name="reason" className="input" required/></Field><Field label="Note"><input name="note" className="input"/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full min-w-[560px] text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Date</Th><Th>Duration</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{wfhRequests.map((r:WfhRequest)=><tr key={r.id}><Td>{dateLabel(r.date)}</Td><Td>{r.duration}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!wfhRequests.length&&<EmptyRow colSpan={4} text="No WFH requests yet."/>}</tbody></table></div></div></>}</PageShell>;
 }
 
@@ -2670,12 +2873,62 @@ async function isPasswordLeaked(password:string){
 
 function ProfileEmployee({user,onRefresh}:any){
   const [name,setName]=useState(user.name);const [phone,setPhone]=useState(user.phone??'');const [message,setMessage]=useState('');const [error,setError]=useState('');const [saving,setSaving]=useState(false);const [currentPassword,setCurrentPassword]=useState('');const [newPassword,setNewPassword]=useState('');const [confirm,setConfirm]=useState('');const [documents,setDocuments]=useState<EmployeeDocument[]>([]);const [documentsLoading,setDocumentsLoading]=useState(true);
+  const [pushState, setPushState] = useState<PushPermissionStatus>('default');
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    setPushState(getPushPermissionState());
+    void getExistingSubscription().then(sub => setIsSubscribed(Boolean(sub)));
+  }, []);
+
+  async function handleTogglePush() {
+    setPushBusy(true); setPushFeedback(null);
+    try {
+      if (isSubscribed) {
+        await unsubscribeFromPush(user.id);
+        setIsSubscribed(false);
+        setPushFeedback({ message: 'Push notifications disabled on this device.', type: 'success' });
+        notify('Push notifications disabled.', 'info');
+      } else {
+        const res = await subscribeToPush(user.id);
+        if (!res.success) {
+          setPushFeedback({ message: res.error || 'Failed to enable notifications.', type: 'error' });
+        } else {
+          setIsSubscribed(true);
+          setPushState('granted');
+          setPushFeedback({ message: 'Push notifications active on this device!', type: 'success' });
+          notify('Phone notifications enabled.', 'success');
+        }
+      }
+    } catch (e) {
+      setPushFeedback({ message: e instanceof Error ? e.message : 'Error updating push settings.', type: 'error' });
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleTestAlert() {
+    setTestBusy(true);
+    try {
+      const ok = await sendLocalTestPushNotification('IRA Presence Test', 'Lock-screen mobile notification test successful.', '/');
+      if (ok) notify('Test alert delivered to your device.', 'success');
+      else notify('Could not trigger test alert.', 'error');
+    } catch {
+      notify('Test alert failed.', 'error');
+    } finally {
+      setTestBusy(false);
+    }
+  }
+
   useEffect(()=>{let mounted=true;(async()=>{if(!user.employeeDbId){setDocumentsLoading(false);return}const {data,error:docError}=await(supabase as any).from('employee_documents').select('*').eq('employee_id',user.employeeDbId).order('created_at',{ascending:false});if(!mounted)return;if(docError){setError(docError.message);setDocuments([])}else setDocuments((data??[]).map((r:any)=>({id:r.id,employeeId:r.employee_id,documentType:r.document_type,fileName:r.file_name,storagePath:r.storage_path,mimeType:r.mime_type,sizeBytes:r.size_bytes,createdAt:r.created_at})));setDocumentsLoading(false)})();return()=>{mounted=false}},[user.employeeDbId]);
   async function save(){setError('');setMessage('');if(!name.trim()){setError('Name is required.');return;}setSaving(true);try{const {error:err}=await(supabase as any).from('employees').update({name:name.trim(),phone:phone.trim()||null}).eq('id',user.employeeDbId);if(err)throw err;setMessage('Profile updated.');notify('Profile updated successfully.','success');await onRefresh()}catch(error){setError(error instanceof Error?error.message:'Unable to update profile.');notify(error instanceof Error?error.message:'Unable to update profile.','error')}finally{setSaving(false)}}
   async function savePhoto(file:File){try{if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Use a JPG, PNG or WebP image.');if(file.size>5*1024*1024)throw new Error('Profile images must be 5 MB or smaller.');const url=await uploadAvatar(user.employeeDbId,file);const {error:err}=await(supabase as any).from('employees').update({avatar_url:url}).eq('id',user.employeeDbId);if(err)throw err;await onRefresh();setMessage('Profile photo updated.');notify('Profile photo updated.','success')}catch(e){setError(e instanceof Error?e.message:'Unable to update photo.');notify(e instanceof Error?e.message:'Unable to update photo.','error')}}
   async function password(){setError('');setMessage('');if(!currentPassword){setError('Enter your current password.');return}if(!validateStrongPassword(newPassword)){setError('Password must be at least 12 characters and include uppercase, lowercase, number and symbol.');return}if(newPassword!==confirm){setError('New passwords do not match.');return}setSaving(true);try{const authEmail=user.role==='admin'?'ira.admin@ira-presence.local':(user.loginId?loginIdToAuthEmail(user.loginId):'');if(!authEmail)throw new Error('Unable to determine the account email.');const {error:reauthError}=await supabase.auth.signInWithPassword({email:authEmail,password:currentPassword});if(reauthError)throw new Error('Current password is incorrect.');if(await isPasswordLeaked(newPassword))throw new Error('Choose a different password. This password has appeared in known data breaches.');const {error:change}=await supabase.auth.updateUser({password:newPassword});if(change)throw change;setMessage('Password changed successfully.');notify('Password changed successfully.','success');setCurrentPassword('');setNewPassword('');setConfirm('')}catch(e){setError(e instanceof Error?e.message:'Unable to change password.')}finally{setSaving(false)}}
   async function viewDocument(doc:EmployeeDocument){try{const url=await getSignedDocumentUrl(doc.storagePath);window.open(url,'_blank','noopener,noreferrer')}catch(e){setError(e instanceof Error?e.message:'Unable to open document.')}}
-  return <PageShell title="Profile" subtitle="Personal details, HR documents and password."><div className="space-y-4">{(error||message)&&<div>{error&&<Notice type="error" text={error}/>} {message&&<Notice type="success" text={message}/>}</div>}<div className="grid lg:grid-cols-2 gap-4"><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-4"><div className="relative">{user.avatar?<img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover ring-1 ring-slate-200"/>:<div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl font-bold">{user.name.slice(0,1)}</div>}<label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer shadow-sm"><Upload className="w-4 h-4"/><input type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void savePhoto(f)}}/></label></div><div><p className="text-lg font-bold">{user.name}</p><p className="text-xs text-slate-500">{user.designation} · {user.department}</p></div></div><div className="grid gap-4 mt-6"><Field label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="input"/></Field><Field label="Phone"><input value={phone} onChange={e=>setPhone(e.target.value)} className="input"/></Field><InfoRow label="Login ID" value={user.loginId??'—'}/><InfoRow label="Employee ID" value={user.empId??'—'}/><InfoRow label="Work mode" value={user.workMode==='remote'?'Remote':'Office'}/><InfoRow label="Designation" value={user.designation??'—'}/><InfoRow label="Manager" value={user.manager??'—'}/><InfoRow label="Monthly salary" value={money(user.currentSalary)}/><button disabled={saving} onClick={()=>void save()} className="btn-primary w-fit">{saving?'Saving…':'Save personal details'}</button></div></section><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-2"><LockKeyhole className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">Change password</h3><p className="text-xs text-slate-500">Verify your current password before changing it.</p></div></div><div className="space-y-4 mt-5"><Field label="Current password"><input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} className="input"/></Field><Field label="New password"><input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="input" minLength={12}/></Field><Field label="Confirm new password"><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} className="input" minLength={12}/></Field><button disabled={saving} onClick={()=>void password()} className="btn-primary">Change password</button></div></section></div><section className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">HR Documents</h3><p className="text-xs text-slate-500">Your secure employee records.</p></div></div>{documentsLoading?<div className="p-6 text-sm text-slate-500">Loading documents…</div>:documents.length?<div className="divide-y divide-slate-100">{documents.map(doc=><div key={doc.id} className="px-5 py-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm font-semibold truncate">{doc.fileName}</p><p className="text-[11px] text-slate-500 mt-1">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0,10))}</p></div><button className="btn-secondary shrink-0" onClick={()=>void viewDocument(doc)}><Eye className="w-3.5 h-3.5 mr-1"/>View</button></div>)}</div>:<div className="p-6 text-sm text-slate-500">No HR documents uploaded yet.</div>}</section></div></PageShell>;
+  return <PageShell title="Profile" subtitle="Personal details, HR documents and password."><div className="space-y-4">{(error||message)&&<div>{error&&<Notice type="error" text={error}/>} {message&&<Notice type="success" text={message}/>}</div>}<div className="grid lg:grid-cols-2 gap-4"><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-4"><div className="relative">{user.avatar?<img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover ring-1 ring-slate-200"/>:<div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl font-bold">{user.name.slice(0,1)}</div>}<label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer shadow-sm"><Upload className="w-4 h-4"/><input type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void savePhoto(f)}}/></label></div><div><p className="text-lg font-bold">{user.name}</p><p className="text-xs text-slate-500">{user.designation} · {user.department}</p></div></div><div className="grid gap-4 mt-6"><Field label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="input"/></Field><Field label="Phone"><input value={phone} onChange={e=>setPhone(e.target.value)} className="input"/></Field><InfoRow label="Login ID" value={user.loginId??'—'}/><InfoRow label="Employee ID" value={user.empId??'—'}/><InfoRow label="Work mode" value={user.workMode==='remote'?'Remote':'Office'}/><InfoRow label="Designation" value={user.designation??'—'}/><InfoRow label="Manager" value={user.manager??'—'}/><InfoRow label="Monthly salary" value={money(user.currentSalary)}/><button disabled={saving} onClick={()=>void save()} className="btn-primary w-fit">{saving?'Saving…':'Save personal details'}</button></div></section><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-2"><LockKeyhole className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">Change password</h3><p className="text-xs text-slate-500">Verify your current password before changing it.</p></div></div><div className="space-y-4 mt-5"><Field label="Current password"><input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} className="input"/></Field><Field label="New password"><input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="input" minLength={12}/></Field><Field label="Confirm new password"><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} className="input" minLength={12}/></Field><button disabled={saving} onClick={()=>void password()} className="btn-primary">Change password</button></div></section></div><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between gap-3 flex-wrap"><div><div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-600"/><h3 className="font-bold text-sm">Phone Push Notifications</h3></div><p className="text-xs text-slate-500 mt-1">Receive real-time alerts on your phone lock screen for assignments and approvals.</p></div><div className="flex items-center gap-2">{isSubscribed&&<button type="button" disabled={testBusy} onClick={()=>void handleTestAlert()} className="btn-secondary text-xs">{testBusy?'Testing…':'Send test alert'}</button>}<button type="button" disabled={pushBusy} onClick={()=>void handleTogglePush()} className={isSubscribed?'btn-secondary text-rose-600':'btn-primary text-xs'}>{pushBusy?'Updating…':isSubscribed?'Disable on this phone':'Enable phone notifications'}</button></div></div>{pushFeedback&&<div className={`mt-3 p-3 rounded-xl border text-xs ${pushFeedback.type==='success'?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-rose-50 border-rose-200 text-rose-800'}`}>{pushFeedback.message}</div>}{isIosNeedsHomeScreen()&&<div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1"><p className="font-bold">iPhone Setup Required</p><p className="text-[11px]">To enable push alerts on iOS, tap the Safari <b>Share</b> button, choose <b>Add to Home Screen</b>, and open the app from your home screen.</p></div>}</section><section className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">HR Documents</h3><p className="text-xs text-slate-500">Your secure employee records.</p></div></div>{documentsLoading?<div className="p-6 text-sm text-slate-500">Loading documents…</div>:documents.length?<div className="divide-y divide-slate-100">{documents.map(doc=><div key={doc.id} className="px-5 py-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm font-semibold truncate">{doc.fileName}</p><p className="text-[11px] text-slate-500 mt-1">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0,10))}</p></div><button className="btn-secondary shrink-0" onClick={()=>void viewDocument(doc)}><Eye className="w-3.5 h-3.5 mr-1"/>View</button></div>)}</div>:<div className="p-6 text-sm text-slate-500">No HR documents uploaded yet.</div>}</section></div></PageShell>;
 }
 
 function ExportsAdmin({employees,payrollPeriods}:any){
@@ -2717,75 +2970,564 @@ function PageShell({title,subtitle,children}:{title:string;subtitle?:string;chil
   );
 }
 
-function NotificationBell({activeTab}:{activeTab:string}){
-  type NotificationItem = {id:string;type:'success'|'error'|'info';category:NotificationCategory;message:string;at:number;count:number};
-  const [items,setItems]=useState<NotificationItem[]>([]);
-  const [open,setOpen]=useState(false);
-  const rootRef=useRef<HTMLDivElement>(null);
-  const buttonRef=useRef<HTMLButtonElement>(null);
-  const panelRef=useRef<HTMLDivElement>(null);
-  const previousTab=useRef(activeTab);
+function NotificationBell({
+  activeTab,
+  user,
+  onSelectTab,
+}: {
+  activeTab: string;
+  user?: AuthUser;
+  onSelectTab?: (tab: string) => void;
+}) {
+  const [items, setItems] = useState<NotificationRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [pushState, setPushState] = useState<PushPermissionStatus>('default');
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [pushModalOpen, setPushModalOpen] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [testPushBusy, setTestPushBusy] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  useEffect(()=>{
-    const onToast=(event:Event)=>{
-      const detail=(event as CustomEvent<any>).detail;
-      if(!detail?.message || !detail.notificationCategory)return;
-      const item:NotificationItem={id:detail.id??crypto.randomUUID(),type:detail.type??'info',category:detail.notificationCategory,message:String(detail.message),at:Date.now(),count:1};
-      setItems(current=>{
-        const duplicate=current.find(x=>x.type===item.type&&x.category===item.category&&x.message===item.message);
-        if(!duplicate)return [item,...current].slice(0,8);
-        return [{...duplicate,at:item.at,count:duplicate.count+1},...current.filter(x=>x.id!==duplicate.id)].slice(0,8);
-      });
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousTab = useRef(activeTab);
+
+  const loadNotifications = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const records = await fetchUserNotifications(user.id, 40);
+      setItems(records);
+    } catch (e) {
+      console.warn('[NotificationBell] Load failed:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  const refreshPushStatus = useCallback(async () => {
+    const perm = getPushPermissionState();
+    setPushState(perm);
+    const sub = await getExistingSubscription();
+    setIsSubscribed(Boolean(sub));
+  }, []);
+
+  useEffect(() => {
+    void loadNotifications();
+    void refreshPushStatus();
+  }, [loadNotifications, refreshPushStatus]);
+
+  // Realtime Supabase listener on notifications table filtered by recipient_id
+  useEffect(() => {
+    if (!user?.id || !isSupabaseConfigured) return;
+
+    const channel = (supabase as any)
+      .channel(`bell-notifications-${user.id}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const next = payload.new as NotificationRecord;
+            setItems((prev) => [next, ...prev.filter((x) => x.id !== next.id)]);
+            notify(next.message, 'info', 4200, next.type as any);
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as NotificationRecord;
+            setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+          } else if (payload.eventType === 'DELETE') {
+            const deleted = payload.old;
+            if (deleted?.id) setItems((prev) => prev.filter((x) => x.id !== deleted.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        (supabase as any).removeChannel(channel);
+      } catch {}
     };
-    window.addEventListener('ira:toast',onToast as EventListener);
-    return()=>window.removeEventListener('ira:toast',onToast as EventListener);
-  },[]);
+  }, [user?.id]);
 
-  useEffect(()=>{
-    if(previousTab.current!==activeTab){
-      previousTab.current=activeTab;
+  // Listen to custom toasts to display local ephemeral notifications
+  useEffect(() => {
+    const onToast = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail?.message || !detail.notificationCategory || !user?.id) return;
+      const exists = items.some((i) => i.message === detail.message);
+      if (!exists) {
+        const localItem: NotificationRecord = {
+          id: detail.id ?? crypto.randomUUID(),
+          recipient_id: user.id,
+          employee_id: user.employeeDbId,
+          actor_id: null,
+          type: detail.notificationCategory,
+          title: (detail.notificationCategory as string).toUpperCase(),
+          message: String(detail.message),
+          action_url: null,
+          read_at: null,
+          idempotency_key: null,
+          metadata: {},
+          created_at: new Date().toISOString(),
+        };
+        setItems((current) => [localItem, ...current].slice(0, 40));
+      }
+    };
+    window.addEventListener('ira:toast', onToast as EventListener);
+    return () => window.removeEventListener('ira:toast', onToast as EventListener);
+  }, [items, user?.id, user?.employeeDbId]);
+
+  useEffect(() => {
+    if (previousTab.current !== activeTab) {
+      previousTab.current = activeTab;
       setOpen(false);
     }
-  },[activeTab]);
+  }, [activeTab]);
 
-  useEffect(()=>{
-    if(!open)return;
-    const onPointerDown=(event:PointerEvent)=>{
-      const target=event.target;
-      if(!(target instanceof Node))return;
-      if(rootRef.current?.contains(target)||panelRef.current?.contains(target))return;
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setOpen(false);
     };
-    const onKeyDown=(event:KeyboardEvent)=>{
-      if(event.key!=='Escape')return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
       setOpen(false);
       buttonRef.current?.focus();
     };
-    document.addEventListener('pointerdown',onPointerDown);
-    window.addEventListener('keydown',onKeyDown);
-    return()=>{
-      document.removeEventListener('pointerdown',onPointerDown);
-      window.removeEventListener('keydown',onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
     };
-  },[open]);
+  }, [open]);
 
-  const unread=items.reduce((total,item)=>total+item.count,0);
-  return <div ref={rootRef} className="relative">
-    <button ref={buttonRef} type="button" onClick={()=>setOpen(v=>!v)} className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-white/70 transition-all" aria-label={unread?String(unread)+' notifications':'Notifications'} aria-expanded={open} aria-controls="notification-panel">
-      <Bell className="w-4.5 h-4.5"/>
-      {unread>0&&<span className="absolute -right-0.5 -top-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">{unread>9?'9+':unread}</span>}
-    </button>
-    {createPortal(<div ref={panelRef} id="notification-panel" role="region" aria-label="Notifications" aria-hidden={!open} className={"fixed left-3 right-3 top-16 max-h-[min(70dvh,24rem)] rounded-2xl border border-slate-200/80 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.16)] overflow-hidden z-[85] sm:left-auto sm:right-4 sm:w-[min(88vw,360px)] origin-top transition-all duration-200 ease-out " + (open?"visible opacity-100 translate-y-0 scale-100":"invisible pointer-events-none opacity-0 -translate-y-1 scale-95")}>
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <div><p className="text-xs font-bold text-slate-900">Notifications</p><p className="text-[10px] text-slate-400">{unread?unread+' recent update'+(unread===1?'':'s'):'All caught up'}</p></div>
-        {unread>0&&<button type="button" onClick={()=>setItems([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700">Clear</button>}
-      </div>
-      {unread?<div className="max-h-[calc(min(70dvh,24rem)_-_4rem)] overflow-y-auto">{items.map(item=><div key={item.id} className="px-4 py-3 border-b border-slate-100 last:border-0 flex gap-3">
-        <span className={'mt-0.5 w-2 h-2 rounded-full shrink-0 '+(item.type==='success'?'bg-emerald-500':item.type==='error'?'bg-rose-500':'bg-blue-500')}/>
-        <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-800 break-words">{item.message}{item.count>1&&<span className="ml-1 text-[10px] font-bold text-slate-500">×{item.count}</span>}</p><p className="text-[10px] text-slate-400 mt-1">{new Date(item.at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})}</p></div>
-      </div>)}</div>:<div className="px-4 py-8 text-center text-xs text-slate-400">No new notifications.</div>}
-    </div>,document.body)}
-  </div>
+  const unreadCount = items.filter((x) => !x.read_at).length;
+  const displayedItems = filter === 'unread' ? items.filter((x) => !x.read_at) : items;
+
+  async function handleMarkRead(id: string) {
+    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, read_at: new Date().toISOString() } : x)));
+    await markNotificationAsRead(id);
+  }
+
+  async function handleMarkAllRead() {
+    if (!user?.id) return;
+    setItems((prev) => prev.map((x) => ({ ...x, read_at: x.read_at || new Date().toISOString() })));
+    await markAllNotificationsAsRead(user.id);
+  }
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    setItems((prev) => prev.filter((x) => x.id !== id));
+    await deleteNotification(id);
+  }
+
+  function handleItemClick(item: NotificationRecord) {
+    void handleMarkRead(item.id);
+    setOpen(false);
+    if (!item.action_url || !onSelectTab) return;
+
+    const url = item.action_url.replace(/^\//, '');
+    let targetTab = url;
+    if (url.startsWith('admin-requests')) targetTab = 'admin-requests';
+    else if (url.startsWith('emp-leave')) targetTab = 'emp-leave';
+    else if (url.startsWith('emp-wfh')) targetTab = 'emp-wfh';
+    else if (url.startsWith('emp-tasks')) targetTab = 'emp-tasks';
+    else if (url.startsWith('admin-tasks')) targetTab = 'admin-tasks';
+    else if (url.startsWith('emp-holidays')) targetTab = 'emp-holidays';
+    else if (url.startsWith('admin-holidays')) targetTab = 'admin-holidays';
+    else if (url.startsWith('emp-attendance')) targetTab = 'emp-attendance';
+    else if (url.startsWith('admin-attendance')) targetTab = 'admin-attendance';
+
+    onSelectTab(targetTab);
+  }
+
+  async function handleEnablePush() {
+    if (!user?.id) return;
+    setPushBusy(true);
+    setPushFeedback(null);
+    try {
+      const res = await subscribeToPush(user.id);
+      if (!res.success) {
+        setPushFeedback({ message: res.error || 'Failed to enable notifications.', type: 'error' });
+      } else {
+        setIsSubscribed(true);
+        setPushState('granted');
+        setPushFeedback({ message: 'Mobile notifications enabled successfully on this device.', type: 'success' });
+        notify('Phone notifications enabled.', 'success');
+      }
+    } catch (e) {
+      setPushFeedback({ message: e instanceof Error ? e.message : 'Subscription error.', type: 'error' });
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleDisablePush() {
+    if (!user?.id) return;
+    setPushBusy(true);
+    try {
+      await unsubscribeFromPush(user.id);
+      setIsSubscribed(false);
+      setPushFeedback({ message: 'Notifications disabled on this device.', type: 'success' });
+      notify('Phone notifications disabled.', 'info');
+    } catch {
+      setPushFeedback({ message: 'Failed to disable notifications.', type: 'error' });
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleSendTestPush() {
+    setTestPushBusy(true);
+    try {
+      const ok = await sendLocalTestPushNotification(
+        'IRA Presence Alert',
+        'Push notifications are working properly on your phone.',
+        '/'
+      );
+      if (ok) {
+        notify('Test alert sent to your device!', 'success');
+      } else {
+        notify('Notification permission required.', 'error');
+      }
+    } catch {
+      notify('Test alert failed.', 'error');
+    } finally {
+      setTestPushBusy(false);
+    }
+  }
+
+  const getCategoryIcon = (type: NotificationType) => {
+    switch (type) {
+      case 'leave':
+        return <CalendarDays className="w-3.5 h-3.5 text-amber-600" />;
+      case 'wfh':
+        return <Home className="w-3.5 h-3.5 text-indigo-600" />;
+      case 'task':
+        return <BriefcaseBusiness className="w-3.5 h-3.5 text-blue-600" />;
+      case 'attendance':
+        return <Clock3 className="w-3.5 h-3.5 text-emerald-600" />;
+      case 'holiday':
+        return <Sparkles className="w-3.5 h-3.5 text-purple-600" />;
+      case 'payroll':
+        return <WalletCards className="w-3.5 h-3.5 text-emerald-600" />;
+      default:
+        return <Bell className="w-3.5 h-3.5 text-slate-600" />;
+    }
+  };
+
+  const getCategoryBg = (type: NotificationType) => {
+    switch (type) {
+      case 'leave':
+        return 'bg-amber-50 border-amber-200';
+      case 'wfh':
+        return 'bg-indigo-50 border-indigo-200';
+      case 'task':
+        return 'bg-blue-50 border-blue-200';
+      case 'attendance':
+        return 'bg-emerald-50 border-emerald-200';
+      case 'holiday':
+        return 'bg-purple-50 border-purple-200';
+      case 'payroll':
+        return 'bg-emerald-50 border-emerald-200';
+      default:
+        return 'bg-slate-50 border-slate-200';
+    }
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-white/70 transition-all"
+        aria-label={unreadCount ? `${unreadCount} notifications` : 'Notifications'}
+        aria-expanded={open}
+        aria-controls="notification-panel"
+      >
+        <Bell className="w-4.5 h-4.5" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {createPortal(
+        <div
+          ref={panelRef}
+          id="notification-panel"
+          role="region"
+          aria-label="Notifications"
+          aria-hidden={!open}
+          className={
+            'fixed left-3 right-3 top-16 max-h-[min(80dvh,32rem)] rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.18)] overflow-hidden z-[85] sm:left-auto sm:right-4 sm:w-[min(90vw,380px)] origin-top transition-all duration-200 ease-out flex flex-col ' +
+            (open ? 'visible opacity-100 translate-y-0 scale-100' : 'invisible pointer-events-none opacity-0 -translate-y-1 scale-95')
+          }
+        >
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white/50">
+            <div>
+              <p className="text-xs font-bold text-slate-900">Notifications</p>
+              <p className="text-[10px] text-slate-400">
+                {unreadCount ? `${unreadCount} unread update${unreadCount === 1 ? '' : 's'}` : 'All caught up'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleMarkAllRead()}
+                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Mobile Web Push Banner */}
+          <div className="px-3.5 py-2.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${isSubscribed ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-slate-300'}`} />
+              <p className="text-[11px] text-slate-700 truncate font-medium">
+                {isSubscribed ? 'Phone push alerts active' : 'Enable phone notifications'}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isSubscribed ? (
+                <button
+                  type="button"
+                  disabled={testPushBusy}
+                  onClick={() => void handleSendTestPush()}
+                  className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+                  title="Send test push to this device"
+                >
+                  {testPushBusy ? 'Testing…' : 'Test alert'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPushModalOpen(true)}
+                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-600 text-white hover:bg-blue-700 transition"
+                >
+                  Enable
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex border-b border-slate-100 text-xs px-3 py-1.5 gap-2 shrink-0 bg-white">
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition ${
+                filter === 'all' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              All ({items.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('unread')}
+              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition ${
+                filter === 'unread' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Unread ({unreadCount})
+            </button>
+          </div>
+
+          {/* Notifications List */}
+          <div className="overflow-y-auto max-h-[calc(min(80dvh,32rem)_-_8.5rem)] divide-y divide-slate-100 flex-1">
+            {loading ? (
+              <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                Loading notifications…
+              </div>
+            ) : displayedItems.length > 0 ? (
+              displayedItems.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => handleItemClick(item)}
+                  className={`group px-3.5 py-3 hover:bg-slate-50/80 transition-colors cursor-pointer flex items-start gap-3 relative ${
+                    !item.read_at ? 'bg-blue-50/30' : ''
+                  }`}
+                >
+                  {/* Category icon */}
+                  <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${getCategoryBg(item.type)}`}>
+                    {getCategoryIcon(item.type)}
+                  </div>
+
+                  {/* Notification Content */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <p className={`text-xs ${!item.read_at ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
+                        {item.title}
+                      </p>
+                      <span className="text-[10px] text-slate-400 shrink-0 font-mono">
+                        {new Date(item.created_at).toLocaleTimeString('en-IN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          timeZone: 'Asia/Kolkata',
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2 leading-relaxed">
+                      {item.message}
+                    </p>
+                    {item.action_url && (
+                      <p className="text-[10px] text-blue-600 font-semibold mt-1 inline-flex items-center gap-0.5">
+                        Tap to open →
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions / Read status */}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0 self-center">
+                    {!item.read_at && (
+                      <span className="w-2 h-2 rounded-full bg-blue-600" title="Unread" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => void handleDelete(e, item.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition"
+                      title="Dismiss notification"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-10 text-center text-xs text-slate-400">
+                {filter === 'unread' ? 'No unread notifications.' : 'No notifications yet.'}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Enable Mobile Push Modal */}
+      {pushModalOpen && (
+        <Modal title="Phone Push Notifications" onClose={() => setPushModalOpen(false)}>
+          <div className="space-y-4 text-xs text-slate-600">
+            <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-blue-600 text-white shrink-0 mt-0.5">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-bold text-slate-900 text-sm">Real-time alerts on your phone</p>
+                <p className="text-slate-600 leading-relaxed">
+                  Enable device notifications to receive alerts on your lock screen even when IRA Presence is closed.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="font-semibold text-slate-800">What you will be notified about:</p>
+              <ul className="space-y-1.5 list-disc list-inside text-slate-600 pl-1">
+                <li><span className="font-medium text-slate-800">Work & Tasks:</span> New assignments, updates, and reviews</li>
+                <li><span className="font-medium text-slate-800">Leave & WFH:</span> Approval and rejection decisions</li>
+                <li><span className="font-medium text-slate-800">Company Announcements:</span> Public and company holidays</li>
+              </ul>
+            </div>
+
+            {isIosNeedsHomeScreen() && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
+                <p className="font-bold text-xs">iPhone / iPad Setup Required</p>
+                <p className="text-[11px] leading-relaxed">
+                  Safari on iOS requires adding this website to your Home Screen before Web Push can be enabled:
+                </p>
+                <ol className="list-decimal list-inside text-[11px] space-y-0.5 pt-1 font-medium">
+                  <li>Tap the Safari <b>Share</b> button (square with arrow up)</li>
+                  <li>Scroll down and tap <b>Add to Home Screen</b></li>
+                  <li>Open IRA Attendance from your Home Screen to enable alerts</li>
+                </ol>
+              </div>
+            )}
+
+            {pushState === 'denied' && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px]">
+                <p className="font-bold">Notifications Blocked</p>
+                <p className="mt-0.5">
+                  Notification permission is blocked in your browser settings. Please click the site settings / lock icon in the browser address bar and set Notifications to Allow.
+                </p>
+              </div>
+            )}
+
+            {pushFeedback && (
+              <div
+                className={`p-3 rounded-xl border text-[11px] ${
+                  pushFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                {pushFeedback.message}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-3 border-t border-slate-100">
+              {isSubscribed ? (
+                <button
+                  type="button"
+                  disabled={pushBusy}
+                  onClick={() => void handleDisablePush()}
+                  className="text-xs text-rose-600 hover:text-rose-700 font-semibold py-1.5"
+                >
+                  Turn off on this device
+                </button>
+              ) : (
+                <span className="text-[11px] text-slate-400">Device-specific opt-in</span>
+              )}
+
+              <div className="flex gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPushModalOpen(false)}
+                  className="btn-secondary"
+                >
+                  Close
+                </button>
+                {isSubscribed ? (
+                  <button
+                    type="button"
+                    disabled={testPushBusy}
+                    onClick={() => void handleSendTestPush()}
+                    className="btn-primary"
+                  >
+                    {testPushBusy ? 'Sending…' : 'Send Test Notification'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={pushBusy || pushState === 'denied'}
+                    onClick={() => void handleEnablePush()}
+                    className="btn-primary"
+                  >
+                    {pushBusy ? 'Enabling…' : 'Enable Notifications'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
 }
 
 function LoadingScreen({label='Loading IRA…'}:{label?:string}){return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin"/>{label}</div></div>}

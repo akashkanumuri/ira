@@ -1,0 +1,551 @@
+// IRA Presence V2 - Persistent In-App Notifications & Event Generator
+import { supabase, isSupabaseConfigured } from './supabase';
+import { notify } from './toast';
+import type { Database } from './database.types';
+
+export type NotificationType = 'attendance' | 'leave' | 'wfh' | 'task' | 'holiday' | 'payroll' | 'system';
+
+export interface NotificationRecord {
+  id: string;
+  recipient_id: string;
+  employee_id: string | null;
+  actor_id: string | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  action_url: string | null;
+  read_at: string | null;
+  idempotency_key: string | null;
+  metadata: any;
+  created_at: string;
+}
+
+export interface CreateNotificationInput {
+  recipientId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  actionUrl?: string;
+  idempotencyKey?: string;
+  employeeId?: string;
+  actorId?: string;
+  metadata?: Record<string, any>;
+}
+
+// In-memory fallback cache when offline or if table is in initial migration phase
+const localFallbackStore: NotificationRecord[] = [];
+
+/**
+ * Resolves all Supabase user IDs that have the 'admin' role.
+ */
+export async function getAdminUserIds(): Promise<string[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data } = await (supabase as any)
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin');
+    return (data ?? []).map((r: any) => r.id);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolves the Supabase Auth profile_id for a given employee DB record ID.
+ */
+export async function getEmployeeProfileId(employeeDbId: string): Promise<string | null> {
+  if (!isSupabaseConfigured || !employeeDbId) return null;
+  try {
+    const { data } = await (supabase as any)
+      .from('employees')
+      .select('profile_id')
+      .eq('id', employeeDbId)
+      .maybeSingle();
+    return data?.profile_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves the Supabase Auth profile IDs for all active employees.
+ */
+export async function getActiveEmployeeProfileIds(): Promise<string[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data } = await (supabase as any)
+      .from('employees')
+      .select('profile_id')
+      .eq('status', 'active')
+      .not('profile_id', 'is', null);
+    return (data ?? []).map((r: any) => r.profile_id).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch persistent notifications for the authenticated user, newest first.
+ */
+export async function fetchUserNotifications(userId: string, limit = 50): Promise<NotificationRecord[]> {
+  if (!isSupabaseConfigured || !userId) {
+    return localFallbackStore.filter((n) => n.recipient_id === userId);
+  }
+
+  try {
+    const { data, error } = await (supabase as any)
+      .from('notifications')
+      .select('*')
+      .eq('recipient_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.warn('[Notifications] Fetch warning (using local store fallback):', error.message);
+      return localFallbackStore.filter((n) => n.recipient_id === userId);
+    }
+
+    return (data ?? []) as NotificationRecord[];
+  } catch (err) {
+    console.warn('[Notifications] Fetch exception:', err);
+    return localFallbackStore.filter((n) => n.recipient_id === userId);
+  }
+}
+
+/**
+ * Mark a single notification as read by timestamping read_at.
+ */
+export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
+  const readTimestamp = new Date().toISOString();
+
+  // Update in-memory fallback
+  const fallback = localFallbackStore.find((n) => n.id === notificationId);
+  if (fallback) fallback.read_at = readTimestamp;
+
+  if (!isSupabaseConfigured) return true;
+
+  try {
+    const { error } = await (supabase as any)
+      .from('notifications')
+      .update({ read_at: readTimestamp })
+      .eq('id', notificationId);
+
+    if (error) {
+      console.warn('[Notifications] Mark read warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Notifications] Mark read error:', err);
+    return false;
+  }
+}
+
+/**
+ * Mark all unread notifications for a user as read.
+ */
+export async function markAllNotificationsAsRead(userId: string): Promise<boolean> {
+  const readTimestamp = new Date().toISOString();
+
+  for (const item of localFallbackStore) {
+    if (item.recipient_id === userId && !item.read_at) {
+      item.read_at = readTimestamp;
+    }
+  }
+
+  if (!isSupabaseConfigured || !userId) return true;
+
+  try {
+    const { error } = await (supabase as any)
+      .from('notifications')
+      .update({ read_at: readTimestamp })
+      .eq('recipient_id', userId)
+      .is('read_at', null);
+
+    if (error) {
+      console.warn('[Notifications] Mark all read warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Notifications] Mark all read error:', err);
+    return false;
+  }
+}
+
+/**
+ * Delete a notification from the user's history.
+ */
+export async function deleteNotification(notificationId: string): Promise<boolean> {
+  const idx = localFallbackStore.findIndex((n) => n.id === notificationId);
+  if (idx !== -1) localFallbackStore.splice(idx, 1);
+
+  if (!isSupabaseConfigured) return true;
+
+  try {
+    const { error } = await (supabase as any)
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId);
+
+    if (error) {
+      console.warn('[Notifications] Delete warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Notifications] Delete error:', err);
+    return false;
+  }
+}
+
+/**
+ * Dispatches an automated Web Push message to the recipient's registered device(s).
+ * Calls the trusted backend / Edge Function or logs delivery intent.
+ */
+async function dispatchPushToRecipient(
+  recipientId: string,
+  title: string,
+  body: string,
+  actionUrl = '/',
+  notificationId?: string
+) {
+  if (!isSupabaseConfigured || !recipientId) return;
+
+  try {
+    // Attempt Supabase Edge Function invoke for secure server-side push dispatch
+    const { error } = await supabase.functions.invoke('send-push', {
+      body: {
+        recipientId,
+        title,
+        body,
+        actionUrl,
+        notificationId,
+      },
+    });
+
+    if (error) {
+      // Handled gracefully in local environments where Edge functions may not be deployed
+      console.debug('[Notifications] Edge function push dispatch notice:', error.message);
+    }
+  } catch (e) {
+    console.debug('[Notifications] Push dispatch exception:', e);
+  }
+}
+
+/**
+ * Creates a persistent notification for a specific recipient.
+ * Validates inputs, prevents duplicates via idempotency keys, and dispatches Web Push.
+ */
+export async function createNotification(input: CreateNotificationInput): Promise<NotificationRecord | null> {
+  if (!input.recipientId || !input.title || !input.message) {
+    console.warn('[Notifications] Missing required notification fields:', input);
+    return null;
+  }
+
+  const record: NotificationRecord = {
+    id: crypto.randomUUID(),
+    recipient_id: input.recipientId,
+    employee_id: input.employeeId ?? null,
+    actor_id: input.actorId ?? null,
+    type: input.type,
+    title: input.title,
+    message: input.message,
+    action_url: input.actionUrl ?? null,
+    read_at: null,
+    idempotency_key: input.idempotencyKey ?? null,
+    metadata: input.metadata ?? {},
+    created_at: new Date().toISOString(),
+  };
+
+  // Prevent duplicate if idempotency key already exists in local store
+  if (input.idempotencyKey && localFallbackStore.some((n) => n.idempotency_key === input.idempotencyKey)) {
+    return null;
+  }
+
+  localFallbackStore.unshift(record);
+
+  if (isSupabaseConfigured) {
+    try {
+      // 1. Attempt secure RPC notify_user first (enforces security & caller verification in DB)
+      const { data: rpcId, error: rpcError } = await (supabase as any).rpc('notify_user', {
+        p_recipient_id: input.recipientId,
+        p_type: input.type,
+        p_title: input.title,
+        p_message: input.message,
+        p_action_url: input.actionUrl ?? null,
+        p_idempotency_key: input.idempotencyKey ?? null,
+        p_employee_id: input.employeeId ?? null,
+        p_actor_id: input.actorId ?? null,
+        p_metadata: input.metadata ?? {},
+      });
+
+      if (!rpcError && rpcId) {
+        record.id = rpcId;
+      } else {
+        // 2. Fallback to direct table insert (permitted for admins under hardened RLS)
+        const payload: any = {
+          recipient_id: input.recipientId,
+          employee_id: input.employeeId ?? null,
+          actor_id: input.actorId ?? null,
+          type: input.type,
+          title: input.title,
+          message: input.message,
+          action_url: input.actionUrl ?? null,
+          idempotency_key: input.idempotencyKey ?? null,
+          metadata: input.metadata ?? {},
+        };
+
+        const { data, error } = await (supabase as any)
+          .from('notifications')
+          .insert(payload)
+          .select('*')
+          .maybeSingle();
+
+        if (error) {
+          if (error.code === '23505') {
+            return null;
+          }
+          console.debug('[Notifications] Insert DB notice (using fallback store):', error.message);
+        } else if (data) {
+          record.id = data.id;
+        }
+      }
+    } catch (err) {
+      console.debug('[Notifications] Insert DB exception:', err);
+    }
+  }
+
+  // Trigger push notification with verified notification reference
+  void dispatchPushToRecipient(input.recipientId, input.title, input.message, input.actionUrl ?? '/', record.id);
+
+  return record;
+}
+
+// ============================================================================
+// CONVENIENCE RECIPIENT-ROUTED EVENT HANDLERS
+// ============================================================================
+
+/**
+ * When an employee submits a leave request:
+ * Notify the authorized approver(s) (Admins).
+ */
+export async function notifyLeaveSubmitted(params: {
+  employeeName: string;
+  days: number;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  leaveId: string;
+  employeeDbId: string;
+  actorUserId: string;
+  adminUserIds?: string[];
+}): Promise<void> {
+  const { employeeName, days, leaveType, startDate, endDate, leaveId, employeeDbId, actorUserId } = params;
+  const adminIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getAdminUserIds();
+
+  for (const adminId of adminIds) {
+    await createNotification({
+      recipientId: adminId,
+      type: 'leave',
+      title: 'New Leave Request',
+      message: `${employeeName} requested ${days} day(s) of ${leaveType} leave (${startDate} to ${endDate}).`,
+      actionUrl: '/admin-requests',
+      idempotencyKey: `leave_submit_${leaveId}_${adminId}`,
+      employeeId: employeeDbId,
+      actorId: actorUserId,
+      metadata: { leaveId, status: 'pending' },
+    });
+  }
+}
+
+/**
+ * When an approver reviews a leave request:
+ * Notify the requesting employee.
+ */
+export async function notifyLeaveReviewed(params: {
+  employeeProfileId?: string | null;
+  employeeDbId: string;
+  status: 'approved' | 'rejected';
+  startDate: string;
+  endDate: string;
+  leaveId: string;
+  actorUserId: string;
+}): Promise<void> {
+  const { employeeDbId, status, startDate, endDate, leaveId, actorUserId } = params;
+  const profileId = params.employeeProfileId || await getEmployeeProfileId(employeeDbId);
+  if (!profileId) return;
+
+  const statusLabel = status === 'approved' ? 'Approved' : 'Rejected';
+
+  await createNotification({
+    recipientId: profileId,
+    type: 'leave',
+    title: `Leave Request ${statusLabel}`,
+    message: `Your leave request for ${startDate} to ${endDate} has been ${status}.`,
+    actionUrl: '/emp-leave',
+    idempotencyKey: `leave_review_${leaveId}_${status}`,
+    employeeId: employeeDbId,
+    actorId: actorUserId,
+    metadata: { leaveId, status },
+  });
+}
+
+/**
+ * When an employee requests WFH:
+ * Notify the authorized approver(s) (Admins).
+ */
+export async function notifyWfhSubmitted(params: {
+  employeeName: string;
+  date: string;
+  duration: string;
+  wfhId: string;
+  employeeDbId: string;
+  actorUserId: string;
+  adminUserIds?: string[];
+}): Promise<void> {
+  const { employeeName, date, duration, wfhId, employeeDbId, actorUserId } = params;
+  const adminIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getAdminUserIds();
+
+  for (const adminId of adminIds) {
+    await createNotification({
+      recipientId: adminId,
+      type: 'wfh',
+      title: 'New WFH Request',
+      message: `${employeeName} requested WFH for ${date} (${duration.replace('_', ' ')}).`,
+      actionUrl: '/admin-requests',
+      idempotencyKey: `wfh_submit_${wfhId}_${adminId}`,
+      employeeId: employeeDbId,
+      actorId: actorUserId,
+      metadata: { wfhId, status: 'pending' },
+    });
+  }
+}
+
+/**
+ * When an approver reviews a WFH request:
+ * Notify the requesting employee.
+ */
+export async function notifyWfhReviewed(params: {
+  employeeProfileId?: string | null;
+  employeeDbId: string;
+  status: 'approved' | 'rejected';
+  date: string;
+  wfhId: string;
+  actorUserId: string;
+}): Promise<void> {
+  const { employeeDbId, status, date, wfhId, actorUserId } = params;
+  const profileId = params.employeeProfileId || await getEmployeeProfileId(employeeDbId);
+  if (!profileId) return;
+
+  const statusLabel = status === 'approved' ? 'Approved' : 'Rejected';
+
+  await createNotification({
+    recipientId: profileId,
+    type: 'wfh',
+    title: `WFH Request ${statusLabel}`,
+    message: `Your WFH request for ${date} has been ${status}.`,
+    actionUrl: '/emp-wfh',
+    idempotencyKey: `wfh_review_${wfhId}_${status}`,
+    employeeId: employeeDbId,
+    actorId: actorUserId,
+    metadata: { wfhId, status },
+  });
+}
+
+/**
+ * When a task is assigned:
+ * Notify the assigned employee.
+ */
+export async function notifyTaskAssigned(params: {
+  assigneeProfileId?: string | null;
+  assigneeEmployeeId: string;
+  taskTitle: string;
+  dueDate: string;
+  taskId: string;
+  actorUserId: string;
+}): Promise<void> {
+  const { assigneeEmployeeId, taskTitle, dueDate, taskId, actorUserId } = params;
+  const profileId = params.assigneeProfileId || await getEmployeeProfileId(assigneeEmployeeId);
+  if (!profileId) return;
+
+  await createNotification({
+    recipientId: profileId,
+    type: 'task',
+    title: 'New Task Assigned',
+    message: `You have been assigned: "${taskTitle}" (Due: ${dueDate}).`,
+    actionUrl: '/emp-tasks',
+    idempotencyKey: `task_assign_${taskId}_${profileId}`,
+    employeeId: assigneeEmployeeId,
+    actorId: actorUserId,
+    metadata: { taskId },
+  });
+}
+
+/**
+ * When an employee submits completed task work:
+ * Notify the reviewer / assigner / admin.
+ */
+export async function notifyTaskSubmitted(params: {
+  assignerProfileId?: string | null;
+  assignerEmployeeId?: string | null;
+  taskTitle: string;
+  taskId: string;
+  actorUserId: string;
+  adminUserIds?: string[];
+}): Promise<void> {
+  const { taskTitle, taskId, actorUserId } = params;
+
+  let recipientId = params.assignerProfileId;
+  if (!recipientId && params.assignerEmployeeId) {
+    recipientId = await getEmployeeProfileId(params.assignerEmployeeId);
+  }
+
+  const recipients = recipientId
+    ? [recipientId]
+    : (params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getAdminUserIds());
+
+  for (const rId of recipients) {
+    await createNotification({
+      recipientId: rId,
+      type: 'task',
+      title: 'Task Work Submitted',
+      message: `Completed work submitted for: "${taskTitle}".`,
+      actionUrl: recipientId ? '/emp-tasks' : '/admin-tasks',
+      idempotencyKey: `task_submit_${taskId}_${rId}`,
+      actorId: actorUserId,
+      metadata: { taskId },
+    });
+  }
+}
+
+/**
+ * When an admin announces a holiday:
+ * Notify active employees.
+ */
+export async function notifyHolidayAdded(params: {
+  holidayName: string;
+  date: string;
+  holidayId: string;
+  actorUserId: string;
+  activeEmployeeProfileIds?: string[];
+}): Promise<void> {
+  const { holidayName, date, holidayId, actorUserId } = params;
+  const profileIds = params.activeEmployeeProfileIds && params.activeEmployeeProfileIds.length
+    ? params.activeEmployeeProfileIds
+    : await getActiveEmployeeProfileIds();
+
+  for (const profileId of profileIds) {
+    await createNotification({
+      recipientId: profileId,
+      type: 'holiday',
+      title: 'Company Holiday Announced',
+      message: `${holidayName} scheduled on ${date}.`,
+      actionUrl: '/emp-holidays',
+      idempotencyKey: `holiday_announce_${holidayId}_${profileId}`,
+      actorId: actorUserId,
+      metadata: { holidayId, date },
+    });
+  }
+}
