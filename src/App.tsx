@@ -806,7 +806,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
             <span className="text-[11px] font-bold uppercase tracking-wider">Present Today</span>
             <Activity className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 font-display">{todayPresent.length}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">{todayPresent.length}</p>
           <p className="text-[11px] text-slate-500 mt-1">
             <span className="font-semibold text-slate-700">{todayOffice}</span> Office · <span className="font-semibold text-slate-700">{todayWfh}</span> WFH
           </p>
@@ -816,7 +816,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
             <span className="text-[11px] font-bold uppercase tracking-wider">Pending Requests</span>
             <FileClock className="w-4 h-4 text-amber-500" />
           </div>
-          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 font-display">{totalPending}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">{totalPending}</p>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-[11px] text-slate-500">
               {pendingLeaves.length} Leave{pendingLeaves.length === 1 ? '' : 's'} · {pendingWfh.length} WFH
@@ -845,7 +845,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
         <div className="px-5 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2.5">
-              <h2 className="font-bold text-sm text-slate-900 font-display">Workforce Attendance</h2>
+              <h2 className="font-bold text-sm text-slate-900">Workforce Attendance</h2>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dateClass.isWorkingDay ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
                 {dateClass.label}
               </span>
@@ -1032,7 +1032,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
           {/* Pending Leave Requests */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-sm text-slate-900 font-display">Pending Leave Applications</h3>
+              <h3 className="font-bold text-sm text-slate-900">Pending Leave Applications</h3>
               <button
                 type="button"
                 onClick={() => onSelectTab('admin-leave')}
@@ -1061,7 +1061,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
           {/* Pending WFH Requests */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-sm text-slate-900 font-display">Pending WFH Requests</h3>
+              <h3 className="font-bold text-sm text-slate-900">Pending WFH Requests</h3>
               <button
                 type="button"
                 onClick={() => onSelectTab('admin-wfh')}
@@ -1291,7 +1291,7 @@ function EmployeeDashboard(props: any) {
         <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-sm text-slate-900 font-display">Leave balance</h3>
+              <h3 className="font-bold text-sm text-slate-900">Leave balance</h3>
               <p className="text-xs text-slate-500 mt-0.5">Unused paid leave carries forward.</p>
             </div>
             <button
@@ -1319,7 +1319,7 @@ function EmployeeDashboard(props: any) {
         <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-sm text-slate-900 font-display">Upcoming tasks</h3>
+              <h3 className="font-bold text-sm text-slate-900">Upcoming tasks</h3>
               <p className="text-xs text-slate-500 mt-0.5">Assigned deliverables.</p>
             </div>
             <button
@@ -1355,7 +1355,7 @@ function EmployeeDashboard(props: any) {
         <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-sm text-slate-900 font-display">Salary snapshot</h3>
+              <h3 className="font-bold text-sm text-slate-900">Salary snapshot</h3>
               <p className="text-xs text-slate-500 mt-0.5">Monthly compensation.</p>
             </div>
             <button
@@ -1369,7 +1369,7 @@ function EmployeeDashboard(props: any) {
           </div>
           <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
             <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Base monthly salary</span>
-            <span className="font-display text-xl font-bold text-slate-900 mt-1 block">{money(monthlySalary)}</span>
+            <span className="text-xl font-bold text-slate-900 mt-1 block">{money(monthlySalary)}</span>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
             <span>Latest finalized pay:</span>
@@ -1915,7 +1915,7 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
       {showLoginSessions && (
         <section className="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-slate-100">
-            <h3 className="font-bold text-sm text-slate-900 font-display">Login sessions</h3>
+            <h3 className="font-bold text-sm text-slate-900">Login sessions</h3>
             <p className="text-xs text-slate-500 mt-0.5">Login/logout history is separate from attendance check-in/check-out.</p>
           </div>
           <div className="overflow-x-auto">
