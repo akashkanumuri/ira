@@ -51,13 +51,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ todayAttendance,
         <Kpi label="Late" value={lateToday} icon={<Clock className="w-4 h-4 text-amber-600" />} />
       </div>
 
-      {(pendingWfh.length > 0 || pendingCorrections.length > 0) && (
+      {pendingWfh.length > 0 && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h4 className="font-bold text-slate-900 text-xs">Pending approvals</h4>
-            <p className="text-xs text-slate-600 mt-0.5">{pendingWfh.length} WFH request(s) and {pendingCorrections.length} correction(s) need review.</p>
+            <p className="text-xs text-slate-600 mt-0.5">{pendingWfh.length} WFH request(s) need review.</p>
           </div>
-          <button onClick={() => onSelectTab(pendingWfh.length ? 'admin-wfh' : 'admin-corrections')} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1">
+          <button onClick={() => onSelectTab('admin-wfh')} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1">
             Review <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

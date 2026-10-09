@@ -464,7 +464,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     ['emp-leave', 'Leave', CalendarDays],
     ['emp-wfh', 'WFH', Home],
     ['emp-payroll', 'Payroll', WalletCards],
-    ['emp-corrections', 'Corrections', FileClock],
     ['emp-holidays', 'Holidays', CalendarDays],
     ['emp-profile', 'Profile', UserRound],
   ] as const;
@@ -481,7 +480,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     ['admin-settings', 'Settings', Settings2],
   ] as const;
 
-  const pendingCount = leaveRequests.filter(x => x.status === 'pending').length + wfhRequests.filter(x => x.status === 'pending').length + corrections.filter(x => x.status === 'pending').length;
+  const pendingCount = leaveRequests.filter(x => x.status === 'pending').length + wfhRequests.filter(x => x.status === 'pending').length;
   const employeeOpenTasks = tasks.filter(t => t.assignedTo === user.employeeDbId && t.status === 'assigned').length;
   const adminSubmittedTasks = tasks.filter(t => t.status === 'completed').length;
 
@@ -519,7 +518,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         pendingTaskCount={user.role === 'admin' ? adminSubmittedTasks : employeeOpenTasks}
         pendingWfhCount={user.role === 'admin' ? wfhRequests.filter(x => x.status === 'pending').length : undefined}
         pendingLeaveCount={user.role === 'admin' ? leaveRequests.filter(x => x.status === 'pending').length : undefined}
-        pendingCorrectionCount={user.role === 'admin' ? corrections.filter(x => x.status === 'pending').length : undefined}
       />
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <header className="ira-topbar h-16 shrink-0 sticky top-0 z-[80] flex items-center px-4 sm:px-6 gap-3 bg-white border-b border-slate-200">
@@ -627,7 +625,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 min-h-[48px] text-[10px] rounded-xl transition-all ${mobileOpen || ['admin-requests', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'emp-wfh', 'emp-payroll', 'emp-corrections', 'emp-holidays', 'emp-profile'].includes(activeTab) ? 'ira-bottom-active text-blue-600 font-bold bg-blue-50/80' : 'ira-bottom-idle text-slate-500 hover:text-slate-900'}`}
+            className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 min-h-[48px] text-[10px] rounded-xl transition-all ${mobileOpen || ['admin-requests', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'emp-wfh', 'emp-payroll', 'emp-holidays', 'emp-profile'].includes(activeTab) ? 'ira-bottom-active text-blue-600 font-bold bg-blue-50/80' : 'ira-bottom-idle text-slate-500 hover:text-slate-900'}`}
             aria-label="Open more navigation"
             aria-expanded={mobileOpen}
           >
@@ -660,7 +658,6 @@ function getPageTitle(tab: string) {
     'emp-leave': 'Leave',
     'emp-wfh': 'WFH',
     'emp-payroll': 'Payroll',
-    'emp-corrections': 'Corrections',
     'emp-holidays': 'Holidays',
     'emp-profile': 'Profile',
   } as Record<string,string>)[tab] ?? 'Dashboard';
@@ -686,7 +683,6 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-leave') return <LeaveEmployee {...props} />;
   if (activeTab === 'emp-wfh') return <WfhEmployee {...props} />;
   if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
-  if (activeTab === 'emp-corrections') return <CorrectionEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysEmployee {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
   return <EmployeeDashboard {...props} onSelectTab={props.onSelectTab} />;
@@ -702,7 +698,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
     return { e, record, leave };
   });
   const present = todayRows.filter((x: any) => x.record?.status === 'present' || x.record?.status === 'late' || x.record?.status === 'wfh').length;
-  const pending = [...leaveRequests, ...wfhRequests, ...corrections].filter((r: any) => r.status === 'pending').length;
+  const pending = [...leaveRequests, ...wfhRequests].filter((r: any) => r.status === 'pending').length;
   const latestPayrollPeriod = [...(payrollPeriods as PayrollPeriod[])]
     .filter(pp=>pp.status==='finalized' && Boolean(pp.finalizedAt))
     .sort((a,b)=>b.monthStart.localeCompare(a.monthStart) || (b.finalizedAt??'').localeCompare(a.finalizedAt??''))[0];
@@ -989,15 +985,9 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], wf
               <p className="text-xs font-bold text-amber-900">Previous shift needs attention</p>
               <p className="text-[11px] text-amber-800 mt-1">Your {dateLabel(previousOpen.date)} attendance is still open. Resolve it before starting a new shift.</p>
             </div>
-            {previousOpen.attendanceState === 'working' ? (
-              <button type="button" disabled={busy} onClick={() => void run(() => performCheckOut(previousOpen), 'Previous shift closed successfully.')} className="px-4 py-3 rounded-xl bg-amber-600 text-white text-xs font-bold disabled:opacity-60">
-                {busy ? 'Saving…' : 'Close previous shift'}
-              </button>
-            ) : (
-              <button type="button" onClick={() => onSelectTab?.('emp-corrections')} className="px-4 py-3 rounded-xl bg-slate-950 text-white text-xs font-bold">
-                Open correction request
-              </button>
-            )}
+            <button type="button" disabled={busy} onClick={() => void run(() => performCheckOut(previousOpen), 'Previous shift closed successfully.')} className="px-4 py-3 rounded-xl bg-amber-600 text-white text-xs font-bold disabled:opacity-60">
+              {busy ? 'Saving…' : 'Close previous shift'}
+            </button>
           </div>
         )}
 
@@ -1507,16 +1497,16 @@ function AttendanceAdmin({attendance,employees,leaveRequests,wfhRequests,holiday
   return <PageShell title="Attendance" subtitle="Daily attendance with explicit login/check-in/break/check-out separation."><div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row gap-3"><label className="flex-1"><span className="label">Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)} className="input"/></label><label className="flex-1"><span className="label">Search</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search employee…" className="input"/></label></div><div className="mt-4 bg-white border border-slate-200 rounded-2xl p-4 text-xs flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600"/><b>{dateLabel(date,{weekday:'long'})}</b><span className="text-slate-500">· {cl.label}</span></div><div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{cl.isWorkingDay?rows.map(({e,record,leave}:any)=><tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td>{leave?'Leave':record?.mode==='wfh'?'WFH':record?'Office':e.workMode==='remote'?'WFH':'—'}</Td><Td mono>{record?.checkIn??'—'}</Td><Td mono>{record?duration(record.breakSeconds):'—'}</Td><Td mono>{record?.checkOut??'—'}</Td><Td mono>{record?duration(record.workingSeconds):'—'}</Td><Td><StatusBadge label={leave?'Leave':record?.status??(e.joinDate&&date<e.joinDate?'Not joined':date>today()?'Upcoming':date===today()?'Not checked-in':'Not recorded')}/></Td></tr>):<tr><td colSpan={7} className="p-10 text-center text-sm text-slate-500">{cl.label}. No check-in required.</td></tr>}{cl.isWorkingDay&&!rows.length&&<EmptyRow colSpan={7} text="No active employees."/ >}</tbody></table></div></div></PageShell>;
 }
 
-function RequestsAdmin({leaveRequests,wfhRequests,corrections,onRefresh}:any){
-  const [tab,setTab]=useState<'leave'|'wfh'|'corrections'>('leave');
+function RequestsAdmin({leaveRequests,wfhRequests,onRefresh}:any){
+  const [tab,setTab]=useState<'leave'|'wfh'>('leave');
   const [busyKey,setBusyKey]=useState<string|null>(null);
-  async function review(table:string,id:string,status:'approved'|'rejected'){const key=table+':'+id;if(busyKey)return;setBusyKey(key);try{const {data,error}=await(supabase as any).from(table).update({status,reviewed_at:new Date().toISOString()}).eq('id',id).eq('status','pending').select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('This request was already reviewed. Refresh the list.');notify(status==='approved'?'Request approved.':'Request rejected.',status==='approved'?'success':'info',4200,table==='leave_requests'?'leave':table==='wfh_requests'?'wfh':'correction');await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to review request.','error')}finally{setBusyKey(null);}}
-  return <PageShell title="Requests" subtitle="Review employee leave, WFH and attendance correction requests."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['leave','Leave'],['wfh','WFH'],['corrections','Corrections']].map(([id,l])=><button key={id} onClick={()=>setTab(id as any)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab===id?'bg-white shadow-sm text-slate-900':'text-slate-500'}`}>{l}</button>)}</div>{tab==='leave'&&<RequestTable type="leave" rows={leaveRequests} onReview={(id,s)=>void review('leave_requests',id,s)} busyKey={busyKey} />}{tab==='wfh'&&<RequestTable type="wfh" rows={wfhRequests} onReview={(id,s)=>void review('wfh_requests',id,s)} busyKey={busyKey} />}{tab==='corrections'&&<RequestTable type="corrections" rows={corrections} onReview={(id,s)=>void review('regularization_requests',id,s)} busyKey={busyKey} />}</PageShell>;
+  async function review(table:string,id:string,status:'approved'|'rejected'){const key=table+':'+id;if(busyKey)return;setBusyKey(key);try{const {data,error}=await(supabase as any).from(table).update({status,reviewed_at:new Date().toISOString()}).eq('id',id).eq('status','pending').select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('This request was already reviewed. Refresh the list.');notify(status==='approved'?'Request approved.':'Request rejected.',status==='approved'?'success':'info',4200,table==='leave_requests'?'leave':'wfh');await onRefresh();}catch(error){notify(error instanceof Error?error.message:'Unable to review request.','error')}finally{setBusyKey(null);}}
+  return <PageShell title="Requests" subtitle="Review employee leave and WFH requests."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['leave','Leave'],['wfh','WFH']].map(([id,l])=><button key={id} onClick={()=>setTab(id as any)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab===id?'bg-white shadow-sm text-slate-900':'text-slate-500'}`}>{l}</button>)}</div>{tab==='leave'&&<RequestTable type="leave" rows={leaveRequests} onReview={(id,s)=>void review('leave_requests',id,s)} busyKey={busyKey} />}{tab==='wfh'&&<RequestTable type="wfh" rows={wfhRequests} onReview={(id,s)=>void review('wfh_requests',id,s)} busyKey={busyKey} />}</PageShell>;
 }
 
-function RequestTable({type,rows,onReview,busyKey}:{type:'leave'|'wfh'|'corrections';rows:any[];onReview:(id:string,s:'approved'|'rejected')=>void;busyKey:string|null}){
-  const title=type==='leave'?'Leave requests':type==='wfh'?'WFH requests':'Correction requests';
-  return <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100"><h3 className="font-bold text-sm">{title}</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Date</Th><Th>Details</Th><Th>Status</Th><Th>Action</Th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map(r=><tr key={r.id}><Td strong>{r.employeeName}<span className="block text-[10px] text-slate-400">{r.department}</span></Td><Td>{type==='leave'?dateLabel(r.startDate)+' → '+dateLabel(r.endDate):dateLabel(r.date)}</Td><Td>{type==='leave'?`${r.leaveType} · ${r.days} day(s) · paid ${r.paidDays??0} · unpaid ${r.unpaidDays??0} · ${r.reason}`:type==='wfh'?`${r.duration} · ${r.reason}`:`${r.originalCheckIn||'—'} → ${r.originalCheckOut||'—'} · requested ${r.requestedCheckIn} → ${r.requestedCheckOut}`}</Td><Td><StatusBadge label={r.status}/></Td><Td>{r.status==='pending'?<div className="flex gap-1.5"><button disabled={!!busyKey} onClick={()=>onReview(r.id,'approved')} className="btn-approve">{busyKey?'Saving…':'Approve'}</button><button disabled={!!busyKey} onClick={()=>onReview(r.id,'rejected')} className="btn-reject">{busyKey?'Saving…':'Reject'}</button></div>:<span className="text-slate-400">Reviewed</span>}</Td></tr>)}{!rows.length&&<EmptyRow colSpan={5} text="No requests."/>}</tbody></table></div></div>;
+function RequestTable({type,rows,onReview,busyKey}:{type:'leave'|'wfh';rows:any[];onReview:(id:string,s:'approved'|'rejected')=>void;busyKey:string|null}){
+  const title=type==='leave'?'Leave requests':'WFH requests';
+  return <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100"><h3 className="font-bold text-sm">{title}</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Date</Th><Th>Details</Th><Th>Status</Th><Th>Action</Th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map(r=><tr key={r.id}><Td strong>{r.employeeName}<span className="block text-[10px] text-slate-400">{r.department}</span></Td><Td>{type==='leave'?dateLabel(r.startDate)+' → '+dateLabel(r.endDate):dateLabel(r.date)}</Td><Td>{type==='leave'?`${r.leaveType} · ${r.days} day(s) · paid ${r.paidDays??0} · unpaid ${r.unpaidDays??0} · ${r.reason}`:`${r.duration} · ${r.reason}`}</Td><Td><StatusBadge label={r.status}/></Td><Td>{r.status==='pending'?<div className="flex gap-1.5"><button disabled={!!busyKey} onClick={()=>onReview(r.id,'approved')} className="btn-approve">{busyKey?'Saving…':'Approve'}</button><button disabled={!!busyKey} onClick={()=>onReview(r.id,'rejected')} className="btn-reject">{busyKey?'Saving…':'Reject'}</button></div>:<span className="text-slate-400">Reviewed</span>}</Td></tr>)}{!rows.length&&<EmptyRow colSpan={5} text="No requests."/>}</tbody></table></div></div>;
 }
 
 function PayrollAdmin({employees,payrollPeriods,payrollRecords,onRefresh}:any){
@@ -1624,80 +1614,7 @@ function LeaveEmployee({user,leaveRequests,ledgers,holidays,onRefresh}:any){
   return <PageShell title="Leave" subtitle="Paid leave accrues at 1.5 days/month and unused balance carries forward.">{error&&<Notice type="error" text={error}/>}<div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Summary label="Available" value={current?.closingBalance??'—'}/><Summary label="Carry forward" value={current?.openingBalance??'—'}/><Summary label="Added" value={current?.accrual??1.5}/><Summary label="Unpaid used" value={current?.unpaidUsed??0}/></div><div className="mt-4 flex justify-end"><button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Apply leave</button></div>{open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Leave type"><select name="leaveType" className="input"><option value="casual">Casual</option><option value="sick">Sick</option><option value="earned">Earned</option><option value="unpaid">Unpaid</option></select></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Start date"><input name="startDate" type="date" min={today()} className="input" required/></Field><Field label="End date"><input name="endDate" type="date" min={today()} className="input" required/></Field><Field label="Reason"><input name="reason" className="input md:col-span-2" required/></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Dates</Th><Th>Type</Th><Th>Days</Th><Th>Paid / Unpaid</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{leaveRequests.map((r:LeaveRequest)=><tr key={r.id}><Td>{dateLabel(r.startDate)} → {dateLabel(r.endDate)}</Td><Td>{r.leaveType}</Td><Td>{r.days}</Td><Td>{r.paidDays??0} / {r.unpaidDays??0}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status}/></Td></tr>)}{!leaveRequests.length&&<EmptyRow colSpan={6} text="No leave requests yet."/>}</tbody></table></div></div></PageShell>;
 }
 
-function CorrectionEmployee({user,corrections,onRefresh}:any){
-  const [open,setOpen]=useState(false);
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState('');
-  const myCorrections=(corrections as CorrectionRequest[]).filter(r=>r.employeeId===user.employeeDbId);
 
-  async function submit(e:React.FormEvent<HTMLFormElement>){
-    e.preventDefault(); const form=e.currentTarget;
-    setError('');
-    setBusy(true);
-    try {
-      const fd=new FormData(e.currentTarget);
-      const date=String(fd.get('date')||'');
-      const requestedCheckIn=String(fd.get('requestedCheckIn')||'');
-      const requestedCheckOut=String(fd.get('requestedCheckOut')||'');
-      const reason=String(fd.get('reason')||'').trim();
-
-      if(!date||!requestedCheckIn||!requestedCheckOut||!reason) throw new Error('Complete all required fields.');
-      if(date>today()) throw new Error('A correction can only be requested for today or an earlier date.');
-      if(requestedCheckOut<=requestedCheckIn) throw new Error('Check-out time must be later than check-in time.');
-
-      const {error:err}=await (supabase as any).from('regularization_requests').insert({
-        employee_id:user.employeeDbId,
-        date,
-        requested_check_in:requestedCheckIn,
-        requested_check_out:requestedCheckOut,
-        reason,
-      });
-      if(err) throw err;
-      notify('Correction request submitted.','success');
-      form.reset();
-      setOpen(false);
-      await onRefresh();
-    } catch(error) {
-      const message=error instanceof Error?error.message:'Unable to submit correction request.';
-      setError(message);
-      notify(message,'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <PageShell title="Corrections" subtitle="Request a correction for a missed or incorrect attendance time. Original attendance is preserved.">
-    {error&&<Notice type="error" text={error}/>}
-    <div className="flex justify-end">
-      <button onClick={()=>setOpen(v=>!v)} className="btn-primary"><Plus className="w-4 h-4"/>Request correction</button>
-    </div>
-    {open&&<form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4">
-      <Field label="Date"><input name="date" type="date" max={today()} className="input" required/></Field>
-      <Field label="Reason"><input name="reason" className="input" required/></Field>
-      <Field label="Correct check-in"><input name="requestedCheckIn" type="time" className="input" required/></Field>
-      <Field label="Correct check-out"><input name="requestedCheckOut" type="time" className="input" required/></Field>
-      <div className="md:col-span-2 flex justify-end gap-2">
-        <button type="button" onClick={()=>setOpen(false)} className="btn-secondary">Cancel</button>
-        <button disabled={busy} className="btn-primary">{busy?'Submitting…':'Submit request'}</button>
-      </div>
-    </form>}
-    <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="overflow-x-auto"><table className="w-full text-xs">
-        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Date</Th><Th>Original</Th><Th>Requested</Th><Th>Reason</Th><Th>Status</Th></tr></thead>
-        <tbody className="divide-y divide-slate-100">
-          {myCorrections.map(r=><tr key={r.id}>
-            <Td>{dateLabel(r.date)}</Td>
-            <Td mono>{r.originalCheckIn||'—'} → {r.originalCheckOut||'—'}</Td>
-            <Td mono>{r.requestedCheckIn} → {r.requestedCheckOut}</Td>
-            <Td>{r.reason}</Td>
-            <Td><StatusBadge label={r.status}/></Td>
-          </tr>)}
-          {!myCorrections.length&&<EmptyRow colSpan={5} text="No correction requests yet."/>}
-        </tbody>
-      </table></div>
-    </div>
-  </PageShell>;
-}
 
 function WfhEmployee({user,wfhRequests,onRefresh}:any){
   const [open,setOpen]=useState(false);const [error,setError]=useState('');const remote=user.workMode==='remote';

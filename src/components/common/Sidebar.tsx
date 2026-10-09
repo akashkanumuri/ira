@@ -20,7 +20,6 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
     ['emp-tasks', 'Work & Assignments', BriefcaseBusiness, pendingTaskCount],
     ['emp-leave', 'Leave Requests', CalendarDays, pendingLeaveCount],
     ['emp-wfh', 'WFH Requests', Home, pendingWfhCount],
-    ['emp-corrections', 'Corrections', FileClock, pendingCorrectionCount],
     ['emp-holidays', 'Holidays', CalendarDays],
     ['emp-profile', 'Profile', UserRound],
   ] as const;
@@ -30,7 +29,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
     ['admin-employees', 'Employees / HR', Users],
     ['admin-attendance', 'Attendance', Clock3],
     ['admin-tasks', 'Work & Assignments', BriefcaseBusiness, pendingTaskCount],
-    ['admin-requests', 'Requests', FileClock, pendingWfhCount + pendingLeaveCount + pendingCorrectionCount],
+    ['admin-requests', 'Requests', FileClock, pendingWfhCount + pendingLeaveCount],
     ['admin-payroll', 'Payroll', WalletCards],
     ['admin-holidays', 'Holidays', CalendarDays],
     ['admin-export', 'Reports / Excel', FileSpreadsheet],

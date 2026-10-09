@@ -32,12 +32,10 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({ activeTab, onSelectT
   const moreItems: MobileNavItem[] = role === 'admin'
     ? [
         { id: 'admin-leave', label: 'Leave Requests', icon: FileText },
-        { id: 'admin-corrections', label: 'Corrections', icon: FileEdit },
         { id: 'admin-export', label: 'Excel Export', icon: FileSpreadsheet },
         { id: 'admin-holidays', label: 'Holidays', icon: Palmtree },
       ]
     : [
-        { id: 'emp-corrections', label: 'Corrections', icon: FileEdit },
         { id: 'emp-holidays', label: 'Holidays', icon: Palmtree },
       ];
 
