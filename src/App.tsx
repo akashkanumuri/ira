@@ -1759,22 +1759,39 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
               ? 'Not checked-in'
               : 'Not recorded';
 
-            const style =
+            const dotColor =
               label === 'Present'
-                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                ? 'bg-emerald-500'
                 : label === 'WFH'
-                ? 'text-sky-700 bg-sky-50 border-sky-200'
+                ? 'bg-sky-500'
                 : label === 'Late'
-                ? 'text-amber-700 bg-amber-50 border-amber-200'
+                ? 'bg-amber-500'
                 : label === 'Leave'
-                ? 'text-purple-700 bg-purple-50 border-purple-200'
+                ? 'bg-purple-500'
                 : label === 'Holiday'
-                ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                ? 'bg-indigo-500'
                 : label === 'Off'
-                ? 'text-purple-600 bg-purple-50 border-purple-100'
+                ? 'bg-purple-400'
                 : label === 'Upcoming'
-                ? 'text-slate-400 bg-white border-slate-100'
-                : 'text-slate-500 bg-slate-50 border-slate-200';
+                ? 'bg-slate-300'
+                : 'bg-slate-400';
+
+            const textColor =
+              label === 'Present'
+                ? 'text-emerald-700'
+                : label === 'WFH'
+                ? 'text-sky-700'
+                : label === 'Late'
+                ? 'text-amber-700'
+                : label === 'Leave'
+                ? 'text-purple-700'
+                : label === 'Holiday'
+                ? 'text-indigo-700'
+                : label === 'Off'
+                ? 'text-purple-600'
+                : label === 'Upcoming'
+                ? 'text-slate-400'
+                : 'text-slate-500';
 
             return (
               <button
@@ -1787,8 +1804,9 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
                 } ${selectedDate === ds ? 'border-[#0033FF] bg-blue-50/20' : ''}`}
               >
                 <span className="text-[11px] sm:text-xs font-bold text-slate-800">{d}</span>
-                <span className={`text-[8px] sm:text-[9px] rounded-md px-1 sm:px-1.5 py-0.5 sm:py-1 border font-bold truncate max-w-full ${style}`}>
-                  {label}
+                <span className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold truncate max-w-full ${textColor}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                  <span className="truncate">{label}</span>
                 </span>
               </button>
             );

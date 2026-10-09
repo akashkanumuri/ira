@@ -195,22 +195,32 @@ export const MyAttendanceCalendar: React.FC<MyAttendanceCalendarProps> = ({
                 const isSaturday = d.classification.type === 'saturday_working';
                 const isToday = d.dateStr === today;
                 let badgeText = '';
-                let badgeBg = '';
+                let dotColor = 'bg-slate-400';
+                let textColor = 'text-slate-600';
                 if (d.record?.status === 'present' || d.record?.status === 'wfh') {
                   badgeText = d.record.mode === 'wfh' ? 'WFH' : 'Present';
-                  badgeBg = d.record.mode === 'wfh' ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800';
+                  dotColor = d.record.mode === 'wfh' ? 'bg-sky-500' : 'bg-emerald-500';
+                  textColor = d.record.mode === 'wfh' ? 'text-sky-700' : 'text-emerald-700';
                 } else if (d.record?.status === 'late') {
                   badgeText = 'Late';
-                  badgeBg = 'bg-amber-100 text-amber-800';
+                  dotColor = 'bg-amber-500';
+                  textColor = 'text-amber-700';
                 } else if (d.record?.status === 'leave') {
                   badgeText = 'Leave';
-                  badgeBg = 'bg-purple-100 text-purple-800';
+                  dotColor = 'bg-purple-500';
+                  textColor = 'text-purple-700';
                 } else if (isSunday) {
-                  badgeText = 'OFF'; badgeBg = 'bg-purple-50 text-purple-700 border border-purple-200';
+                  badgeText = 'OFF';
+                  dotColor = 'bg-purple-400';
+                  textColor = 'text-purple-600';
                 } else if (isHoliday) {
-                  badgeText = 'Holiday'; badgeBg = 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+                  badgeText = 'Holiday';
+                  dotColor = 'bg-indigo-500';
+                  textColor = 'text-indigo-700';
                 } else if (isSaturday) {
-                  badgeText = 'Working'; badgeBg = 'bg-slate-100 text-slate-600';
+                  badgeText = 'Working';
+                  dotColor = 'bg-slate-400';
+                  textColor = 'text-slate-600';
                 }
 
                 return (
@@ -225,7 +235,12 @@ export const MyAttendanceCalendar: React.FC<MyAttendanceCalendarProps> = ({
 )}
                     </div>
                     <div className="truncate">
-                      {badgeText && <span className={`inline-block text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded ${badgeBg} truncate max-w-full`}>{badgeText}</span>}
+                      {badgeText && (
+                        <div className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold truncate max-w-full ${textColor}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                          <span className="truncate">{badgeText}</span>
+                        </div>
+                      )}
                       {d.record?.workingHours && <span className="block text-[10px] font-mono text-slate-500 mt-0.5">{d.record.workingHours}</span>}
                     </div>
                   </button>
