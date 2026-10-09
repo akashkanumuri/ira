@@ -9,12 +9,12 @@ import { ToastHost } from './components/common/ToastHost';
 import { notify, type NotificationCategory } from './lib/toast';
 import {
   Activity, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight,
-  Clock3, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
-  Bell, LogOut, Menu, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
+  Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
+  Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus
 } from 'lucide-react';
 import type {
-  AssignmentRule, AttendanceRecord, Department, Designation, Employee, EmployeeDocument,
+  AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
   Holiday, LeaveLedger, LeaveRequest, PayrollPeriod, PayrollRecord, Task, TaskPriority,
   WfhRequest, CorrectionRequest
 } from './types/attendance';
@@ -24,7 +24,7 @@ import {
   money, invokeEmployeeAdmin, uploadAvatar, uploadEmployeeDocument, getSignedDocumentUrl
 } from './lib/v2';
 import { classifyDay, formatKolkataTime, getKolkataDateString } from './lib/workingDays';
-import { performCheckIn, performStartBreak, performResumeWork, performCheckOut, recoverTodayAttendance, formatLiveTimer } from './lib/attendance';
+import { performCheckIn, performStartBreak, performResumeWork, performCheckOut, recoverTodayAttendance, formatLiveTimer, fetchAttendanceRecord } from './lib/attendance';
 
 const today = () => getKolkataDateString();
 const tomorrow = () => {
@@ -689,57 +689,508 @@ function EmployeeContent(props: any) {
 }
 
 function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, corrections, holidays, payrollPeriods, payrollRecords, onSelectTab }: any) {
-  const active = employees.filter((e: Employee) => e.status === 'active');
-  const todayStr = today();
-  const todayClass = classifyDay(todayStr, holidays);
-  const todayRows = active.map((e: Employee) => {
-    const record = attendance.find((a: AttendanceRecord) => a.employeeId === e.id && a.date === todayStr);
-    const leave = leaveRequests.find((l: LeaveRequest) => l.employeeId === e.id && l.status === 'approved' && l.startDate <= todayStr && l.endDate >= todayStr);
-    return { e, record, leave };
+  const [selectedDate, setSelectedDate] = useState(today());
+  const [search, setSearch] = useState('');
+  const [selectedRow, setSelectedRow] = useState<any | null>(null);
+  const [inspectBreaks, setInspectBreaks] = useState<BreakEvent[]>([]);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const active = (employees as Employee[]).filter((e) => e.status === 'active');
+  const dateClass = classifyDay(selectedDate, holidays);
+
+  const rows = active
+    .filter((e) => !search || `${e.name} ${e.empId} ${e.designation}`.toLowerCase().includes(search.toLowerCase()))
+    .map((e) => {
+      const record = attendance.find((a: AttendanceRecord) => a.employeeId === e.id && a.date === selectedDate);
+      const leave = (leaveRequests as LeaveRequest[]).find(
+        (l) => l.employeeId === e.id && l.status === 'approved' && l.startDate <= selectedDate && l.endDate >= selectedDate
+      );
+      return { e, record, leave };
+    });
+
+  const todayPresent = active.filter((e) => {
+    const r = attendance.find((a: AttendanceRecord) => a.employeeId === e.id && a.date === today());
+    return r?.status === 'present' || r?.status === 'late' || r?.status === 'wfh';
   });
-  const present = todayRows.filter((x: any) => x.record?.status === 'present' || x.record?.status === 'late' || x.record?.status === 'wfh').length;
-  const pending = [...leaveRequests, ...wfhRequests].filter((r: any) => r.status === 'pending').length;
+
+  const todayOffice = todayPresent.filter((e) => {
+    const r = attendance.find((a: AttendanceRecord) => a.employeeId === e.id && a.date === today());
+    return r?.mode === 'office';
+  }).length;
+
+  const todayWfh = todayPresent.filter((e) => {
+    const r = attendance.find((a: AttendanceRecord) => a.employeeId === e.id && a.date === today());
+    return r?.mode === 'wfh';
+  }).length;
+
+  const pendingLeaves = (leaveRequests as LeaveRequest[]).filter((r) => r.status === 'pending');
+  const pendingWfh = (wfhRequests as WfhRequest[]).filter((r) => r.status === 'pending');
+  const totalPending = pendingLeaves.length + pendingWfh.length;
+
   const latestPayrollPeriod = [...(payrollPeriods as PayrollPeriod[])]
-    .filter(pp=>pp.status==='finalized' && Boolean(pp.finalizedAt))
-    .sort((a,b)=>b.monthStart.localeCompare(a.monthStart) || (b.finalizedAt??'').localeCompare(a.finalizedAt??''))[0];
+    .filter((pp) => pp.status === 'finalized' && Boolean(pp.finalizedAt))
+    .sort((a, b) => b.monthStart.localeCompare(a.monthStart) || (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? ''))[0];
+
   const latestPayrollTotal = latestPayrollPeriod
-    ? (payrollRecords as PayrollRecord[]).filter(p=>p.periodId===latestPayrollPeriod.id).reduce((sum,p)=>sum+p.finalPay,0)
+    ? (payrollRecords as PayrollRecord[]).filter((p) => p.periodId === latestPayrollPeriod.id).reduce((sum, p) => sum + p.finalPay, 0)
     : 0;
 
+  const handleRowClick = async (item: any) => {
+    setSelectedRow(item);
+    setInspectBreaks([]);
+    if (item.record?.id) {
+      setInspectLoading(true);
+      try {
+        const { data, error } = await (supabase as any)
+          .from('break_events')
+          .select('id,attendance_id,employee_id,break_start,break_end,duration_seconds')
+          .eq('attendance_id', item.record.id)
+          .order('break_start', { ascending: true });
+        if (!error && data) {
+          setInspectBreaks(
+            data.map((b: any) => ({
+              id: b.id,
+              attendanceId: b.attendance_id,
+              employeeId: b.employee_id,
+              breakStart: b.break_start,
+              breakEnd: b.break_end,
+              durationSeconds: b.duration_seconds == null ? undefined : Number(b.duration_seconds),
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching breaks:', err);
+      } finally {
+        setInspectLoading(false);
+      }
+    }
+  };
+
+  const handleExport = () => {
+    try {
+      setExporting(true);
+      const data = rows.map(({ e, record, leave }) => ({
+        'Employee ID': e.empId,
+        'Employee Name': e.name,
+        Department: e.department,
+        Designation: e.designation,
+        Date: selectedDate,
+        'Work Mode': leave ? 'Leave' : record?.mode === 'wfh' ? 'Work From Home' : record ? 'Office' : e.workMode === 'remote' ? 'Work From Home' : '—',
+        'Check-In': record?.checkIn ?? '—',
+        'Check-Out': record?.checkOut ?? (record?.attendanceState === 'completed' ? '—' : record?.mode === 'wfh' ? 'Pending (Manual)' : 'Pending'),
+        'Break Duration': duration(record?.breakSeconds ?? 0),
+        'Working Hours': record?.workingHours || duration(record?.workingSeconds ?? 0),
+        Status: leave ? 'Leave' : record?.status ? record.status : dateClass.isWorkingDay ? 'Not Checked In' : dateClass.label,
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+      XLSX.writeFile(wb, `IRA_Attendance_${selectedDate}.xlsx`);
+      notify(`Exported attendance for ${selectedDate}`, 'success');
+    } catch (err) {
+      notify('Failed to export attendance.', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
-    <PageShell title="Dashboard" subtitle="Live workforce snapshot.">
+    <PageShell title="Executive Dashboard" subtitle="Workforce attendance inspection, payroll snapshot, and activity queue.">
+      {/* 1. Executive KPI Cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <Kpi label="Active Employees" value={active.length} icon={<Users className="w-4 h-4" />} />
-        <Kpi label={todayClass.isWorkingDay ? 'Present Today' : 'Today'} value={todayClass.isWorkingDay ? present : 0} icon={<Activity className="w-4 h-4" />} />
-        <Kpi label="Pending Requests" value={pending} icon={<FileClock className="w-4 h-4" />} />
-        <Kpi label="Latest Final Payroll" value={latestPayrollPeriod ? money(latestPayrollTotal) : '—'} icon={<WalletCards className="w-4 h-4" />} textValue />
-        {latestPayrollPeriod && <p className="text-[10px] text-slate-400 -mt-2 col-span-2 xl:col-span-4">Period: {dateLabel(latestPayrollPeriod.monthStart,{month:'long',year:'numeric'})}</p>}
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Present Today</span>
+            <Activity className="w-4 h-4 text-emerald-600" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 font-display">{todayPresent.length}</p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            <span className="font-semibold text-slate-700">{todayOffice}</span> Office · <span className="font-semibold text-slate-700">{todayWfh}</span> WFH
+          </p>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Pending Requests</span>
+            <FileClock className="w-4 h-4 text-amber-500" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 font-display">{totalPending}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[11px] text-slate-500">
+              {pendingLeaves.length} Leave{pendingLeaves.length === 1 ? '' : 's'} · {pendingWfh.length} WFH
+            </span>
+            {totalPending > 0 && (
+              <button
+                type="button"
+                onClick={() => onSelectTab?.(pendingLeaves.length ? 'admin-leave' : 'admin-wfh')}
+                className="text-[11px] font-bold text-[#0033FF] hover:underline ml-auto"
+              >
+                Review
+              </button>
+            )}
+          </div>
+        </div>
+        <Kpi
+          label="Latest Final Payroll"
+          value={latestPayrollPeriod ? money(latestPayrollTotal) : '—'}
+          icon={<WalletCards className="w-4 h-4 text-[#0033FF]" />}
+          textValue
+        />
       </div>
 
-      <section className="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div><h2 className="font-bold text-sm">Today</h2><p className="text-xs text-slate-500 mt-0.5">{dateLabel(todayStr, { weekday: 'long' })} · {todayClass.label}</p></div>
-          <button onClick={() => onSelectTab('admin-attendance')} className="text-xs font-bold text-blue-600">Open attendance <ArrowRight className="w-3.5 h-3.5 inline ml-1" /></button>
-        </div>
-        {todayClass.isWorkingDay ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead>
-              <tbody className="divide-y divide-slate-100">
-                {todayRows.map(({e,record,leave}: any) => (
-                  <tr key={e.id}>
-                    <Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.designation}</span></Td>
-                    <Td>{leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : '—'}</Td>
-                    <Td mono>{record?.checkIn ?? '—'}</Td><Td mono>{record?.checkOut ?? '—'}</Td><Td mono>{record ? duration(record.workingSeconds) : '—'}</Td>
-                    <Td><StatusBadge label={leave ? 'Leave' : record?.status ? record.status : todayClass.isWorkingDay ? 'Not checked-in' : todayClass.label} /></Td>
-                  </tr>
-                ))}
-                {!todayRows.length && <EmptyRow colSpan={6} text="No active employees yet. Create the first employee from Employees / HR." />}
-              </tbody>
-            </table>
+      {/* 2. Workforce Attendance Inspection */}
+      <section className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h2 className="font-bold text-sm text-slate-900 font-display">Workforce Attendance</h2>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dateClass.isWorkingDay ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-purple-50 text-purple-700 border border-purple-200'}`}>
+                {dateClass.label}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Inspecting records for {dateLabel(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           </div>
-        ) : <div className="p-8 text-center text-sm text-slate-500"><CalendarDays className="w-8 h-8 mx-auto text-slate-300 mb-2" />{todayClass.label}</div>}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Date Selector */}
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0033FF]/20"
+            />
+            {/* Search Filter */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search employee…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 w-36 sm:w-44 focus:outline-none focus:ring-2 focus:ring-[#0033FF]/20"
+              />
+            </div>
+            {/* Export Button */}
+            <button
+              type="button"
+              disabled={exporting || !rows.length}
+              onClick={handleExport}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
+              title="Download Excel report"
+            >
+              <Download className="w-3.5 h-3.5 text-[#0033FF]" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+            {/* Link to Full Module */}
+            <button
+              type="button"
+              onClick={() => onSelectTab('admin-attendance')}
+              className="px-3 py-1.5 rounded-xl bg-[#0033FF] hover:bg-[#0600AB] text-xs font-bold text-white flex items-center gap-1.5 transition-colors shadow-sm"
+            >
+              <span>Full View</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider">
+              <tr>
+                <Th>Employee</Th>
+                <Th>Department</Th>
+                <Th>Mode</Th>
+                <Th>Check-In</Th>
+                <Th>Check-Out</Th>
+                <Th>Working</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(({ e, record, leave }) => (
+                <tr
+                  key={e.id}
+                  onClick={() => handleRowClick({ e, record, leave })}
+                  className="hover:bg-slate-50 cursor-pointer transition-colors"
+                  title="Click to inspect attendance details and break events"
+                >
+                  <Td strong>
+                    {e.name}
+                    <span className="block text-[10px] text-slate-400 font-normal">
+                      {e.empId} · {e.designation}
+                    </span>
+                  </Td>
+                  <Td>{e.department}</Td>
+                  <Td>
+                    <span className="inline-flex items-center gap-1">
+                      {record?.mode === 'wfh' || (!record && e.workMode === 'remote') ? (
+                        <Home className="w-3.5 h-3.5 text-sky-600" />
+                      ) : (
+                        <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                      )}
+                      <span>
+                        {leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : 'Office'}
+                      </span>
+                    </span>
+                  </Td>
+                  <Td mono>{record?.checkIn ?? '—'}</Td>
+                  <Td mono>
+                    {record?.checkOut ?? (record?.attendanceState === 'completed' ? '—' : record?.mode === 'wfh' ? 'Pending (Manual)' : record ? 'Pending' : '—')}
+                  </Td>
+                  <Td mono>{record ? record.workingHours || duration(record.workingSeconds) : '—'}</Td>
+                  <Td>
+                    <StatusBadge
+                      label={
+                        leave
+                          ? 'leave'
+                          : record?.status
+                          ? record.status
+                          : dateClass.isWorkingDay
+                          ? 'absent'
+                          : dateClass.type === 'holiday'
+                          ? 'holiday'
+                          : 'off'
+                      }
+                    />
+                  </Td>
+                </tr>
+              ))}
+              {!rows.length && (
+                <EmptyRow
+                  colSpan={7}
+                  text={search ? `No active employees matching "${search}".` : 'No active employees found.'}
+                />
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Compact Cards View */}
+        <div className="block sm:hidden divide-y divide-slate-100">
+          {rows.map(({ e, record, leave }) => (
+            <div
+              key={e.id}
+              onClick={() => handleRowClick({ e, record, leave })}
+              className="p-4 active:bg-slate-50 cursor-pointer space-y-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-900">{e.name}</span>
+                  <span className="text-[10px] text-slate-400 ml-1.5">{e.empId}</span>
+                </div>
+                <StatusBadge
+                  label={
+                    leave
+                      ? 'leave'
+                      : record?.status
+                      ? record.status
+                      : dateClass.isWorkingDay
+                      ? 'absent'
+                      : dateClass.type === 'holiday'
+                      ? 'holiday'
+                      : 'off'
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>{e.designation}</span>
+                <span className="font-semibold text-slate-700">
+                  {leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : 'Office'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2 rounded-xl text-[11px]">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">In</span>
+                  <span className="font-mono font-bold text-slate-800">{record?.checkIn ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Out</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {record?.checkOut ?? (record?.attendanceState === 'completed' ? '—' : record?.mode === 'wfh' ? 'Pending' : '—')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Hours</span>
+                  <span className="font-mono font-bold text-slate-800">{record ? duration(record.workingSeconds) : '—'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {!rows.length && (
+            <div className="p-8 text-center text-xs text-slate-500">No active employees found.</div>
+          )}
+        </div>
       </section>
+
+      {/* 3. Pending Requests & Shortcuts Queue */}
+      {totalPending > 0 && (
+        <section className="mt-6 grid lg:grid-cols-2 gap-4">
+          {/* Pending Leave Requests */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-sm text-slate-900 font-display">Pending Leave Applications</h3>
+              <button
+                type="button"
+                onClick={() => onSelectTab('admin-leave')}
+                className="text-xs font-bold text-[#0033FF] hover:underline"
+              >
+                Review all ({pendingLeaves.length})
+              </button>
+            </div>
+            <div className="space-y-2">
+              {pendingLeaves.slice(0, 3).map((req) => (
+                <div key={req.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{req.employeeName}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {req.startDate} to {req.endDate} · {req.leaveType} ({req.days ?? 1}d)
+                    </p>
+                  </div>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 uppercase">
+                    Pending
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Pending WFH Requests */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-sm text-slate-900 font-display">Pending WFH Requests</h3>
+              <button
+                type="button"
+                onClick={() => onSelectTab('admin-wfh')}
+                className="text-xs font-bold text-[#0033FF] hover:underline"
+              >
+                Review all ({pendingWfh.length})
+              </button>
+            </div>
+            <div className="space-y-2">
+              {pendingWfh.slice(0, 3).map((req) => (
+                <div key={req.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{req.employeeName}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Date: {req.date} · {req.reason}</p>
+                  </div>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 uppercase">
+                    Pending
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 4. Inspection Modal for Selected Employee Attendance & Breaks */}
+      {selectedRow && (
+        <Modal
+          title={`Attendance Inspection · ${selectedRow.e.name}`}
+          onClose={() => setSelectedRow(null)}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">{selectedRow.e.name}</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {selectedRow.e.empId} · {selectedRow.e.department} · {selectedRow.e.designation}
+                </p>
+              </div>
+              <StatusBadge
+                label={
+                  selectedRow.leave
+                    ? 'leave'
+                    : selectedRow.record?.status
+                    ? selectedRow.record.status
+                    : dateClass.isWorkingDay
+                    ? 'absent'
+                    : 'holiday'
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Check-In</span>
+                <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 mt-0.5 block">
+                  {selectedRow.record?.checkIn ?? '—'}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Check-Out</span>
+                <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 mt-0.5 block">
+                  {selectedRow.record?.checkOut ?? (selectedRow.record?.attendanceState === 'completed' ? '—' : selectedRow.record?.mode === 'wfh' ? 'Pending (Manual)' : selectedRow.record ? 'Pending' : '—')}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Total Break</span>
+                <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 mt-0.5 block">
+                  {duration(selectedRow.record?.breakSeconds ?? 0)}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Working Hours</span>
+                <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 mt-0.5 block">
+                  {selectedRow.record ? selectedRow.record.workingHours || duration(selectedRow.record.workingSeconds) : '—'}
+                </span>
+              </div>
+            </div>
+
+            {selectedRow.leave && (
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900">
+                <span className="font-bold mr-1">Approved leave:</span>
+                <span>{selectedRow.leave.leaveType} · {selectedRow.leave.reason}</span>
+              </div>
+            )}
+
+            {/* Break Events Inspection */}
+            <div className="pt-2">
+              <p className="text-xs font-bold text-slate-700 mb-2">Break intervals ({inspectBreaks.length})</p>
+              {inspectLoading ? (
+                <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0033FF]" />
+                  <span>Loading break intervals…</span>
+                </div>
+              ) : inspectBreaks.length > 0 ? (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {inspectBreaks.map((b, idx) => (
+                    <div
+                      key={b.id || idx}
+                      className="text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between"
+                    >
+                      <span className="font-medium text-slate-600">Break {idx + 1}</span>
+                      <span className="font-mono text-slate-800">
+                        {b.breakStart ? formatKolkataTime(new Date(b.breakStart)) : '—'} →{' '}
+                        {b.breakEnd ? formatKolkataTime(new Date(b.breakEnd)) : 'In progress'}
+                        {b.durationSeconds != null ? ` · ${duration(b.durationSeconds)}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  No break intervals recorded for this session.
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedRow(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </PageShell>
   );
 }
@@ -798,110 +1249,151 @@ function PayrollEmployee({ payrollPeriods, payrollRecords }: any) {
   );
 }
 
-function EmployeeDashboard({ user, attendance, leaveRequests, ledgers, payrollPeriods, payrollRecords, tasks, employees, onSelectTab }: any) {
-  const [live, setLive] = useState(new Date());
-  const emp = authEmployee(user);
-  const todayRecord = attendance.find((x: AttendanceRecord) => x.date === today());
-  useEffect(() => { const t = window.setInterval(() => setLive(new Date()), 1000); return () => window.clearInterval(t); }, []);
-  const state = todayRecord?.attendanceState ?? 'not_checked_in';
-  const running = state === 'working' || state === 'on_break';
-  const elapsed = todayRecord ? Math.max(0, Math.floor((live.getTime() - new Date(todayRecord.checkInIso ?? live).getTime()) / 1000)) : 0;
-  const currentBreak = state === 'on_break' ? Math.max(0, Math.floor((live.getTime() - new Date(todayRecord?.activeBreakStartIso ?? live).getTime()) / 1000)) : 0;
-  const currentWorking = todayRecord ? Math.max(0, elapsed - Number(todayRecord.breakSeconds ?? 0) - currentBreak) : 0;
-  const currentLedger = ledgers.find((l: LeaveLedger) => l.periodStart === `${today().slice(0,7)}-01`);
+function EmployeeDashboard(props: any) {
+  const { user, attendance, leaveRequests, ledgers, payrollPeriods, payrollRecords, tasks, employees, onSelectTab } = props;
+  const currentLedger = ledgers?.find((l: LeaveLedger) => l.periodStart === `${today().slice(0, 7)}-01`);
   const employeeMaster = (employees as Employee[] | undefined)?.find((e) => e.id === user.employeeDbId);
   const latestFinal = [...(payrollRecords as PayrollRecord[])]
-    .filter((p)=>Boolean(p.finalizedAt))
-    .sort((a,b)=>{
-      const aPeriod=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===a.periodId)?.monthStart ?? '';
-      const bPeriod=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===b.periodId)?.monthStart ?? '';
-      return bPeriod.localeCompare(aPeriod) || (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? '');
+    .filter((p) => Boolean(p.finalizedAt))
+    .sort((a, b) => {
+      const am = payrollPeriods?.find((pp: PayrollPeriod) => pp.id === a.periodId)?.monthStart ?? '';
+      const bm = payrollPeriods?.find((pp: PayrollPeriod) => pp.id === b.periodId)?.monthStart ?? '';
+      return bm.localeCompare(am) || (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? '');
     })[0];
   const monthlySalary = employeeMaster?.currentSalary ?? user.currentSalary ?? latestFinal?.salarySnapshot ?? 0;
   const dueTasks = [...(tasks as Task[])]
-    .filter((t)=>t.status!=='completed')
-    .sort((a,b)=>a.dueDate.localeCompare(b.dueDate) || a.priority.localeCompare(b.priority))
-    .slice(0,4);
+    .filter((t) => t.status !== 'completed')
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.priority.localeCompare(b.priority))
+    .slice(0, 4);
 
-  const kolkataHour=Number(new Intl.DateTimeFormat('en-IN',{hour:'2-digit',hourCycle:'h23',timeZone:'Asia/Kolkata'}).format(new Date()));
-  const greeting=kolkataHour<12?'morning':kolkataHour<17?'afternoon':'evening';
+  const kolkataHour = Number(
+    new Intl.DateTimeFormat('en-IN', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Kolkata' }).format(new Date())
+  );
+  const greeting = kolkataHour < 12 ? 'morning' : kolkataHour < 17 ? 'afternoon' : 'evening';
+
   return (
-    <PageShell title={`Good ${greeting}, ${user.name.split(' ')[0]}`} subtitle={new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}>
-      <div className="grid xl:grid-cols-3 gap-4">
-        <section className="xl:col-span-2 bg-slate-950 text-white rounded-3xl p-5 sm:p-7 shadow-[0_18px_60px_rgba(15,23,42,.14)]">
-          <div className="flex items-start justify-between gap-4">
-            <div><p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 font-bold">Today's attendance</p><h2 className="text-2xl sm:text-3xl font-bold mt-2">{formatKolkataTime(live,true)}</h2></div>
-            <StatusBadge label={state === 'completed' ? 'Completed' : state === 'on_break' ? 'On Break' : state === 'working' ? 'Working' : 'Ready'} dark />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-6">
-            <DarkMetric label="Check-in" value={todayRecord?.checkIn ?? '—'} />
-            <DarkMetric label="Break" value={duration((todayRecord?.breakSeconds ?? 0) + currentBreak)} />
-            <DarkMetric label="Working" value={duration(running ? currentWorking : todayRecord?.workingSeconds ?? 0)} />
-            <DarkMetric label="Check-out" value={todayRecord?.checkOut ?? '—'} />
-          </div>
-          <div className="mt-6 flex flex-wrap gap-2">
-            {!todayRecord && <button onClick={() => onSelectTab?.('emp-attendance')} className="btn-secondary !bg-white !text-slate-950">Go to attendance <ArrowRight className="w-4 h-4"/></button>}
-            {todayRecord && state !== 'completed' && <span className="text-xs text-slate-400">Attendance actions are available in the Attendance section.</span>}
-          </div>
-        </section>
-        <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 font-bold">Payroll</p>
-          <h3 className="text-lg font-bold mt-2">{money(monthlySalary)}</h3>
-          <p className="text-xs text-slate-500 mt-1">Monthly salary</p>
-          <div className="mt-5 pt-4 border-t border-slate-100 flex items-end justify-between">
-            <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Latest finalized pay</p><p className="text-xl font-bold mt-1">{latestFinal ? money(latestFinal.finalPay) : 'Awaiting payroll'}</p>{latestFinal&&<p className="text-[10px] text-slate-400 mt-1">{payrollPeriods.find((p:PayrollPeriod)=>p.id===latestFinal.periodId)?.monthStart?.slice(0,7) ?? ''}</p>}</div>
-            <WalletCards className="w-5 h-5 text-blue-600" />
-          </div>
-          {latestFinal && <p className="text-[11px] text-slate-500 mt-3">Unpaid leave: {latestFinal.unpaidLeaveDays} day(s) · Deduction {money(latestFinal.leaveDeduction)}</p>}
-          {latestFinal && <div className="mt-4 pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-2"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Recent finalized payments</p><button type="button" onClick={() => onSelectTab?.('emp-payroll')} className="text-[10px] font-semibold text-blue-600 hover:text-blue-700">View history</button></div>
-            <div className="space-y-1.5">
-              {[...(payrollRecords as PayrollRecord[])]
-                .filter(p=>Boolean(p.finalizedAt))
-                .sort((a,b)=>{
-                  const am=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===a.periodId)?.monthStart ?? '';
-                  const bm=payrollPeriods.find((pp:PayrollPeriod)=>pp.id===b.periodId)?.monthStart ?? '';
-                  return bm.localeCompare(am) || (b.finalizedAt??'').localeCompare(a.finalizedAt??'');
-                })
-                .slice(0,4)
-                .map(p=><div key={p.id} className="flex items-center justify-between rounded-xl bg-slate-50/80 border border-slate-100 px-3 py-2.5">
-                  <span className="text-[11px] font-semibold text-slate-600">{payrollPeriods.find((pp:PayrollPeriod)=>pp.id===p.periodId)?.monthStart?.slice(0,7) ?? '—'}</span>
-                  <span className="text-xs font-bold text-slate-950">{money(p.finalPay)}</span>
-                </div>)}
-            </div>
-          </div>}
-        </section>
-      </div>
+    <PageShell
+      title={`Good ${greeting}, ${user.name.split(' ')[0]}`}
+      subtitle={new Date().toLocaleDateString('en-IN', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      })}
+    >
+      {/* 1. Main Interactive Attendance Dashboard */}
+      <EmployeeAttendanceSection {...props} showLoginSessions={false} />
 
-      <div className="grid lg:grid-cols-3 gap-4 mt-4">
-        <section className="bg-white rounded-2xl border border-slate-200 p-5 lg:col-span-2">
-          <div className="flex items-center justify-between"><div><h3 className="font-bold text-sm">Leave balance</h3><p className="text-xs text-slate-500 mt-1">Unused paid leave carries forward.</p></div><CalendarDays className="w-5 h-5 text-blue-600" /></div>
-          <div className="grid grid-cols-3 gap-3 mt-5">
+      {/* 2. Employee Overview Cards */}
+      <div className="grid lg:grid-cols-3 gap-4 mt-6">
+        {/* Leave Balance */}
+        <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 font-display">Leave balance</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Unused paid leave carries forward.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectTab?.('emp-leave')}
+              className="p-2 rounded-xl text-[#0033FF] hover:bg-blue-50 transition-colors"
+              title="Apply for leave"
+            >
+              <CalendarDays className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2.5 mt-4">
             <Summary label="Available" value={currentLedger ? currentLedger.closingBalance : '—'} />
             <Summary label="Carry forward" value={currentLedger ? currentLedger.openingBalance : '—'} />
-            <Summary label="This month added" value={currentLedger ? currentLedger.accrual : '1.5'} />
+            <Summary label="Added" value={currentLedger ? currentLedger.accrual : '1.5'} />
           </div>
-          {currentLedger && <p className="text-[11px] text-slate-500 mt-4">Paid used: {currentLedger.paidUsed} · Unpaid used: {currentLedger.unpaidUsed}</p>}
+          {currentLedger && (
+            <p className="text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-100">
+              Paid used: <b className="text-slate-800">{currentLedger.paidUsed}</b> · Unpaid: <b className="text-slate-800">{currentLedger.unpaidUsed}</b>
+            </p>
+          )}
         </section>
-        <section className="bg-white rounded-2xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between"><div><h3 className="font-bold text-sm">Upcoming work</h3><p className="text-xs text-slate-500 mt-1">Your assigned tasks.</p></div><BriefcaseBusiness className="w-5 h-5 text-blue-600" /></div>
-          <div className="mt-4 space-y-2">{dueTasks.map((t: Task) => <div key={t.id} className="p-3 rounded-xl bg-slate-50 border border-slate-100"><p className="text-xs font-bold">{t.title}</p><p className="text-[10px] text-slate-500 mt-1">Due {dateLabel(t.dueDate)} · {t.priority}</p></div>)}{!dueTasks.length && <p className="text-xs text-slate-400 py-6 text-center">No open tasks.</p>}</div>
+
+        {/* Assigned Tasks */}
+        <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 font-display">Upcoming tasks</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Assigned deliverables.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectTab?.('emp-tasks')}
+              className="p-2 rounded-xl text-[#0033FF] hover:bg-blue-50 transition-colors"
+              title="View all tasks"
+            >
+              <BriefcaseBusiness className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {dueTasks.map((t: Task) => (
+              <div key={t.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-900">{t.title}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Due {dateLabel(t.dueDate)}</p>
+                </div>
+                <span
+                  className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase ${
+                    t.priority === 'high' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {t.priority}
+                </span>
+              </div>
+            ))}
+            {!dueTasks.length && <p className="text-xs text-slate-400 py-5 text-center">No open tasks assigned.</p>}
+          </div>
+        </section>
+
+        {/* Payroll Snapshot */}
+        <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 font-display">Salary snapshot</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Monthly compensation.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectTab?.('emp-payroll')}
+              className="p-2 rounded-xl text-[#0033FF] hover:bg-blue-50 transition-colors"
+              title="View payroll history"
+            >
+              <WalletCards className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Base monthly salary</span>
+            <span className="font-display text-xl font-bold text-slate-900 mt-1 block">{money(monthlySalary)}</span>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+            <span>Latest finalized pay:</span>
+            <b className="font-mono text-slate-900">{latestFinal ? money(latestFinal.finalPay) : 'Pending'}</b>
+          </div>
         </section>
       </div>
     </PageShell>
   );
 }
 
-function propsHasAssignableDesignation(designations: Designation[] | undefined, id: string) {
-  return Boolean(designations?.find(d => d.id === id)?.canAssignTasks);
-}
-
-function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], wfhRequests = [], loginSessions = [], onRefresh, onSelectTab }: any) {
+function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests = [], wfhRequests = [], loginSessions = [], onRefresh, showLoginSessions = false }: any) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [now, setNow] = useState(new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [dateModalOpen, setDateModalOpen] = useState(false);
+  const [dateRecord, setDateRecord] = useState<AttendanceRecord | null>(null);
+  const [dateLoading, setDateLoading] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [showAllRecent, setShowAllRecent] = useState(false);
+
   const isRemote = user.workMode === 'remote';
   const approvedWfhToday = (wfhRequests as WfhRequest[]).find((request) => request.date === today() && request.status === 'approved');
   const [checkInMode, setCheckInMode] = useState<'office' | 'wfh'>(isRemote ? 'wfh' : approvedWfhToday ? 'wfh' : 'office');
@@ -919,12 +1411,14 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], wf
   const base = new Date(today() + 'T12:00:00Z');
   base.setUTCDate(1);
   base.setUTCMonth(base.getUTCMonth() + monthOffset);
-  const y = base.getUTCFullYear(); const m = base.getUTCMonth();
-  const monthStart = `${y}-${String(m+1).padStart(2,'0')}-01`;
-  const days = new Date(Date.UTC(y,m+1,0)).getUTCDate();
-  const first = new Date(Date.UTC(y,m,1,12)).getUTCDay();
+  const y = base.getUTCFullYear();
+  const m = base.getUTCMonth();
+  const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const first = new Date(Date.UTC(y, m, 1, 12)).getUTCDay();
   const offset = first === 0 ? 6 : first - 1;
   const current = attendance.find((a: AttendanceRecord) => a.date === today());
+  const isCheckedIn = Boolean(current);
+  const effectiveMode: 'office' | 'wfh' = current ? (current.mode === 'wfh' ? 'wfh' : 'office') : (isRemote ? 'wfh' : checkInMode);
 
   const previousOpen = useMemo(() => {
     return [...(attendance as AttendanceRecord[])]
@@ -932,13 +1426,20 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], wf
       .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
   }, [attendance]);
 
+  const sortedAttendance = useMemo(() => {
+    return [...(attendance as AttendanceRecord[])].sort((a, b) => b.date.localeCompare(a.date));
+  }, [attendance]);
+
+  const visibleRecent = showAllRecent ? sortedAttendance : sortedAttendance.slice(0, 7);
+
   const refreshRecord = async () => {
     await onRefresh();
   };
 
   const run = async (fn: () => Promise<any>, successMessage: string) => {
     if (busy) return;
-    setBusy(true); setMessage('');
+    setBusy(true);
+    setMessage('');
     try {
       const result = await fn();
       if (!result?.success) {
@@ -958,130 +1459,644 @@ function AttendanceEmployee({ user, attendance, holidays, leaveRequests = [], wf
     }
   };
 
+  const openDateDetails = async (ds: string) => {
+    setSelectedDate(ds);
+    setDateModalOpen(true);
+    setDateLoading(true);
+    setDateError(null);
+    setDateRecord(null);
+
+    try {
+      const fetched = await fetchAttendanceRecord(employeeId, ds);
+      setDateRecord(fetched);
+    } catch (err) {
+      setDateError(err instanceof Error ? err.message : 'Unable to load attendance details.');
+    } finally {
+      setDateLoading(false);
+    }
+  };
+
   const state = current?.attendanceState ?? 'not_checked_in';
   const todayClass = classifyDay(today(), holidays);
   const isHolidayToday = todayClass.type === 'holiday';
   const isSunday = todayClass.type === 'sunday_off';
 
+  const selectedClass = selectedDate ? classifyDay(selectedDate, holidays) : null;
+  const selectedApprovedLeave = selectedDate
+    ? (leaveRequests as LeaveRequest[]).find((l) => l.status === 'approved' && l.startDate <= selectedDate && l.endDate >= selectedDate)
+    : null;
+
   return (
-    <PageShell title="My Attendance" subtitle="Check-in, breaks, checkout and your monthly history.">
+    <div className="space-y-5">
       {message && <Notice type="error" text={message} />}
-      <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-7">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div><p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 font-bold">Today</p><h2 className="text-2xl font-bold mt-1">{dateLabel(today(), { weekday: 'long' })}</h2><p className="text-xs text-slate-500 mt-1">{isRemote ? 'Permanent remote · WFH check-in' : approvedWfhToday ? 'Approved WFH today · choose your check-in mode' : isHolidayToday ? 'Company holiday · no attendance required' : isSunday ? 'Weekly off · Sunday' : 'Monday–Saturday working day'}</p></div>
-          <div className="text-left lg:text-right"><p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Live clock</p><p className="font-mono text-xl font-bold">{formatKolkataTime(now,true)}</p></div>
+
+      {/* Main Attendance Card */}
+      <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-7 shadow-sm">
+        {/* A. DATE AND LIVE CLOCK */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 font-bold">Today</p>
+            <h2 className="text-2xl font-bold mt-1 text-slate-900">{dateLabel(today(), { weekday: 'long' })}</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              {isRemote
+                ? 'Permanent remote · WFH check-in'
+                : approvedWfhToday
+                ? 'Approved WFH today · choose your check-in mode'
+                : isHolidayToday
+                ? 'Company holiday · no attendance required'
+                : isSunday
+                ? 'Weekly off · Sunday'
+                : 'Monday–Saturday working day'}
+            </p>
+          </div>
+          <div className="text-left lg:text-right">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Live clock</p>
+            <p className="font-mono text-xl sm:text-2xl font-bold text-slate-950 mt-0.5">{formatKolkataTime(now, true)}</p>
+          </div>
         </div>
 
-        <div className="grid sm:grid-cols-4 gap-3 mt-6">
+        {/* B. FOUR METRIC CARDS: Check-in, Break, Working, Check-out */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
           <AttendanceMetric label="Check-in" value={current?.checkIn ?? '—'} />
-          <AttendanceMetric label="Break" value={duration((current?.breakSeconds ?? 0) + (state === 'on_break' ? Math.floor((now.getTime() - new Date(current?.activeBreakStartIso ?? now).getTime()) / 1000) : 0))} />
+          <AttendanceMetric
+            label="Break"
+            value={duration(
+              (current?.breakSeconds ?? 0) +
+                (state === 'on_break'
+                  ? Math.floor((now.getTime() - new Date(current?.activeBreakStartIso ?? now).getTime()) / 1000)
+                  : 0)
+            )}
+          />
           <AttendanceMetric label="Working" value={current ? liveWorking(current, now) : '00h 00m'} />
           <AttendanceMetric label="Check-out" value={current?.checkOut ?? '—'} />
         </div>
 
+        {/* C. WORK MODE SELECTOR */}
+        <div className="mt-6 pt-5 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-2.5">
+            <label className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Work Mode</label>
+            {isCheckedIn ? (
+              <span className="text-[11px] font-semibold text-slate-400">Active session mode</span>
+            ) : isRemote ? (
+              <span className="text-[11px] font-semibold text-blue-700">Permanent remote account</span>
+            ) : approvedWfhToday ? (
+              <span className="text-[11px] font-semibold text-blue-700">Approved WFH request active today</span>
+            ) : null}
+          </div>
+          <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Work Mode">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={effectiveMode === 'office'}
+              disabled={busy || isCheckedIn}
+              onClick={() => setCheckInMode('office')}
+              className={`min-h-[52px] p-3 rounded-xl border flex items-center justify-center gap-2.5 text-xs font-bold transition-all ${
+                effectiveMode === 'office'
+                  ? 'bg-[#0033FF] text-white border-[#0033FF] shadow-sm'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              } ${isCheckedIn ? 'cursor-default opacity-95' : 'cursor-pointer active:scale-[0.99]'}`}
+            >
+              <Building2 className={`w-4 h-4 shrink-0 ${effectiveMode === 'office' ? 'text-white' : 'text-slate-500'}`} />
+              <span>OFFICE</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={effectiveMode === 'wfh'}
+              disabled={busy || isCheckedIn}
+              onClick={() => setCheckInMode('wfh')}
+              className={`min-h-[52px] p-3 rounded-xl border flex items-center justify-center gap-2.5 text-xs font-bold transition-all ${
+                effectiveMode === 'wfh'
+                  ? 'bg-[#0033FF] text-white border-[#0033FF] shadow-sm'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              } ${isCheckedIn ? 'cursor-default opacity-95' : 'cursor-pointer active:scale-[0.99]'}`}
+            >
+              <Home className={`w-4 h-4 shrink-0 ${effectiveMode === 'wfh' ? 'text-white' : 'text-slate-500'}`} />
+              <span>WORK FROM HOME</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Previous shift needs attention (if any) */}
         {previousOpen && !current && (
-          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <p className="text-xs font-bold text-amber-900">Previous shift needs attention</p>
-              <p className="text-[11px] text-amber-800 mt-1">Your {dateLabel(previousOpen.date)} attendance is still open. Resolve it before starting a new shift.</p>
+              <p className="text-xs font-bold text-amber-900">
+                {previousOpen.mode === 'wfh' ? 'Incomplete Work From Home shift' : 'Previous shift needs attention'}
+              </p>
+              <p className="text-[11px] text-amber-800 mt-1">
+                {previousOpen.mode === 'wfh'
+                  ? `Your ${dateLabel(previousOpen.date)} Work From Home attendance is still open. WFH sessions require manual checkout. Please close it before starting a new shift.`
+                  : `Your ${dateLabel(previousOpen.date)} attendance is still open. Resolve it before starting a new shift.`}
+              </p>
             </div>
-            <button type="button" disabled={busy} onClick={() => void run(() => performCheckOut(previousOpen), 'Previous shift closed successfully.')} className="px-4 py-3 rounded-xl bg-amber-600 text-white text-xs font-bold disabled:opacity-60">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run(() => performCheckOut(previousOpen), 'Previous shift closed successfully.')}
+              className="px-4 py-3 rounded-xl bg-amber-600 text-white text-xs font-bold disabled:opacity-60 shrink-0"
+            >
               {busy ? 'Saving…' : 'Close previous shift'}
             </button>
           </div>
         )}
 
-        {!isHolidayToday && !isSunday && !previousOpen && (
-          <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3">
-            {!current && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full">
-                {approvedWfhToday && !isRemote && (
-                  <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 w-full sm:w-auto" aria-label="Check-in mode">
-                    <button type="button" onClick={() => setCheckInMode('office')} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold ${checkInMode === 'office' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>Office</button>
-                    <button type="button" onClick={() => setCheckInMode('wfh')} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-xs font-bold ${checkInMode === 'wfh' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'}`}>WFH</button>
-                  </div>
+        {/* D. ATTENDANCE ACTION BUTTONS */}
+        {!previousOpen && (
+          <div className="mt-5">
+            {!current ? (
+              <div className="space-y-2">
+                {(isHolidayToday || isSunday) && (
+                  <p className="text-[11px] font-medium text-amber-700">
+                    {isHolidayToday ? 'Today is a scheduled holiday.' : 'Today is Sunday (weekly off).'} Check in below if you are working today:
+                  </p>
                 )}
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void run(() => performCheckIn({ employeeId, mode: isRemote ? 'wfh' : checkInMode }), `Checked in · ${isRemote || checkInMode === 'wfh' ? 'WFH' : 'Office'}`)}
-                  className="px-5 py-3 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm disabled:opacity-60"
+                  onClick={() =>
+                    void run(
+                      () => performCheckIn({ employeeId, mode: effectiveMode }),
+                      `Checked in · ${effectiveMode === 'wfh' ? 'WFH' : 'Office'}`
+                    )
+                  }
+                  className="w-full sm:w-auto px-6 py-3.5 min-h-[48px] rounded-xl bg-[#0033FF] hover:bg-[#0600AB] text-white text-xs sm:text-sm font-bold shadow-sm transition-all active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  {busy ? 'Saving…' : `Check in · ${isRemote || checkInMode === 'wfh' ? 'WFH' : 'Office'}`}
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>{busy ? 'Saving…' : `CHECK IN · ${effectiveMode === 'wfh' ? 'WORK FROM HOME' : 'OFFICE'}`}</span>
                 </button>
-                {approvedWfhToday && !isRemote && <span className="text-[10px] text-sky-700 font-semibold">Approved WFH request active today</span>}
+              </div>
+            ) : state === 'working' ? (
+              <div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(() => performStartBreak(current), 'Break started.')}
+                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    <Coffee className="w-4 h-4" />
+                    <span>{busy ? 'Saving…' : 'START BREAK'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setCheckoutOpen(true)}
+                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#00033D] hover:bg-slate-900 text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>{busy ? 'Saving…' : 'CHECK OUT'}</span>
+                  </button>
+                </div>
+                {effectiveMode === 'wfh' && (
+                  <p className="text-[11px] text-slate-500 font-medium mt-2">
+                    Work From Home session active · Manual checkout required when your workday ends.
+                  </p>
+                )}
+              </div>
+            ) : state === 'on_break' ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(() => performResumeWork(current), 'Work resumed.')}
+                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>{busy ? 'Saving…' : 'RESUME WORK'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={true}
+                    title="Resume work before checking out"
+                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-slate-200 text-slate-400 text-xs sm:text-sm font-bold cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>CHECK OUT</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-amber-700 font-medium">Currently on break. Click Resume Work before checking out.</p>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Attendance completed for today.</span>
               </div>
             )}
-            {current && state === 'working' && <button type="button" disabled={busy} onClick={() => void run(() => performStartBreak(current), 'Break started.')} className="px-5 py-3 rounded-xl bg-amber-500 text-white text-xs font-bold">{busy ? 'Saving…' : 'Start break'}</button>}
-            {current && state === 'on_break' && <button type="button" disabled={busy} onClick={() => void run(() => performResumeWork(current), 'Work resumed.')} className="px-5 py-3 rounded-xl bg-emerald-600 text-white text-xs font-bold">{busy ? 'Saving…' : 'Resume work'}</button>}
-            {current && state === 'working' && <button type="button" disabled={busy} onClick={() => setCheckoutOpen(true)} className="px-5 py-3 rounded-xl bg-slate-950 text-white text-xs font-bold">{busy ? 'Saving…' : 'Check out'}</button>}
-            {state === 'on_break' && <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-3">Resume work before checking out.</span>}
-            {state === 'completed' && <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-3">Attendance completed for today.</span>}
           </div>
         )}
       </section>
 
-      {checkoutOpen && current && (
-        <Modal title="Confirm check-out" onClose={() => setCheckoutOpen(false)} closeDisabled={busy}>
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-slate-900">Are you sure you want to check out?</p>
-            <p className="text-xs text-slate-500">This completes today's attendance. You will not be able to check in again for today.</p>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setCheckoutOpen(false)} className="btn-secondary">Cancel</button>
-              <button type="button" disabled={busy} onClick={() => { setCheckoutOpen(false); void run(() => performCheckOut(current), 'Checked out successfully.'); }} className="btn-primary disabled:opacity-60">
-                {busy ? 'Saving…' : 'Check out'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
+      {/* MONTHLY CALENDAR (with clickable date cells) */}
       <section className="mt-5 bg-white rounded-2xl border border-slate-200 p-5">
-        <div className="flex items-center justify-between gap-4"><div><h3 className="font-bold text-sm">Monthly calendar</h3><p className="text-xs text-slate-500 mt-1">Sunday is weekly off. Public and company holidays are paid non-working days.</p></div><div className="flex items-center gap-1"><button type="button" onClick={() => setMonthOffset(v=>v-1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button><span className="px-3 text-xs font-bold min-w-28 text-center">{base.toLocaleDateString('en-IN',{month:'long',year:'numeric',timeZone:'Asia/Kolkata'})}</span><button type="button" onClick={() => setMonthOffset(v=>v+1)} className="p-2 rounded-lg hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button></div></div>
-        <div className="grid grid-cols-7 gap-1 mt-5">{['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d,i)=><div key={d} className={`text-[9px] font-bold text-center py-2 ${i===6?'text-purple-600':'text-slate-400'}`}>{d}</div>)}{Array.from({length:offset}).map((_,i)=><div key={`e${i}`} className="h-20 bg-slate-50 rounded-xl" />)}{Array.from({length:days},(_,i)=>{
-          const d=i+1; const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const cl=classifyDay(ds,holidays); const r=attendance.find((a:AttendanceRecord)=>a.date===ds);
-          const approvedLeave=(leaveRequests as LeaveRequest[]).find((l)=>l.status==='approved'&&l.startDate<=ds&&l.endDate>=ds);
-          const isFuture=ds>today(); const isBeforeJoin=Boolean(user.joinDate&&ds<user.joinDate);
-          const label=isBeforeJoin?'Not joined':r?.status==='late'?'Late':r?.mode==='wfh'?'WFH':r?.status==='present'?'Present':r?.status==='leave'?'Leave':cl.type==='holiday'?'Holiday':cl.type==='sunday_off'?'Off':approvedLeave?'Leave':isFuture?'Upcoming':ds===today()?'Not checked-in':'Not recorded';
-          const style=label==='Present'?'text-emerald-700 bg-emerald-50 border-emerald-200':label==='WFH'?'text-sky-700 bg-sky-50 border-sky-200':label==='Late'?'text-amber-700 bg-amber-50 border-amber-200':label==='Leave'?'text-purple-700 bg-purple-50 border-purple-200':label==='Holiday'?'text-indigo-700 bg-indigo-50 border-indigo-200':label==='Off'?'text-purple-600 bg-purple-50 border-purple-100':label==='Upcoming'?'text-slate-400 bg-white border-slate-100':'text-slate-500 bg-slate-50 border-slate-200';
-          return <div key={ds} title={cl.type==='holiday'?cl.label:approvedLeave?'Approved leave':label} className={`h-20 rounded-xl border p-2 flex flex-col justify-between ${ds===today()?'ring-2 ring-blue-500/20':''} `}><span className="text-xs font-bold">{d}</span><span className={`text-[9px] rounded-md px-1.5 py-1 border font-bold truncate ${style}`}>{label}</span></div>;
-        })}</div>
-      </section>
-      <section className="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h3 className="font-bold text-sm">Login sessions</h3>
-          <p className="text-xs text-slate-500 mt-1">Login/logout history is separate from attendance check-in/check-out.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-sm text-slate-900">Monthly calendar</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Click any date to inspect details. Sunday is weekly off.</p>
+          </div>
+          <div className="flex items-center gap-1 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setMonthOffset((v) => v - 1)}
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-3 text-xs font-bold min-w-28 text-center text-slate-800">
+              {base.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMonthOffset((v) => v + 1)}
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              aria-label="Next month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-        <div className="overflow-x-auto">
+
+        <div className="grid grid-cols-7 gap-1 mt-5">
+          {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, i) => (
+            <div key={d} className={`text-[9px] font-bold text-center py-2 ${i === 6 ? 'text-purple-600' : 'text-slate-400'}`}>
+              {d}
+            </div>
+          ))}
+          {Array.from({ length: offset }).map((_, i) => (
+            <div key={`e${i}`} className="h-16 sm:h-20 bg-slate-50/70 rounded-xl" />
+          ))}
+          {Array.from({ length: days }, (_, i) => {
+            const d = i + 1;
+            const ds = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const cl = classifyDay(ds, holidays);
+            const r = attendance.find((a: AttendanceRecord) => a.date === ds);
+            const approvedLeave = (leaveRequests as LeaveRequest[]).find(
+              (l) => l.status === 'approved' && l.startDate <= ds && l.endDate >= ds
+            );
+            const isFuture = ds > today();
+            const isBeforeJoin = Boolean(user.joinDate && ds < user.joinDate);
+            const label = isBeforeJoin
+              ? 'Not joined'
+              : r?.status === 'late'
+              ? 'Late'
+              : r?.mode === 'wfh'
+              ? 'WFH'
+              : r?.status === 'present'
+              ? 'Present'
+              : r?.status === 'leave'
+              ? 'Leave'
+              : cl.type === 'holiday'
+              ? 'Holiday'
+              : cl.type === 'sunday_off'
+              ? 'Off'
+              : approvedLeave
+              ? 'Leave'
+              : isFuture
+              ? 'Upcoming'
+              : ds === today()
+              ? 'Not checked-in'
+              : 'Not recorded';
+
+            const style =
+              label === 'Present'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                : label === 'WFH'
+                ? 'text-sky-700 bg-sky-50 border-sky-200'
+                : label === 'Late'
+                ? 'text-amber-700 bg-amber-50 border-amber-200'
+                : label === 'Leave'
+                ? 'text-purple-700 bg-purple-50 border-purple-200'
+                : label === 'Holiday'
+                ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                : label === 'Off'
+                ? 'text-purple-600 bg-purple-50 border-purple-100'
+                : label === 'Upcoming'
+                ? 'text-slate-400 bg-white border-slate-100'
+                : 'text-slate-500 bg-slate-50 border-slate-200';
+
+            return (
+              <button
+                key={ds}
+                type="button"
+                onClick={() => void openDateDetails(ds)}
+                title={cl.type === 'holiday' ? cl.label : approvedLeave ? 'Approved leave' : label}
+                className={`h-16 sm:h-20 rounded-xl border p-1.5 sm:p-2 flex flex-col justify-between text-left transition-all hover:border-[#0033FF] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0033FF]/30 active:scale-[0.98] ${
+                  ds === today() ? 'ring-2 ring-[#0033FF]/30 font-semibold' : ''
+                } ${selectedDate === ds ? 'border-[#0033FF] bg-blue-50/20' : ''}`}
+              >
+                <span className="text-[11px] sm:text-xs font-bold text-slate-800">{d}</span>
+                <span className={`text-[8px] sm:text-[9px] rounded-md px-1 sm:px-1.5 py-0.5 sm:py-1 border font-bold truncate max-w-full ${style}`}>
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* RECENT ATTENDANCE (Responsive desktop table + compact mobile card layout) */}
+      <section className="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-sm text-slate-900">Recent attendance</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Confirmed check-in, checkout, and working hours.</p>
+          </div>
+          {sortedAttendance.length > 7 && (
+            <button
+              type="button"
+              onClick={() => setShowAllRecent((v) => !v)}
+              className="text-xs font-bold text-[#0033FF] hover:underline"
+            >
+              {showAllRecent ? 'Show less' : `View all (${sortedAttendance.length})`}
+            </button>
+          )}
+        </div>
+
+        {/* Desktop View */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Login</Th><Th>Logout</Th><Th>Session</Th><Th>Status</Th></tr></thead>
+            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider">
+              <tr>
+                <Th>Date</Th>
+                <Th>Day</Th>
+                <Th>Work mode</Th>
+                <Th>Check-in</Th>
+                <Th>Check-out</Th>
+                <Th>Working</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
             <tbody className="divide-y divide-slate-100">
-              {loginSessions.slice(0,50).map((s:any)=><tr key={s.id}>
-                <Td mono>{new Date(s.loginTime).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</Td>
-                <Td mono>{s.logoutTime?new Date(s.logoutTime).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}):'Active'}</Td>
-                <Td mono>{s.duration==null?'—':duration(Number(s.duration))}</Td>
-                <Td><StatusBadge label={s.status}/></Td>
-              </tr>)}
-              {!loginSessions.length && <EmptyRow colSpan={4} text="No login sessions yet."/>}
+              {visibleRecent.map((r) => (
+                <tr
+                  key={r.id}
+                  onClick={() => void openDateDetails(r.date)}
+                  className="hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <Td strong>{dateLabel(r.date)}</Td>
+                  <Td>{dateLabel(r.date, { weekday: 'short' })}</Td>
+                  <Td>
+                    <span className="inline-flex items-center gap-1.5">
+                      {r.mode === 'wfh' ? <Home className="w-3.5 h-3.5 text-sky-600" /> : <Building2 className="w-3.5 h-3.5 text-slate-600" />}
+                      <span>{r.mode === 'wfh' ? 'WFH' : 'Office'}</span>
+                    </span>
+                  </Td>
+                  <Td mono>{r.checkIn ?? '—'}</Td>
+                  <Td mono>{r.checkOut ?? (r.attendanceState === 'completed' ? '—' : r.mode === 'wfh' ? 'Pending (Manual)' : 'Pending')}</Td>
+                  <Td mono>{r.workingHours || duration(r.workingSeconds)}</Td>
+                  <Td><StatusBadge label={r.status} /></Td>
+                </tr>
+              ))}
+              {!visibleRecent.length && <EmptyRow colSpan={7} text="No attendance records recorded yet." />}
             </tbody>
           </table>
         </div>
+
+        {/* Mobile View: Clean compact cards to eliminate horizontal table squeezing */}
+        <div className="block sm:hidden divide-y divide-slate-100">
+          {visibleRecent.map((r) => (
+            <div
+              key={r.id}
+              onClick={() => void openDateDetails(r.date)}
+              className="p-4 active:bg-slate-50 cursor-pointer space-y-2.5 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-900">{dateLabel(r.date)}</span>
+                  <span className="text-[11px] text-slate-400 ml-1.5 font-medium">{dateLabel(r.date, { weekday: 'short' })}</span>
+                </div>
+                <StatusBadge label={r.status} />
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                {r.mode === 'wfh' ? <Home className="w-3.5 h-3.5 text-sky-600" /> : <Building2 className="w-3.5 h-3.5 text-slate-600" />}
+                <span className="font-semibold">{r.mode === 'wfh' ? 'Work From Home' : 'Office'}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[11px]">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">In</span>
+                  <span className="font-mono font-bold text-slate-800">{r.checkIn ?? '—'}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Out</span>
+                  <span className="font-mono font-bold text-slate-800">{r.checkOut ?? (r.attendanceState === 'completed' ? '—' : r.mode === 'wfh' ? 'Pending (Manual)' : 'Pending')}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Work</span>
+                  <span className="font-mono font-bold text-slate-800">{r.workingHours || duration(r.workingSeconds)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {!visibleRecent.length && <div className="p-8 text-center text-xs text-slate-500">No attendance records recorded yet.</div>}
+        </div>
       </section>
 
+      {/* LOGIN SESSIONS */}
+      {showLoginSessions && (
+        <section className="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h3 className="font-bold text-sm text-slate-900 font-display">Login sessions</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Login/logout history is separate from attendance check-in/check-out.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <Th>Login</Th>
+                  <Th>Logout</Th>
+                  <Th>Session</Th>
+                  <Th>Status</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loginSessions.slice(0, 50).map((s: any) => (
+                  <tr key={s.id}>
+                    <Td mono>{new Date(s.loginTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</Td>
+                    <Td mono>{s.logoutTime ? new Date(s.logoutTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'Active'}</Td>
+                    <Td mono>{s.duration == null ? '—' : duration(Number(s.duration))}</Td>
+                    <Td><StatusBadge label={s.status} /></Td>
+                  </tr>
+                ))}
+                {!loginSessions.length && <EmptyRow colSpan={4} text="No login sessions yet." />}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* DATE DETAILS MODAL */}
+      {dateModalOpen && selectedDate && (
+        <Modal
+          title={`Attendance Details · ${dateLabel(selectedDate, { weekday: 'short' })}`}
+          onClose={() => setDateModalOpen(false)}
+        >
+          {dateLoading ? (
+            <div className="p-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#0033FF]" />
+              <span>Loading attendance records…</span>
+            </div>
+          ) : dateError ? (
+            <Notice type="error" text={dateError} />
+          ) : !dateRecord && !selectedApprovedLeave && selectedClass?.type !== 'holiday' ? (
+            <div className="p-6 text-center bg-slate-50 rounded-2xl border border-slate-200">
+              <CalendarDays className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-800">No attendance records for this date.</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {selectedClass?.type === 'sunday_off'
+                  ? 'Sunday is a weekly off.'
+                  : `No attendance activity was recorded for ${dateLabel(selectedDate)}.`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">{dateLabel(selectedDate, { weekday: 'long' })}</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {dateRecord ? (dateRecord.mode === 'wfh' ? 'Work From Home' : 'Office Attendance') : selectedClass?.label}
+                  </p>
+                </div>
+                <StatusBadge
+                  label={
+                    dateRecord
+                      ? dateRecord.status
+                      : selectedApprovedLeave
+                      ? 'leave'
+                      : selectedClass?.type === 'holiday'
+                      ? 'holiday'
+                      : 'absent'
+                  }
+                />
+              </div>
+
+              {dateRecord && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Check-in</span>
+                      <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 mt-0.5 block">
+                        {dateRecord.checkIn ?? '—'}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Check-out</span>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className="font-mono font-bold text-xs sm:text-sm text-slate-900">
+                          {dateRecord.checkOut ?? (dateRecord.attendanceState === 'completed' ? '—' : 'Pending')}
+                        </span>
+                        {dateRecord.notes?.toLowerCase().includes('auto') && (
+                          <span className="text-[8px] bg-slate-200 text-slate-700 px-1 py-0.5 rounded font-medium">Auto</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Break</span>
+                      <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 mt-0.5 block">
+                        {duration(dateRecord.breakSeconds ?? 0)}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block">Working</span>
+                      <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 mt-0.5 block">
+                        {dateRecord.workingHours || duration(dateRecord.workingSeconds)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {dateRecord.mode === 'wfh' && dateRecord.attendanceState !== 'completed' && (
+                    <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-800 flex items-center gap-2">
+                      <Home className="w-4 h-4 text-sky-600 shrink-0" />
+                      <span>Incomplete Work From Home session · Manual checkout required.</span>
+                    </div>
+                  )}
+
+                  {dateRecord.breaks && dateRecord.breaks.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-xs font-bold text-slate-700 mb-2">Break events ({dateRecord.breaks.length})</p>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        {dateRecord.breaks.map((b, idx) => (
+                          <div
+                            key={b.id || idx}
+                            className="text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between"
+                          >
+                            <span className="font-medium text-slate-600">Break {idx + 1}</span>
+                            <span className="font-mono text-slate-800">
+                              {b.breakStart ? formatKolkataTime(new Date(b.breakStart)) : '—'} → {b.breakEnd ? formatKolkataTime(new Date(b.breakEnd)) : 'In progress'}
+                              {b.durationSeconds != null ? ` · ${duration(b.durationSeconds)}` : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {dateRecord.notes && (
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+                      <span className="font-bold text-slate-700 mr-1.5">Note:</span>
+                      <span>{dateRecord.notes}</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {selectedApprovedLeave && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900">
+                  <span className="font-bold mr-1">Approved leave:</span>
+                  <span>{selectedApprovedLeave.leaveType} · {selectedApprovedLeave.reason}</span>
+                </div>
+              )}
+
+              {selectedClass?.type === 'holiday' && (
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900">
+                  <span className="font-bold mr-1">Company holiday:</span>
+                  <span>{selectedClass.label}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* CHECKOUT CONFIRMATION MODAL */}
       {checkoutOpen && current && (
         <Modal title="Confirm check-out" onClose={() => setCheckoutOpen(false)} closeDisabled={busy}>
           <div className="space-y-3">
             <p className="text-sm font-semibold text-slate-900">Are you sure you want to check out?</p>
-            <p className="text-xs text-slate-500">This completes today's attendance. You will not be able to check in again for today.</p>
+            <p className="text-xs text-slate-500">
+              This will complete your attendance session for today. Once checked out, further work hours cannot be recorded today without administrative review.
+            </p>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setCheckoutOpen(false)} className="btn-secondary">Cancel</button>
-              <button type="button" disabled={busy} onClick={() => { setCheckoutOpen(false); void run(() => performCheckOut(current), 'Checked out successfully.'); }} className="btn-primary disabled:opacity-60">
+              <button type="button" onClick={() => setCheckoutOpen(false)} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setCheckoutOpen(false);
+                  void run(() => performCheckOut(current), 'Checked out successfully.');
+                }}
+                className="btn-primary disabled:opacity-60"
+              >
                 {busy ? 'Saving…' : 'Check out'}
               </button>
             </div>
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+function AttendanceEmployee(props: any) {
+  return (
+    <PageShell
+      title="My Attendance"
+      subtitle="Check-in, breaks, checkout and your monthly attendance history."
+    >
+      <EmployeeAttendanceSection {...props} showLoginSessions={true} />
     </PageShell>
   );
 }
