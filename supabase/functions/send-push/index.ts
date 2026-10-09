@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
 
     // 3. Parse and sanitize payload
     const body = await req.json().catch(() => ({}))
-    const { recipientId, notificationId } = body
+    const { recipientId, notificationId, idempotencyKey } = body
     let { title, body: messageBody, actionUrl } = body
 
     if (!recipientId || typeof recipientId !== 'string' || !UUID_REGEX.test(recipientId)) {
@@ -149,16 +149,22 @@ Deno.serve(async (req) => {
       const isSelfTest = recipientId === callerId
 
       if (isSelfTest) {
-        title = String(title || 'IRA Presence Test').slice(0, 100)
+        title = String(title || 'IRA Presence Alert').slice(0, 100)
         messageBody = String(messageBody || 'Test alert from your device.').slice(0, 400)
         actionUrl = typeof actionUrl === 'string' && actionUrl.startsWith('/') ? actionUrl.slice(0, 200) : '/'
-      } else if (notificationId) {
+      } else if (notificationId || (idempotencyKey && typeof idempotencyKey === 'string')) {
         // Case B: Dispatch push backed by a verified database notification where caller is actor
-        const { data: dbNotif, error: notifError } = await supabase
+        let notifQuery = supabase
           .from('notifications')
           .select('id, recipient_id, actor_id, title, message, action_url, metadata')
-          .eq('id', notificationId)
-          .maybeSingle()
+
+        if (notificationId) {
+          notifQuery = notifQuery.eq('id', notificationId)
+        } else {
+          notifQuery = notifQuery.eq('idempotency_key', idempotencyKey)
+        }
+
+        const { data: dbNotif, error: notifError } = await notifQuery.maybeSingle()
 
         if (notifError || !dbNotif) {
           return new Response(JSON.stringify({ error: 'Referenced notification record not found' }), {
@@ -202,12 +208,18 @@ Deno.serve(async (req) => {
       messageBody = String(messageBody || 'You have a new update.').slice(0, 500)
       actionUrl = typeof actionUrl === 'string' && actionUrl.startsWith('/') ? actionUrl.slice(0, 200) : '/'
 
-      if (notificationId) {
-        const { data: dbNotif } = await supabase
+      if (notificationId || (idempotencyKey && typeof idempotencyKey === 'string')) {
+        let notifQuery = supabase
           .from('notifications')
           .select('id, recipient_id, actor_id, title, message, action_url, metadata')
-          .eq('id', notificationId)
-          .maybeSingle()
+
+        if (notificationId) {
+          notifQuery = notifQuery.eq('id', notificationId)
+        } else {
+          notifQuery = notifQuery.eq('idempotency_key', idempotencyKey)
+        }
+
+        const { data: dbNotif } = await notifQuery.maybeSingle()
         if (dbNotif) {
           referencedNotification = dbNotif
         }

@@ -36,20 +36,29 @@ export interface CreateNotificationInput {
 const localFallbackStore: NotificationRecord[] = [];
 
 /**
- * Resolves all Supabase user IDs that have the 'admin' role.
+ * Resolves all Supabase user IDs that are authorized approvers (Admins + direct manager).
  */
-export async function getAdminUserIds(): Promise<string[]> {
+export async function getApproverUserIds(): Promise<string[]> {
   if (!isSupabaseConfigured) return [];
+  try {
+    const { data, error } = await (supabase as any).rpc('get_my_approver_ids');
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data.map((r: any) => r.profile_id).filter(Boolean);
+    }
+  } catch {}
+
   try {
     const { data } = await (supabase as any)
       .from('profiles')
       .select('id')
       .eq('role', 'admin');
-    return (data ?? []).map((r: any) => r.id);
+    return (data ?? []).map((r: any) => r.id).filter(Boolean);
   } catch {
     return [];
   }
 }
+
+export const getAdminUserIds = getApproverUserIds;
 
 /**
  * Resolves the Supabase Auth profile_id for a given employee DB record ID.
@@ -204,12 +213,13 @@ export async function deleteNotification(notificationId: string): Promise<boolea
  * Dispatches an automated Web Push message to the recipient's registered device(s).
  * Calls the trusted backend / Edge Function or logs delivery intent.
  */
-async function dispatchPushToRecipient(
+export async function dispatchPushToRecipient(
   recipientId: string,
   title: string,
   body: string,
   actionUrl = '/',
-  notificationId?: string
+  notificationId?: string,
+  idempotencyKey?: string
 ) {
   if (!isSupabaseConfigured || !recipientId) return;
 
@@ -222,11 +232,11 @@ async function dispatchPushToRecipient(
         body,
         actionUrl,
         notificationId,
+        idempotencyKey,
       },
     });
 
     if (error) {
-      // Handled gracefully in local environments where Edge functions may not be deployed
       console.debug('[Notifications] Edge function push dispatch notice:', error.message);
     }
   } catch (e) {
@@ -329,7 +339,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
 
 /**
  * When an employee submits a leave request:
- * Notify the authorized approver(s) (Admins).
+ * Notify the authorized approver(s) (Admins and direct manager).
  */
 export async function notifyLeaveSubmitted(params: {
   employeeName: string;
@@ -342,21 +352,19 @@ export async function notifyLeaveSubmitted(params: {
   actorUserId: string;
   adminUserIds?: string[];
 }): Promise<void> {
-  const { employeeName, days, leaveType, startDate, endDate, leaveId, employeeDbId, actorUserId } = params;
-  const adminIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getAdminUserIds();
+  const { employeeName, days, leaveType, startDate, endDate, leaveId, actorUserId } = params;
+  const approverIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getApproverUserIds();
 
-  for (const adminId of adminIds) {
-    await createNotification({
-      recipientId: adminId,
-      type: 'leave',
-      title: 'New Leave Request',
-      message: `${employeeName} requested ${days} day(s) of ${leaveType} leave (${startDate} to ${endDate}).`,
-      actionUrl: '/admin-requests',
-      idempotencyKey: `leave_submit_${leaveId}_${adminId}`,
-      employeeId: employeeDbId,
-      actorId: actorUserId,
-      metadata: { leaveId, status: 'pending' },
-    });
+  for (const approverId of approverIds) {
+    const idempotencyKey = `leave_submit_${leaveId}_${approverId}`;
+    void dispatchPushToRecipient(
+      approverId,
+      'New Leave Request',
+      `${employeeName} requested ${days} day(s) of ${leaveType} leave (${startDate} to ${endDate}).`,
+      '/admin-requests',
+      undefined,
+      idempotencyKey
+    );
   }
 }
 
@@ -394,7 +402,7 @@ export async function notifyLeaveReviewed(params: {
 
 /**
  * When an employee requests WFH:
- * Notify the authorized approver(s) (Admins).
+ * Notify the authorized approver(s) (Admins and direct manager).
  */
 export async function notifyWfhSubmitted(params: {
   employeeName: string;
@@ -405,21 +413,19 @@ export async function notifyWfhSubmitted(params: {
   actorUserId: string;
   adminUserIds?: string[];
 }): Promise<void> {
-  const { employeeName, date, duration, wfhId, employeeDbId, actorUserId } = params;
-  const adminIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getAdminUserIds();
+  const { employeeName, date, duration, wfhId, actorUserId } = params;
+  const approverIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getApproverUserIds();
 
-  for (const adminId of adminIds) {
-    await createNotification({
-      recipientId: adminId,
-      type: 'wfh',
-      title: 'New WFH Request',
-      message: `${employeeName} requested WFH for ${date} (${duration.replace('_', ' ')}).`,
-      actionUrl: '/admin-requests',
-      idempotencyKey: `wfh_submit_${wfhId}_${adminId}`,
-      employeeId: employeeDbId,
-      actorId: actorUserId,
-      metadata: { wfhId, status: 'pending' },
-    });
+  for (const approverId of approverIds) {
+    const idempotencyKey = `wfh_submit_${wfhId}_${approverId}`;
+    void dispatchPushToRecipient(
+      approverId,
+      'New WFH Request',
+      `${employeeName} requested WFH for ${date} (${duration.replace('_', ' ')}).`,
+      '/admin-requests',
+      undefined,
+      idempotencyKey
+    );
   }
 }
 
@@ -504,19 +510,18 @@ export async function notifyTaskSubmitted(params: {
 
   const recipients = recipientId
     ? [recipientId]
-    : (params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getAdminUserIds());
+    : (params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getApproverUserIds());
 
   for (const rId of recipients) {
-    await createNotification({
-      recipientId: rId,
-      type: 'task',
-      title: 'Task Work Submitted',
-      message: `Completed work submitted for: "${taskTitle}".`,
-      actionUrl: recipientId ? '/emp-tasks' : '/admin-tasks',
-      idempotencyKey: `task_submit_${taskId}_${rId}`,
-      actorId: actorUserId,
-      metadata: { taskId },
-    });
+    const idempotencyKey = `task_completed_${taskId}_${rId}`;
+    void dispatchPushToRecipient(
+      rId,
+      'Task Work Submitted',
+      `Completed work submitted for: "${taskTitle}".`,
+      recipientId ? '/emp-tasks' : '/admin-tasks',
+      undefined,
+      idempotencyKey
+    );
   }
 }
 

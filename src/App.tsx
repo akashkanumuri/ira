@@ -29,7 +29,6 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
   getExistingSubscription,
-  sendLocalTestPushNotification,
   type PushPermissionStatus
 } from './lib/pushSubscription';
 import {
@@ -2876,7 +2875,6 @@ function ProfileEmployee({user,onRefresh}:any){
   const [pushState, setPushState] = useState<PushPermissionStatus>('default');
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
-  const [testBusy, setTestBusy] = useState(false);
   const [pushFeedback, setPushFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
@@ -2910,25 +2908,12 @@ function ProfileEmployee({user,onRefresh}:any){
     }
   }
 
-  async function handleTestAlert() {
-    setTestBusy(true);
-    try {
-      const ok = await sendLocalTestPushNotification('IRA Presence Test', 'Lock-screen mobile notification test successful.', '/');
-      if (ok) notify('Test alert delivered to your device.', 'success');
-      else notify('Could not trigger test alert.', 'error');
-    } catch {
-      notify('Test alert failed.', 'error');
-    } finally {
-      setTestBusy(false);
-    }
-  }
-
   useEffect(()=>{let mounted=true;(async()=>{if(!user.employeeDbId){setDocumentsLoading(false);return}const {data,error:docError}=await(supabase as any).from('employee_documents').select('*').eq('employee_id',user.employeeDbId).order('created_at',{ascending:false});if(!mounted)return;if(docError){setError(docError.message);setDocuments([])}else setDocuments((data??[]).map((r:any)=>({id:r.id,employeeId:r.employee_id,documentType:r.document_type,fileName:r.file_name,storagePath:r.storage_path,mimeType:r.mime_type,sizeBytes:r.size_bytes,createdAt:r.created_at})));setDocumentsLoading(false)})();return()=>{mounted=false}},[user.employeeDbId]);
   async function save(){setError('');setMessage('');if(!name.trim()){setError('Name is required.');return;}setSaving(true);try{const {error:err}=await(supabase as any).from('employees').update({name:name.trim(),phone:phone.trim()||null}).eq('id',user.employeeDbId);if(err)throw err;setMessage('Profile updated.');notify('Profile updated successfully.','success');await onRefresh()}catch(error){setError(error instanceof Error?error.message:'Unable to update profile.');notify(error instanceof Error?error.message:'Unable to update profile.','error')}finally{setSaving(false)}}
   async function savePhoto(file:File){try{if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Use a JPG, PNG or WebP image.');if(file.size>5*1024*1024)throw new Error('Profile images must be 5 MB or smaller.');const url=await uploadAvatar(user.employeeDbId,file);const {error:err}=await(supabase as any).from('employees').update({avatar_url:url}).eq('id',user.employeeDbId);if(err)throw err;await onRefresh();setMessage('Profile photo updated.');notify('Profile photo updated.','success')}catch(e){setError(e instanceof Error?e.message:'Unable to update photo.');notify(e instanceof Error?e.message:'Unable to update photo.','error')}}
   async function password(){setError('');setMessage('');if(!currentPassword){setError('Enter your current password.');return}if(!validateStrongPassword(newPassword)){setError('Password must be at least 12 characters and include uppercase, lowercase, number and symbol.');return}if(newPassword!==confirm){setError('New passwords do not match.');return}setSaving(true);try{const authEmail=user.role==='admin'?'ira.admin@ira-presence.local':(user.loginId?loginIdToAuthEmail(user.loginId):'');if(!authEmail)throw new Error('Unable to determine the account email.');const {error:reauthError}=await supabase.auth.signInWithPassword({email:authEmail,password:currentPassword});if(reauthError)throw new Error('Current password is incorrect.');if(await isPasswordLeaked(newPassword))throw new Error('Choose a different password. This password has appeared in known data breaches.');const {error:change}=await supabase.auth.updateUser({password:newPassword});if(change)throw change;setMessage('Password changed successfully.');notify('Password changed successfully.','success');setCurrentPassword('');setNewPassword('');setConfirm('')}catch(e){setError(e instanceof Error?e.message:'Unable to change password.')}finally{setSaving(false)}}
   async function viewDocument(doc:EmployeeDocument){try{const url=await getSignedDocumentUrl(doc.storagePath);window.open(url,'_blank','noopener,noreferrer')}catch(e){setError(e instanceof Error?e.message:'Unable to open document.')}}
-  return <PageShell title="Profile" subtitle="Personal details, HR documents and password."><div className="space-y-4">{(error||message)&&<div>{error&&<Notice type="error" text={error}/>} {message&&<Notice type="success" text={message}/>}</div>}<div className="grid lg:grid-cols-2 gap-4"><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-4"><div className="relative">{user.avatar?<img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover ring-1 ring-slate-200"/>:<div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl font-bold">{user.name.slice(0,1)}</div>}<label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer shadow-sm"><Upload className="w-4 h-4"/><input type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void savePhoto(f)}}/></label></div><div><p className="text-lg font-bold">{user.name}</p><p className="text-xs text-slate-500">{user.designation} · {user.department}</p></div></div><div className="grid gap-4 mt-6"><Field label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="input"/></Field><Field label="Phone"><input value={phone} onChange={e=>setPhone(e.target.value)} className="input"/></Field><InfoRow label="Login ID" value={user.loginId??'—'}/><InfoRow label="Employee ID" value={user.empId??'—'}/><InfoRow label="Work mode" value={user.workMode==='remote'?'Remote':'Office'}/><InfoRow label="Designation" value={user.designation??'—'}/><InfoRow label="Manager" value={user.manager??'—'}/><InfoRow label="Monthly salary" value={money(user.currentSalary)}/><button disabled={saving} onClick={()=>void save()} className="btn-primary w-fit">{saving?'Saving…':'Save personal details'}</button></div></section><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-2"><LockKeyhole className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">Change password</h3><p className="text-xs text-slate-500">Verify your current password before changing it.</p></div></div><div className="space-y-4 mt-5"><Field label="Current password"><input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} className="input"/></Field><Field label="New password"><input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="input" minLength={12}/></Field><Field label="Confirm new password"><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} className="input" minLength={12}/></Field><button disabled={saving} onClick={()=>void password()} className="btn-primary">Change password</button></div></section></div><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between gap-3 flex-wrap"><div><div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-600"/><h3 className="font-bold text-sm">Phone Push Notifications</h3></div><p className="text-xs text-slate-500 mt-1">Receive real-time alerts on your phone lock screen for assignments and approvals.</p></div><div className="flex items-center gap-2">{isSubscribed&&<button type="button" disabled={testBusy} onClick={()=>void handleTestAlert()} className="btn-secondary text-xs">{testBusy?'Testing…':'Send test alert'}</button>}<button type="button" disabled={pushBusy} onClick={()=>void handleTogglePush()} className={isSubscribed?'btn-secondary text-rose-600':'btn-primary text-xs'}>{pushBusy?'Updating…':isSubscribed?'Disable on this phone':'Enable phone notifications'}</button></div></div>{pushFeedback&&<div className={`mt-3 p-3 rounded-xl border text-xs ${pushFeedback.type==='success'?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-rose-50 border-rose-200 text-rose-800'}`}>{pushFeedback.message}</div>}{isIosNeedsHomeScreen()&&<div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1"><p className="font-bold">iPhone Setup Required</p><p className="text-[11px]">To enable push alerts on iOS, tap the Safari <b>Share</b> button, choose <b>Add to Home Screen</b>, and open the app from your home screen.</p></div>}</section><section className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">HR Documents</h3><p className="text-xs text-slate-500">Your secure employee records.</p></div></div>{documentsLoading?<div className="p-6 text-sm text-slate-500">Loading documents…</div>:documents.length?<div className="divide-y divide-slate-100">{documents.map(doc=><div key={doc.id} className="px-5 py-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm font-semibold truncate">{doc.fileName}</p><p className="text-[11px] text-slate-500 mt-1">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0,10))}</p></div><button className="btn-secondary shrink-0" onClick={()=>void viewDocument(doc)}><Eye className="w-3.5 h-3.5 mr-1"/>View</button></div>)}</div>:<div className="p-6 text-sm text-slate-500">No HR documents uploaded yet.</div>}</section></div></PageShell>;
+  return <PageShell title="Profile" subtitle="Personal details, HR documents and password."><div className="space-y-4">{(error||message)&&<div>{error&&<Notice type="error" text={error}/>} {message&&<Notice type="success" text={message}/>}</div>}<div className="grid lg:grid-cols-2 gap-4"><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-4"><div className="relative">{user.avatar?<img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover ring-1 ring-slate-200"/>:<div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl font-bold">{user.name.slice(0,1)}</div>}<label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer shadow-sm"><Upload className="w-4 h-4"/><input type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void savePhoto(f)}}/></label></div><div><p className="text-lg font-bold">{user.name}</p><p className="text-xs text-slate-500">{user.designation} · {user.department}</p></div></div><div className="grid gap-4 mt-6"><Field label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="input"/></Field><Field label="Phone"><input value={phone} onChange={e=>setPhone(e.target.value)} className="input"/></Field><InfoRow label="Login ID" value={user.loginId??'—'}/><InfoRow label="Employee ID" value={user.empId??'—'}/><InfoRow label="Work mode" value={user.workMode==='remote'?'Remote':'Office'}/><InfoRow label="Designation" value={user.designation??'—'}/><InfoRow label="Manager" value={user.manager??'—'}/><InfoRow label="Monthly salary" value={money(user.currentSalary)}/><button disabled={saving} onClick={()=>void save()} className="btn-primary w-fit">{saving?'Saving…':'Save personal details'}</button></div></section><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-2"><LockKeyhole className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">Change password</h3><p className="text-xs text-slate-500">Verify your current password before changing it.</p></div></div><div className="space-y-4 mt-5"><Field label="Current password"><input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} className="input"/></Field><Field label="New password"><input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="input" minLength={12}/></Field><Field label="Confirm new password"><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} className="input" minLength={12}/></Field><button disabled={saving} onClick={()=>void password()} className="btn-primary">Change password</button></div></section></div><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between gap-3 flex-wrap"><div><div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-600"/><h3 className="font-bold text-sm">Phone Push Notifications</h3></div><p className="text-xs text-slate-500 mt-1">Receive real-time alerts on your phone lock screen for assignments and approvals.</p></div><div className="flex items-center gap-2"><button type="button" disabled={pushBusy} onClick={()=>void handleTogglePush()} className={isSubscribed?'btn-secondary text-rose-600':'btn-primary text-xs'}>{pushBusy?'Updating…':isSubscribed?'Disable on this phone':'Enable phone notifications'}</button></div></div>{pushFeedback&&<div className={`mt-3 p-3 rounded-xl border text-xs ${pushFeedback.type==='success'?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-rose-50 border-rose-200 text-rose-800'}`}>{pushFeedback.message}</div>}{isIosNeedsHomeScreen()&&<div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1"><p className="font-bold">iPhone Setup Required</p><p className="text-[11px]">To enable push alerts on iOS, tap the Safari <b>Share</b> button, choose <b>Add to Home Screen</b>, and open the app from your home screen.</p></div>}</section><section className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600"/><div><h3 className="font-bold text-sm">HR Documents</h3><p className="text-xs text-slate-500">Your secure employee records.</p></div></div>{documentsLoading?<div className="p-6 text-sm text-slate-500">Loading documents…</div>:documents.length?<div className="divide-y divide-slate-100">{documents.map(doc=><div key={doc.id} className="px-5 py-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm font-semibold truncate">{doc.fileName}</p><p className="text-[11px] text-slate-500 mt-1">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0,10))}</p></div><button className="btn-secondary shrink-0" onClick={()=>void viewDocument(doc)}><Eye className="w-3.5 h-3.5 mr-1"/>View</button></div>)}</div>:<div className="p-6 text-sm text-slate-500">No HR documents uploaded yet.</div>}</section></div></PageShell>;
 }
 
 function ExportsAdmin({employees,payrollPeriods}:any){
@@ -2987,7 +2972,6 @@ function NotificationBell({
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [pushModalOpen, setPushModalOpen] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
-  const [testPushBusy, setTestPushBusy] = useState(false);
   const [pushFeedback, setPushFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -3022,7 +3006,7 @@ function NotificationBell({
     void refreshPushStatus();
   }, [loadNotifications, refreshPushStatus]);
 
-  // Realtime Supabase listener on notifications table filtered by recipient_id
+  // Realtime Supabase listener on notifications table
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) return;
 
@@ -3030,14 +3014,16 @@ function NotificationBell({
       .channel(`bell-notifications-${user.id}-${Date.now()}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` },
+        { event: '*', schema: 'public', table: 'notifications' },
         (payload: any) => {
           if (payload.eventType === 'INSERT') {
             const next = payload.new as NotificationRecord;
+            if (next.recipient_id !== user.id) return;
             setItems((prev) => [next, ...prev.filter((x) => x.id !== next.id)]);
             notify(next.message, 'info', 4200, next.type as any);
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new as NotificationRecord;
+            if (updated.recipient_id !== user.id) return;
             setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
           } else if (payload.eventType === 'DELETE') {
             const deleted = payload.old;
@@ -3053,34 +3039,6 @@ function NotificationBell({
       } catch {}
     };
   }, [user?.id]);
-
-  // Listen to custom toasts to display local ephemeral notifications
-  useEffect(() => {
-    const onToast = (event: Event) => {
-      const detail = (event as CustomEvent<any>).detail;
-      if (!detail?.message || !detail.notificationCategory || !user?.id) return;
-      const exists = items.some((i) => i.message === detail.message);
-      if (!exists) {
-        const localItem: NotificationRecord = {
-          id: detail.id ?? crypto.randomUUID(),
-          recipient_id: user.id,
-          employee_id: user.employeeDbId,
-          actor_id: null,
-          type: detail.notificationCategory,
-          title: (detail.notificationCategory as string).toUpperCase(),
-          message: String(detail.message),
-          action_url: null,
-          read_at: null,
-          idempotency_key: null,
-          metadata: {},
-          created_at: new Date().toISOString(),
-        };
-        setItems((current) => [localItem, ...current].slice(0, 40));
-      }
-    };
-    window.addEventListener('ira:toast', onToast as EventListener);
-    return () => window.removeEventListener('ira:toast', onToast as EventListener);
-  }, [items, user?.id, user?.employeeDbId]);
 
   useEffect(() => {
     if (previousTab.current !== activeTab) {
@@ -3186,26 +3144,6 @@ function NotificationBell({
     }
   }
 
-  async function handleSendTestPush() {
-    setTestPushBusy(true);
-    try {
-      const ok = await sendLocalTestPushNotification(
-        'IRA Presence Alert',
-        'Push notifications are working properly on your phone.',
-        '/'
-      );
-      if (ok) {
-        notify('Test alert sent to your device!', 'success');
-      } else {
-        notify('Notification permission required.', 'error');
-      }
-    } catch {
-      notify('Test alert failed.', 'error');
-    } finally {
-      setTestPushBusy(false);
-    }
-  }
-
   const getCategoryIcon = (type: NotificationType) => {
     switch (type) {
       case 'leave':
@@ -3305,25 +3243,17 @@ function NotificationBell({
               </p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {isSubscribed ? (
-                <button
-                  type="button"
-                  disabled={testPushBusy}
-                  onClick={() => void handleSendTestPush()}
-                  className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
-                  title="Send test push to this device"
-                >
-                  {testPushBusy ? 'Testing…' : 'Test alert'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setPushModalOpen(true)}
-                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-600 text-white hover:bg-blue-700 transition"
-                >
-                  Enable
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setPushModalOpen(true)}
+                className={
+                  isSubscribed
+                    ? 'px-2 py-1 rounded-lg text-[10px] font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition'
+                    : 'px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-600 text-white hover:bg-blue-700 transition'
+                }
+              >
+                {isSubscribed ? 'Manage' : 'Enable'}
+              </button>
             </div>
           </div>
 
@@ -3420,109 +3350,123 @@ function NotificationBell({
         document.body
       )}
 
-      {/* Enable Mobile Push Modal */}
+      {/* Phone Push Notifications Modal */}
       {pushModalOpen && (
         <Modal title="Phone Push Notifications" onClose={() => setPushModalOpen(false)}>
           <div className="space-y-4 text-xs text-slate-600">
-            <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-blue-600 text-white shrink-0 mt-0.5">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <p className="font-bold text-slate-900 text-sm">Real-time alerts on your phone</p>
-                <p className="text-slate-600 leading-relaxed">
-                  Enable device notifications to receive alerts on your lock screen even when IRA Presence is closed.
-                </p>
-              </div>
-            </div>
+            {isSubscribed ? (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-100 shrink-0" />
+                  <div>
+                    <p className="font-bold text-slate-900 text-xs">Notifications enabled</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      You will receive real-time alerts on this device.
+                    </p>
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <p className="font-semibold text-slate-800">What you will be notified about:</p>
-              <ul className="space-y-1.5 list-disc list-inside text-slate-600 pl-1">
-                <li><span className="font-medium text-slate-800">Work & Tasks:</span> New assignments, updates, and reviews</li>
-                <li><span className="font-medium text-slate-800">Leave & WFH:</span> Approval and rejection decisions</li>
-                <li><span className="font-medium text-slate-800">Company Announcements:</span> Public and company holidays</li>
-              </ul>
-            </div>
-
-            {isIosNeedsHomeScreen() && (
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
-                <p className="font-bold text-xs">iPhone / iPad Setup Required</p>
-                <p className="text-[11px] leading-relaxed">
-                  Safari on iOS requires adding this website to your Home Screen before Web Push can be enabled:
-                </p>
-                <ol className="list-decimal list-inside text-[11px] space-y-0.5 pt-1 font-medium">
-                  <li>Tap the Safari <b>Share</b> button (square with arrow up)</li>
-                  <li>Scroll down and tap <b>Add to Home Screen</b></li>
-                  <li>Open IRA Attendance from your Home Screen to enable alerts</li>
-                </ol>
-              </div>
-            )}
-
-            {pushState === 'denied' && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px]">
-                <p className="font-bold">Notifications Blocked</p>
-                <p className="mt-0.5">
-                  Notification permission is blocked in your browser settings. Please click the site settings / lock icon in the browser address bar and set Notifications to Allow.
-                </p>
-              </div>
-            )}
-
-            {pushFeedback && (
-              <div
-                className={`p-3 rounded-xl border text-[11px] ${
-                  pushFeedback.type === 'success'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                    : 'bg-rose-50 border-rose-200 text-rose-800'
-                }`}
-              >
-                {pushFeedback.message}
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-3 border-t border-slate-100">
-              {isSubscribed ? (
-                <button
-                  type="button"
-                  disabled={pushBusy}
-                  onClick={() => void handleDisablePush()}
-                  className="text-xs text-rose-600 hover:text-rose-700 font-semibold py-1.5"
-                >
-                  Turn off on this device
-                </button>
-              ) : (
-                <span className="text-[11px] text-slate-400">Device-specific opt-in</span>
-              )}
-
-              <div className="flex gap-2 w-full sm:w-auto justify-end">
-                <button
-                  type="button"
-                  onClick={() => setPushModalOpen(false)}
-                  className="btn-secondary"
-                >
-                  Close
-                </button>
-                {isSubscribed ? (
-                  <button
-                    type="button"
-                    disabled={testPushBusy}
-                    onClick={() => void handleSendTestPush()}
-                    className="btn-primary"
+                {pushFeedback && (
+                  <div
+                    className={`p-3 rounded-xl border text-[11px] ${
+                      pushFeedback.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
                   >
-                    {testPushBusy ? 'Sending…' : 'Send Test Notification'}
-                  </button>
-                ) : (
+                    {pushFeedback.message}
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center gap-2 pt-3 border-t border-slate-100">
                   <button
                     type="button"
-                    disabled={pushBusy || pushState === 'denied'}
+                    disabled={pushBusy}
+                    onClick={() => void handleDisablePush()}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-semibold py-1.5 transition"
+                  >
+                    {pushBusy ? 'Disabling…' : 'Turn off on this device'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPushModalOpen(false)}
+                    className="btn-secondary"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-slate-600 text-xs leading-relaxed">
+                  Enable device notifications to receive alerts for assignments, approvals, and company updates.
+                </p>
+
+                {!isPushSupported() && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px]">
+                    <p className="font-bold">Notifications Not Supported</p>
+                    <p className="mt-0.5">
+                      Your current browser or device environment does not support Web Push notifications.
+                    </p>
+                  </div>
+                )}
+
+                {isIosNeedsHomeScreen() && (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
+                    <p className="font-bold text-xs">iPhone / iPad Setup Required</p>
+                    <p className="text-[11px] leading-relaxed">
+                      Safari on iOS requires adding this website to your Home Screen before Web Push can be enabled:
+                    </p>
+                    <ol className="list-decimal list-inside text-[11px] space-y-0.5 pt-1 font-medium">
+                      <li>Tap the Safari <b>Share</b> button (square with arrow up)</li>
+                      <li>Scroll down and tap <b>Add to Home Screen</b></li>
+                      <li>Open IRA Attendance from your Home Screen to enable alerts</li>
+                    </ol>
+                  </div>
+                )}
+
+                {pushState === 'denied' && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px]">
+                    <p className="font-bold">Notifications Blocked</p>
+                    <p className="mt-0.5">
+                      Notification permission is blocked in your browser settings. Please click the site settings / lock icon in the browser address bar and set Notifications to Allow.
+                    </p>
+                  </div>
+                )}
+
+                {pushFeedback && (
+                  <div
+                    className={`p-3 rounded-xl border text-[11px] ${
+                      pushFeedback.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    {pushFeedback.message}
+                  </div>
+                )}
+
+                <div className="flex justify-end items-center gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setPushModalOpen(false)}
+                    className="btn-secondary"
+                  >
+                    Close
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={pushBusy || pushState === 'denied' || !isPushSupported()}
                     onClick={() => void handleEnablePush()}
                     className="btn-primary"
                   >
-                    {pushBusy ? 'Enabling…' : 'Enable Notifications'}
+                    {pushBusy ? 'Enabling…' : 'Enable phone notifications'}
                   </button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </Modal>
       )}
