@@ -29,6 +29,8 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
   getExistingSubscription,
+  registerServiceWorker,
+  syncExistingPushSubscription,
   type PushPermissionStatus
 } from './lib/pushSubscription';
 import {
@@ -84,6 +86,17 @@ const authEmployee = (u: AuthUser): Employee => ({
 export default function App() {
   const { user, loading, signOut } = useAuth();
   const adminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+
+  useEffect(() => {
+    void registerServiceWorker();
+  }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      void syncExistingPushSubscription(user.id);
+    }
+  }, [user?.id]);
+
   if (loading) return <LoadingScreen />;
   if (!user) return adminPath ? <AdminLoginScreen /> : <EmployeeLoginScreen />;
   if (!isSupabaseConfigured) return <LoadingScreen label="Supabase is not configured." />;
@@ -106,7 +119,19 @@ function LiveClockDisplay() {
 }
 
 function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }) {
-  const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard');
+  const getInitialTab = () => {
+    const p = typeof window !== 'undefined' ? window.location.pathname.replace(/^\//, '') : '';
+    if (user.role === 'admin') {
+      const validAdminTabs = ['admin-dashboard', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-reports', 'admin-settings'];
+      if (validAdminTabs.includes(p)) return p;
+      return 'admin-dashboard';
+    } else {
+      const validEmpTabs = ['emp-dashboard', 'emp-attendance', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-corrections', 'emp-holidays', 'emp-payroll', 'emp-profile'];
+      if (validEmpTabs.includes(p)) return p;
+      return 'emp-dashboard';
+    }
+  };
+  const [activeTab, setActiveTab] = useState(getInitialTab);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -515,7 +540,19 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     }
     setActiveTab(tab);
     setMobileOpen(false);
+    if (typeof window !== 'undefined' && window.location.pathname !== `/${tab}`) {
+      window.history.pushState(null, '', `/${tab}`);
+    }
   };
+
+  useEffect(() => {
+    const onPopState = () => {
+      const p = window.location.pathname.replace(/^\//, '');
+      if (p) setActiveTab(p);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
   const selectedComponent = user.role === 'admin'
     ? <AdminContent
         user={user} activeTab={activeTab} employees={employees} departments={departments} designations={designations}
@@ -2221,16 +2258,18 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
     if (due < start) { setMessage('Due date cannot be before the start date.'); return; }
     assignRequestRef.current = crypto.randomUUID(); setAssignBusy(true);
     try {
-      const { error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: clean(fd.get('description')), p_assigned_to: to, p_start_date: start, p_due_date: due, p_priority: String(fd.get('priority') ?? 'medium'), p_client_request_id: assignRequestRef.current });
+      const { data: createdTaskId, error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: clean(fd.get('description')), p_assigned_to: to, p_start_date: start, p_due_date: due, p_priority: String(fd.get('priority') ?? 'medium'), p_client_request_id: assignRequestRef.current });
       if (error) throw error;
       notify('Task assigned successfully.', 'success');
+
+      const finalTaskId = createdTaskId || assignRequestRef.current;
 
       // Dispatch recipient notification to assigned employee
       void notifyTaskAssigned({
         assigneeEmployeeId: to,
         taskTitle: title,
         dueDate: due,
-        taskId: assignRequestRef.current ?? crypto.randomUUID(),
+        taskId: finalTaskId,
         actorUserId: user.id,
       });
 
@@ -2285,15 +2324,17 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
     if (assignRequestRef.current?.signature !== signature) assignRequestRef.current = { signature, id: crypto.randomUUID() };
     setAssignBusy(true);
     try {
-      const { error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: description, p_assigned_to: toId, p_start_date: start, p_due_date: due, p_priority: priorityValue, p_client_request_id: assignRequestRef.current.id });
+      const { data: createdTaskId, error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: description, p_assigned_to: toId, p_start_date: start, p_due_date: due, p_priority: priorityValue, p_client_request_id: assignRequestRef.current.id });
       if (error) throw error;
+
+      const finalTaskId = createdTaskId || assignRequestRef.current?.id;
 
       // Dispatch recipient notification to assigned employee
       void notifyTaskAssigned({
         assigneeEmployeeId: toId,
         taskTitle: title,
         dueDate: due,
-        taskId: assignRequestRef.current?.id ?? crypto.randomUUID(),
+        taskId: finalTaskId,
         actorUserId: user?.id ?? '',
       });
 

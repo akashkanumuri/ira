@@ -327,8 +327,8 @@ export async function createNotification(input: CreateNotificationInput): Promis
     }
   }
 
-  // Trigger push notification with verified notification reference
-  void dispatchPushToRecipient(input.recipientId, input.title, input.message, input.actionUrl ?? '/', record.id);
+  // Trigger push notification with verified notification reference and idempotency key
+  void dispatchPushToRecipient(input.recipientId, input.title, input.message, input.actionUrl ?? '/', record.id, input.idempotencyKey);
 
   return record;
 }
@@ -352,7 +352,7 @@ export async function notifyLeaveSubmitted(params: {
   actorUserId: string;
   adminUserIds?: string[];
 }): Promise<void> {
-  const { employeeName, days, leaveType, startDate, endDate, leaveId, actorUserId } = params;
+  const { employeeName, days, leaveType, startDate, endDate, leaveId } = params;
   const approverIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getApproverUserIds();
 
   for (const approverId of approverIds) {
@@ -386,18 +386,18 @@ export async function notifyLeaveReviewed(params: {
   if (!profileId) return;
 
   const statusLabel = status === 'approved' ? 'Approved' : 'Rejected';
+  const idempotencyKey = `leave_review_${leaveId}_${status}`;
 
-  await createNotification({
-    recipientId: profileId,
-    type: 'leave',
-    title: `Leave Request ${statusLabel}`,
-    message: `Your leave request for ${startDate} to ${endDate} has been ${status}.`,
-    actionUrl: '/emp-leave',
-    idempotencyKey: `leave_review_${leaveId}_${status}`,
-    employeeId: employeeDbId,
-    actorId: actorUserId,
-    metadata: { leaveId, status },
-  });
+  // Database trigger trg_leave_request_notify creates in-app notification row.
+  // Dispatch Web Push to employee backed by the verified trigger notification.
+  void dispatchPushToRecipient(
+    profileId,
+    `Leave Request ${statusLabel}`,
+    `Your leave request for ${startDate} to ${endDate} has been ${status}.`,
+    '/emp-leave',
+    undefined,
+    idempotencyKey
+  );
 }
 
 /**
@@ -413,7 +413,7 @@ export async function notifyWfhSubmitted(params: {
   actorUserId: string;
   adminUserIds?: string[];
 }): Promise<void> {
-  const { employeeName, date, duration, wfhId, actorUserId } = params;
+  const { employeeName, date, duration, wfhId } = params;
   const approverIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getApproverUserIds();
 
   for (const approverId of approverIds) {
@@ -446,18 +446,18 @@ export async function notifyWfhReviewed(params: {
   if (!profileId) return;
 
   const statusLabel = status === 'approved' ? 'Approved' : 'Rejected';
+  const idempotencyKey = `wfh_review_${wfhId}_${status}`;
 
-  await createNotification({
-    recipientId: profileId,
-    type: 'wfh',
-    title: `WFH Request ${statusLabel}`,
-    message: `Your WFH request for ${date} has been ${status}.`,
-    actionUrl: '/emp-wfh',
-    idempotencyKey: `wfh_review_${wfhId}_${status}`,
-    employeeId: employeeDbId,
-    actorId: actorUserId,
-    metadata: { wfhId, status },
-  });
+  // Database trigger trg_wfh_request_notify creates in-app notification row.
+  // Dispatch Web Push to employee backed by the verified trigger notification.
+  void dispatchPushToRecipient(
+    profileId,
+    `WFH Request ${statusLabel}`,
+    `Your WFH request for ${date} has been ${status}.`,
+    '/emp-wfh',
+    undefined,
+    idempotencyKey
+  );
 }
 
 /**
@@ -476,17 +476,18 @@ export async function notifyTaskAssigned(params: {
   const profileId = params.assigneeProfileId || await getEmployeeProfileId(assigneeEmployeeId);
   if (!profileId) return;
 
-  await createNotification({
-    recipientId: profileId,
-    type: 'task',
-    title: 'New Task Assigned',
-    message: `You have been assigned: "${taskTitle}" (Due: ${dueDate}).`,
-    actionUrl: '/emp-tasks',
-    idempotencyKey: `task_assign_${taskId}_${profileId}`,
-    employeeId: assigneeEmployeeId,
-    actorId: actorUserId,
-    metadata: { taskId },
-  });
+  const idempotencyKey = `task_assign_${taskId}_${profileId}`;
+
+  // Database trigger trg_task_notify creates in-app notification row.
+  // Dispatch Web Push to employee backed by the verified trigger notification.
+  void dispatchPushToRecipient(
+    profileId,
+    'New Task Assigned',
+    `You have been assigned: "${taskTitle}" (Due: ${dueDate}).`,
+    '/emp-tasks',
+    undefined,
+    idempotencyKey
+  );
 }
 
 /**
@@ -501,24 +502,28 @@ export async function notifyTaskSubmitted(params: {
   actorUserId: string;
   adminUserIds?: string[];
 }): Promise<void> {
-  const { taskTitle, taskId, actorUserId } = params;
+  const { taskTitle, taskId } = params;
 
-  let recipientId = params.assignerProfileId;
-  if (!recipientId && params.assignerEmployeeId) {
-    recipientId = await getEmployeeProfileId(params.assignerEmployeeId);
+  let assignerProfileId = params.assignerProfileId;
+  if (!assignerProfileId && params.assignerEmployeeId) {
+    assignerProfileId = await getEmployeeProfileId(params.assignerEmployeeId);
   }
 
-  const recipients = recipientId
-    ? [recipientId]
-    : (params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getApproverUserIds());
+  const adminIds = params.adminUserIds && params.adminUserIds.length ? params.adminUserIds : await getApproverUserIds();
+  const allRecipients = Array.from(new Set([
+    ...(assignerProfileId ? [assignerProfileId] : []),
+    ...adminIds,
+  ]));
 
-  for (const rId of recipients) {
+  for (const rId of allRecipients) {
+    const isAssigner = rId === assignerProfileId;
+    const actionUrl = isAssigner ? '/emp-tasks' : '/admin-tasks';
     const idempotencyKey = `task_completed_${taskId}_${rId}`;
     void dispatchPushToRecipient(
       rId,
       'Task Work Submitted',
       `Completed work submitted for: "${taskTitle}".`,
-      recipientId ? '/emp-tasks' : '/admin-tasks',
+      actionUrl,
       undefined,
       idempotencyKey
     );
@@ -536,21 +541,20 @@ export async function notifyHolidayAdded(params: {
   actorUserId: string;
   activeEmployeeProfileIds?: string[];
 }): Promise<void> {
-  const { holidayName, date, holidayId, actorUserId } = params;
+  const { holidayName, date, holidayId } = params;
   const profileIds = params.activeEmployeeProfileIds && params.activeEmployeeProfileIds.length
     ? params.activeEmployeeProfileIds
     : await getActiveEmployeeProfileIds();
 
   for (const profileId of profileIds) {
-    await createNotification({
-      recipientId: profileId,
-      type: 'holiday',
-      title: 'Company Holiday Announced',
-      message: `${holidayName} scheduled on ${date}.`,
-      actionUrl: '/emp-holidays',
-      idempotencyKey: `holiday_announce_${holidayId}_${profileId}`,
-      actorId: actorUserId,
-      metadata: { holidayId, date },
-    });
+    const idempotencyKey = `holiday_announce_${holidayId}_${profileId}`;
+    void dispatchPushToRecipient(
+      profileId,
+      'Company Holiday Announced',
+      `${holidayName} scheduled on ${date}.`,
+      '/emp-holidays',
+      undefined,
+      idempotencyKey
+    );
   }
 }

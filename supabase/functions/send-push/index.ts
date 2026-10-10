@@ -154,19 +154,29 @@ Deno.serve(async (req) => {
         actionUrl = typeof actionUrl === 'string' && actionUrl.startsWith('/') ? actionUrl.slice(0, 200) : '/'
       } else if (notificationId || (idempotencyKey && typeof idempotencyKey === 'string')) {
         // Case B: Dispatch push backed by a verified database notification where caller is actor
-        let notifQuery = supabase
-          .from('notifications')
-          .select('id, recipient_id, actor_id, title, message, action_url, metadata')
+        let dbNotif = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          let notifQuery = supabase
+            .from('notifications')
+            .select('id, recipient_id, actor_id, title, message, action_url, metadata')
 
-        if (notificationId) {
-          notifQuery = notifQuery.eq('id', notificationId)
-        } else {
-          notifQuery = notifQuery.eq('idempotency_key', idempotencyKey)
+          if (notificationId) {
+            notifQuery = notifQuery.eq('id', notificationId)
+          } else {
+            notifQuery = notifQuery.eq('idempotency_key', idempotencyKey)
+          }
+
+          const { data } = await notifQuery.maybeSingle()
+          if (data) {
+            dbNotif = data
+            break
+          }
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 150))
+          }
         }
 
-        const { data: dbNotif, error: notifError } = await notifQuery.maybeSingle()
-
-        if (notifError || !dbNotif) {
+        if (!dbNotif) {
           return new Response(JSON.stringify({ error: 'Referenced notification record not found' }), {
             status: 404,
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
@@ -209,19 +219,25 @@ Deno.serve(async (req) => {
       actionUrl = typeof actionUrl === 'string' && actionUrl.startsWith('/') ? actionUrl.slice(0, 200) : '/'
 
       if (notificationId || (idempotencyKey && typeof idempotencyKey === 'string')) {
-        let notifQuery = supabase
-          .from('notifications')
-          .select('id, recipient_id, actor_id, title, message, action_url, metadata')
+        for (let attempt = 0; attempt < 3; attempt++) {
+          let notifQuery = supabase
+            .from('notifications')
+            .select('id, recipient_id, actor_id, title, message, action_url, metadata')
 
-        if (notificationId) {
-          notifQuery = notifQuery.eq('id', notificationId)
-        } else {
-          notifQuery = notifQuery.eq('idempotency_key', idempotencyKey)
-        }
+          if (notificationId) {
+            notifQuery = notifQuery.eq('id', notificationId)
+          } else {
+            notifQuery = notifQuery.eq('idempotency_key', idempotencyKey)
+          }
 
-        const { data: dbNotif } = await notifQuery.maybeSingle()
-        if (dbNotif) {
-          referencedNotification = dbNotif
+          const { data } = await notifQuery.maybeSingle()
+          if (data) {
+            referencedNotification = data
+            break
+          }
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 150))
+          }
         }
       }
     }

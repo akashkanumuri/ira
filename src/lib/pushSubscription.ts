@@ -63,11 +63,43 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 export async function getExistingSubscription(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    if (!reg) return null;
     return await reg.pushManager.getSubscription();
   } catch (err) {
     console.warn('[WebPush] Error checking existing subscription:', err);
     return null;
+  }
+}
+
+export async function syncExistingPushSubscription(userId: string): Promise<boolean> {
+  if (!isPushSupported() || !userId) return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    if (!reg) return false;
+    const subscription = await reg.pushManager.getSubscription();
+    if (!subscription) return false;
+
+    const subJson = subscription.toJSON();
+    const p256dh = subJson.keys?.p256dh;
+    const auth = subJson.keys?.auth;
+    if (!subscription.endpoint || !p256dh || !auth) return false;
+
+    const { error } = await (supabase as any).rpc('save_push_subscription', {
+      p_endpoint: subscription.endpoint,
+      p_p256dh: p256dh,
+      p_auth: auth,
+      p_user_agent: navigator.userAgent.slice(0, 500),
+    });
+
+    if (error) {
+      console.warn('[WebPush] Background sync error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.debug('[WebPush] Background sync exception:', err);
+    return false;
   }
 }
 
@@ -117,7 +149,7 @@ export async function subscribeToPush(
       });
     }
 
-    // 4. Extract keys and persist to Supabase
+    // 4. Extract keys and persist to Supabase using secure RPC
     const subJson = subscription.toJSON();
     const p256dh = subJson.keys?.p256dh;
     const auth = subJson.keys?.auth;
@@ -126,23 +158,16 @@ export async function subscribeToPush(
       return { success: false, error: 'Failed to extract push encryption credentials.' };
     }
 
-    const { error: dbError } = await (supabase as any)
-      .from('push_subscriptions')
-      .upsert(
-        {
-          user_id: userId,
-          endpoint: subscription.endpoint,
-          p256dh,
-          auth,
-          user_agent: navigator.userAgent.slice(0, 500),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'endpoint' }
-      );
+    const { error: dbError } = await (supabase as any).rpc('save_push_subscription', {
+      p_endpoint: subscription.endpoint,
+      p_p256dh: p256dh,
+      p_auth: auth,
+      p_user_agent: navigator.userAgent.slice(0, 500),
+    });
 
     if (dbError) {
-      console.warn('[WebPush] Database save warning (table may require migration):', dbError.message);
-      // Even if local DB insert has a warning, the browser subscription itself succeeded
+      console.error('[WebPush] Database save failed:', dbError.message);
+      return { success: false, error: `Failed to record device subscription: ${dbError.message}` };
     }
 
     return { success: true, subscription };
@@ -159,13 +184,13 @@ export async function unsubscribeFromPush(
   try {
     const subscription = await getExistingSubscription();
     if (subscription) {
+      const endpoint = subscription.endpoint;
       await subscription.unsubscribe();
       try {
         await (supabase as any)
           .from('push_subscriptions')
           .delete()
-          .eq('endpoint', subscription.endpoint)
-          .eq('user_id', userId);
+          .eq('endpoint', endpoint);
       } catch (dbErr) {
         console.warn('[WebPush] Error removing subscription from DB:', dbErr);
       }
