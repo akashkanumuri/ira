@@ -286,7 +286,10 @@ Deno.serve(async (req) => {
       }
 
       try {
-        await webpush.sendNotification(pushConfig, payload, { TTL: 86400 })
+        await webpush.sendNotification(pushConfig, payload, {
+          TTL: 86400,
+          urgency: 'high',
+        })
         delivered++
       } catch (err: any) {
         console.warn(`[WebPush] Delivery failure for subscription ${sub.id}:`, err?.statusCode || err?.message)

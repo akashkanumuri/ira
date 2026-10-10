@@ -37,12 +37,26 @@ self.addEventListener('push', (event) => {
       id: payload.id,
       timestamp: Date.now(),
     },
-    vibrate: [120, 60, 120],
-    actions: payload.actions || [],
   };
 
+  // Safe checks for vibration and actions to prevent iOS WebKit errors
+  if ('vibrate' in navigator) {
+    options.vibrate = [120, 60, 120];
+  }
+  if (Array.isArray(payload.actions) && payload.actions.length > 0) {
+    options.actions = payload.actions;
+  }
+
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.showNotification(title, options).catch((err) => {
+      // Fallback for browsers (such as iOS WebKit) that reject extended options
+      console.warn('[SW] showNotification failed with full options, retrying basic:', err);
+      return self.registration.showNotification(title, {
+        body,
+        icon: '/icon-192.png',
+        data: { url },
+      });
+    })
   );
 });
 

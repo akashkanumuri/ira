@@ -48,11 +48,25 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const b64 = typeof window !== 'undefined' && window.btoa ? window.btoa(binary) : (typeof globalThis !== 'undefined' && (globalThis as any).btoa ? (globalThis as any).btoa(binary) : Buffer.from(binary, 'binary').toString('base64'));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!isPushSupported()) return null;
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    await navigator.serviceWorker.ready;
+    // Guard against ready promise hanging indefinitely on backgrounded tabs
+    await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((resolve) => setTimeout(resolve, 2500)),
+    ]);
     return registration;
   } catch (err) {
     console.error('[WebPush] Service Worker registration failed:', err);
@@ -63,7 +77,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 export async function getExistingSubscription(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null;
   try {
-    const reg = await navigator.serviceWorker.getRegistration('/');
+    const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.getRegistration('/'));
     if (!reg) return null;
     return await reg.pushManager.getSubscription();
   } catch (err) {
@@ -75,14 +89,39 @@ export async function getExistingSubscription(): Promise<PushSubscription | null
 export async function syncExistingPushSubscription(userId: string): Promise<boolean> {
   if (!isPushSupported() || !userId) return false;
   try {
-    const reg = await navigator.serviceWorker.getRegistration('/');
+    const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.getRegistration('/'));
     if (!reg) return false;
-    const subscription = await reg.pushManager.getSubscription();
+    let subscription = await reg.pushManager.getSubscription();
+
+    // If notification permission was already granted by user, but PushManager subscription is missing or expired, renew it
+    if (!subscription && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try {
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey as any,
+        });
+      } catch (renewErr) {
+        console.debug('[WebPush] Auto-renew subscription exception:', renewErr);
+      }
+    }
+
     if (!subscription) return false;
 
     const subJson = subscription.toJSON();
-    const p256dh = subJson.keys?.p256dh;
-    const auth = subJson.keys?.auth;
+    let p256dh = subJson.keys?.p256dh;
+    let auth = subJson.keys?.auth;
+
+    // Fallback: extract directly from ArrayBuffer if toJSON omits keys (WebKit / iOS Safari)
+    if (!p256dh && subscription.getKey) {
+      const p256dhRaw = subscription.getKey('p256dh');
+      if (p256dhRaw) p256dh = arrayBufferToBase64(p256dhRaw);
+    }
+    if (!auth && subscription.getKey) {
+      const authRaw = subscription.getKey('auth');
+      if (authRaw) auth = arrayBufferToBase64(authRaw);
+    }
+
     if (!subscription.endpoint || !p256dh || !auth) return false;
 
     const { error } = await (supabase as any).rpc('save_push_subscription', {
@@ -106,14 +145,16 @@ export async function syncExistingPushSubscription(userId: string): Promise<bool
 export async function subscribeToPush(
   userId: string
 ): Promise<{ success: boolean; subscription?: PushSubscription; error?: string }> {
+  // CRITICAL: On iOS, Web Push is strictly blocked in Safari tabs and only allowed in standalone PWA mode.
+  if (isIosNeedsHomeScreen()) {
+    return {
+      success: false,
+      error: 'iPhone requires adding this app to your Home Screen first. Tap the Safari Share button (square with arrow up), tap "Add to Home Screen", then open the app from your Home Screen to enable notifications.',
+    };
+  }
+
   if (!isPushSupported()) {
-    if (isIosNeedsHomeScreen()) {
-      return {
-        success: false,
-        error: 'iPhone requires adding this application to the Home Screen to enable notifications. Tap Share > Add to Home Screen.',
-      };
-    }
-    return { success: false, error: 'Web Push notifications are not supported in this browser.' };
+    return { success: false, error: 'Web Push notifications are not supported in this browser or device.' };
   }
 
   if (!userId) {
@@ -121,13 +162,23 @@ export async function subscribeToPush(
   }
 
   try {
-    // 1. Request permission explicitly via user gesture
-    const permission = await Notification.requestPermission();
+    // 1. Request permission explicitly via user gesture (supports both Promise & callback)
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      try {
+        permission = await Notification.requestPermission();
+      } catch {
+        permission = await new Promise((resolve) => {
+          Notification.requestPermission((p) => resolve(p));
+        });
+      }
+    }
+
     if (permission !== 'granted') {
       return {
         success: false,
         error: permission === 'denied'
-          ? 'Notification permission was denied. Please allow notifications in your browser settings.'
+          ? 'Notification permission was denied. Please allow notifications in your browser/device settings.'
           : 'Notification permission was dismissed.',
       };
     }
@@ -143,16 +194,39 @@ export async function subscribeToPush(
     let subscription = await registration.pushManager.getSubscription();
 
     if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: applicationServerKey as any,
-      });
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey as any,
+        });
+      } catch (subErr) {
+        // If an existing subscription had mismatched keys, unsubscribe and renew
+        const existing = await registration.pushManager.getSubscription();
+        if (existing) {
+          await existing.unsubscribe();
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: applicationServerKey as any,
+          });
+        } else {
+          throw subErr;
+        }
+      }
     }
 
-    // 4. Extract keys and persist to Supabase using secure RPC
+    // 4. Extract keys with ArrayBuffer fallback and persist to Supabase using secure RPC
     const subJson = subscription.toJSON();
-    const p256dh = subJson.keys?.p256dh;
-    const auth = subJson.keys?.auth;
+    let p256dh = subJson.keys?.p256dh;
+    let auth = subJson.keys?.auth;
+
+    if (!p256dh && subscription.getKey) {
+      const p256dhRaw = subscription.getKey('p256dh');
+      if (p256dhRaw) p256dh = arrayBufferToBase64(p256dhRaw);
+    }
+    if (!auth && subscription.getKey) {
+      const authRaw = subscription.getKey('auth');
+      if (authRaw) auth = arrayBufferToBase64(authRaw);
+    }
 
     if (!subscription.endpoint || !p256dh || !auth) {
       return { success: false, error: 'Failed to extract push encryption credentials.' };
