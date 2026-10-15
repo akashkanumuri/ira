@@ -59,6 +59,44 @@ export async function invokeEmployeeAdmin(body: Record<string, unknown>) {
   return data;
 }
 
+export async function invokeClientAdmin(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('client-admin', { body });
+  if (error) {
+    let message = error.message || 'Client action failed.';
+    try {
+      const response = (error as any).context as Response | undefined;
+      if (response) {
+        const payload = await response.clone().json().catch(() => null);
+        if (payload?.error) message = String(payload.error);
+      }
+    } catch {
+      // Keep the SDK message when the response body cannot be read.
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(String(data.error));
+  return data;
+}
+
+export async function invokeClientSetup(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('client-setup', { body });
+  if (error) {
+    let message = error.message || 'Password setup action failed.';
+    try {
+      const response = (error as any).context as Response | undefined;
+      if (response) {
+        const payload = await response.clone().json().catch(() => null);
+        if (payload?.error) message = String(payload.error);
+      }
+    } catch {
+      // Keep the SDK message when the response body cannot be read.
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(String(data.error));
+  return data;
+}
+
 export async function uploadAvatar(employeeId: string, file: File) {
   const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'jpg';
   const path = `${employeeId}/${crypto.randomUUID()}.${ext}`;

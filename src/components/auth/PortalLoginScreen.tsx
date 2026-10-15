@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle } from 'lucide-react';
 
-type Portal = 'employee' | 'admin';
+type Portal = 'employee' | 'admin' | 'client';
 
 export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'employee' }) => {
   const { signIn } = useAuth();
@@ -14,6 +14,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const [error, setError] = useState('');
 
   const isEmployee = activePortal === 'employee';
+  const isClient = activePortal === 'client';
 
   useEffect(() => {
     setActivePortal(portal);
@@ -30,7 +31,8 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     setPassword('');
     setError('');
     setShowPassword(false);
-    window.history.replaceState({}, '', next === 'admin' ? '/admin/login' : '/login');
+    const path = next === 'admin' ? '/admin/login' : next === 'client' ? '/client/login' : '/login';
+    window.history.replaceState({}, '', path);
   };
 
   async function submit(e: React.FormEvent) {
@@ -38,7 +40,13 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     setError('');
 
     if (!identifier.trim() || !password) {
-      setError(isEmployee ? 'Please enter your Login ID and password.' : 'Please enter your Admin ID and password.');
+      setError(
+        isEmployee
+          ? 'Please enter your Login ID and password.'
+          : isClient
+          ? 'Please enter your email and password.'
+          : 'Please enter your Admin ID and password.'
+      );
       return;
     }
 
@@ -85,7 +93,11 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
               />
               <h1 className="ira-form-title">SIGN IN</h1>
               <p className="ira-form-subtitle">
-                {isEmployee ? 'Employee Attendance & Work Portal' : 'Administration & HR Management'}
+                {isEmployee
+                  ? 'Employee Attendance & Work Portal'
+                  : isClient
+                  ? 'Client Project & Operations Portal'
+                  : 'Administration & HR Management'}
               </p>
             </div>
 
@@ -100,7 +112,9 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             {/* Form */}
             <form onSubmit={submit} className="ira-login-form" noValidate>
               <label className="ira-form-field">
-                <span className="sr-only">{isEmployee ? 'Login ID' : 'Admin ID'}</span>
+                <span className="sr-only">
+                  {isEmployee ? 'Login ID' : isClient ? 'Client Email' : 'Admin ID'}
+                </span>
                 <div className="ira-input-wrapper">
                   <UserRound className="ira-input-icon" aria-hidden="true" />
                   <input
@@ -110,14 +124,21 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
                       setIdentifier(e.target.value);
                       if (error) setError('');
                     }}
-                    autoComplete="username"
+                    autoComplete={isClient ? 'email' : 'username'}
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
-                    inputMode="text"
+                    inputMode={isClient ? 'email' : 'text'}
+                    type={isClient ? 'email' : 'text'}
                     enterKeyHint="next"
-                    placeholder={isEmployee ? 'Username / Login ID' : 'Admin ID'}
-                    aria-label={isEmployee ? 'Login ID' : 'Admin ID'}
+                    placeholder={
+                      isEmployee
+                        ? 'Username / Login ID'
+                        : isClient
+                        ? 'Company Email'
+                        : 'Admin ID'
+                    }
+                    aria-label={isEmployee ? 'Login ID' : isClient ? 'Client Email' : 'Admin ID'}
                     className="ira-input"
                   />
                 </div>
@@ -166,16 +187,36 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
 
             {/* Portal Switcher */}
             <div className="ira-portal-switch">
-              <span className="ira-switch-prompt">
-                {isEmployee ? 'Have an admin account?' : 'Have an employee account?'}
-              </span>
-              <button
-                type="button"
-                className="ira-switch-btn"
-                onClick={() => switchPortal(isEmployee ? 'admin' : 'employee')}
-              >
-                {isEmployee ? 'ADMIN LOGIN' : 'EMPLOYEE LOGIN'}
-              </button>
+              <span className="ira-switch-prompt">Need a different portal?</span>
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+                {activePortal !== 'employee' && (
+                  <button
+                    type="button"
+                    className="ira-switch-btn"
+                    onClick={() => switchPortal('employee')}
+                  >
+                    EMPLOYEE LOGIN
+                  </button>
+                )}
+                {activePortal !== 'admin' && (
+                  <button
+                    type="button"
+                    className="ira-switch-btn"
+                    onClick={() => switchPortal('admin')}
+                  >
+                    ADMIN LOGIN
+                  </button>
+                )}
+                {activePortal !== 'client' && (
+                  <button
+                    type="button"
+                    className="ira-switch-btn"
+                    onClick={() => switchPortal('client')}
+                  >
+                    CLIENT LOGIN
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -186,3 +227,5 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
 
 export const EmployeeLoginScreen = () => <PortalLoginScreen portal="employee" />;
 export const AdminLoginScreen = () => <PortalLoginScreen portal="admin" />;
+export const ClientLoginScreen = () => <PortalLoginScreen portal="client" />;
+

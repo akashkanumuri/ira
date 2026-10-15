@@ -28,9 +28,11 @@ export interface AuthUser {
   leaveBalance?: number;
   currentSalary?: number;
   joinDate?: string;
+  companyName?: string;
+  primaryContact?: string;
 }
 
-type LoginPortal = 'employee' | 'admin';
+export type LoginPortal = 'employee' | 'admin' | 'client';
 
 const ADMIN_LOGIN_IDS = new Set(['IRA', 'APEXADMIN']);
 export const ADMIN_AUTH_EMAIL = 'ira.admin@ira-presence.local';
@@ -169,6 +171,37 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
       designationId: null,
       departmentId: null,
       status: 'active',
+    };
+  }
+
+  if (profile.role === 'client') {
+    const { data: client, error: clientError } = await db
+      .from('clients')
+      .select('id, company_name, primary_contact, email, status')
+      .eq('profile_id', supabaseUser.id)
+      .maybeSingle();
+
+    if (clientError || !client) {
+      console.error('[Auth] Client profile lookup failed:', clientError);
+      return null;
+    }
+
+    return {
+      id: supabaseUser.id,
+      email: client.email ?? supabaseUser.email ?? '',
+      role: 'client',
+      empId: null,
+      employeeDbId: null,
+      loginId: client.email ?? supabaseUser.email ?? null,
+      name: client.company_name ?? 'Client Representative',
+      companyName: client.company_name,
+      primaryContact: client.primary_contact,
+      avatar: null,
+      department: null,
+      designation: 'Client Representative',
+      designationId: null,
+      departmentId: null,
+      status: client.status === 'inactive' ? 'inactive' : 'active',
     };
   }
 
@@ -325,10 +358,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const email = portal === 'admin'
         ? (ADMIN_LOGIN_IDS.has(value.toUpperCase()) ? ADMIN_AUTH_EMAIL : '')
+        : portal === 'client'
+        ? (value.includes('@') ? value.toLowerCase() : '')
         : (/^[a-z0-9][a-z0-9._-]{2,31}$/i.test(value) ? loginIdToAuthEmail(value) : '');
 
       if (!email) {
-        return { error: portal === 'admin' ? 'Admin ID or password is incorrect.' : 'Login ID or password is incorrect.' };
+        return {
+          error: portal === 'admin'
+            ? 'Admin ID or password is incorrect.'
+            : portal === 'client'
+            ? 'Please enter a valid email address.'
+            : 'Login ID or password is incorrect.',
+        };
       }
 
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -373,13 +414,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: 'Password must be at least 12 characters and include uppercase, lowercase, number and symbol.' };
     }
     if (!currentPassword) return { error: 'Current password is required.' };
-    const reauthEmail = user?.role === 'admin' ? ADMIN_AUTH_EMAIL : (user?.loginId ? loginIdToAuthEmail(user.loginId) : '');
+    const reauthEmail = user?.role === 'admin'
+      ? ADMIN_AUTH_EMAIL
+      : user?.role === 'client'
+      ? (user.email || '')
+      : (user?.loginId ? loginIdToAuthEmail(user.loginId) : '');
     if (!reauthEmail) return { error: 'Unable to determine the account email.' };
     const { error: reauthError } = await supabase.auth.signInWithPassword({ email: reauthEmail, password: currentPassword });
     if (reauthError) return { error: 'Current password is incorrect.' };
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     return { error: error?.message ?? null };
-  }, [user?.role, user?.loginId]);
+  }, [user?.role, user?.loginId, user?.email]);
 
   return (
     <AuthContext.Provider value={{ user, session, loading, signIn, signOut, changePassword, isConfigured: isSupabaseConfigured }}>

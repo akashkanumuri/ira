@@ -6,8 +6,8 @@ export interface Database {
   public: {
     Tables: {
       profiles: {
-        Row: { id: string; role: 'employee' | 'admin'; emp_id: string | null; created_at: string; updated_at: string };
-        Insert: { id: string; role?: 'employee' | 'admin'; emp_id?: string | null; created_at?: string; updated_at?: string };
+        Row: { id: string; role: 'employee' | 'admin' | 'client' | 'manager'; emp_id: string | null; created_at: string; updated_at: string };
+        Insert: { id: string; role?: 'employee' | 'admin' | 'client' | 'manager'; emp_id?: string | null; created_at?: string; updated_at?: string };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
       };
       employees: {
@@ -113,6 +113,99 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['push_subscriptions']['Insert']>;
+      };
+      clients: {
+        Row: {
+          id: string;
+          profile_id: string;
+          company_name: string;
+          primary_contact: string;
+          email: string;
+          status: 'invited' | 'active' | 'inactive';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          company_name: string;
+          primary_contact: string;
+          email: string;
+          status?: 'invited' | 'active' | 'inactive';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['clients']['Insert']>;
+      };
+      projects: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          status: 'active' | 'paused' | 'completed';
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          status?: 'active' | 'paused' | 'completed';
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['projects']['Insert']>;
+      };
+      project_clients: {
+        Row: {
+          project_id: string;
+          client_id: string;
+          created_at: string;
+        };
+        Insert: {
+          project_id: string;
+          client_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['project_clients']['Insert']>;
+      };
+      project_managers: {
+        Row: {
+          project_id: string;
+          manager_id: string;
+          created_at: string;
+        };
+        Insert: {
+          project_id: string;
+          manager_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['project_managers']['Insert']>;
+      };
+      client_invitations: {
+        Row: {
+          id: string;
+          client_id: string;
+          email: string;
+          token_hash: string;
+          expires_at: string;
+          used_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          email: string;
+          token_hash: string;
+          expires_at?: string;
+          used_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['client_invitations']['Insert']>;
       };
     };
     Views: {};

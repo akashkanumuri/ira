@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AuthUser } from '../../contexts/AuthContext';
-import { LayoutDashboard, Clock3, Users, BriefcaseBusiness, CalendarDays, Home, WalletCards, FileClock, Settings2, UserRound, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, Clock3, Users, BriefcaseBusiness, CalendarDays, Home, WalletCards, FileClock, Settings2, UserRound, FileSpreadsheet, Building2 } from 'lucide-react';
 
 interface Props {
   activeRole: 'admin' | 'employee';
@@ -26,6 +26,7 @@ export const Sidebar: React.FC<Props> = ({ activeRole, activeTab, onSelectTab, c
 
   const adminItems = [
     ['admin-dashboard', 'Dashboard', LayoutDashboard],
+    ['admin-clients', 'Clients', Building2],
     ['admin-employees', 'Employees / HR', Users],
     ['admin-attendance', 'Attendance', Clock3],
     ['admin-tasks', 'Work & Assignments', BriefcaseBusiness, pendingTaskCount],

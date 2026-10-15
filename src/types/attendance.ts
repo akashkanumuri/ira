@@ -1,4 +1,4 @@
-export type UserRole = 'employee' | 'admin';
+export type UserRole = 'employee' | 'admin' | 'client' | 'manager';
 export type AttendanceMode = 'office' | 'wfh';
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'wfh' | 'leave' | 'holiday';
 export type AttendanceState = 'not_checked_in' | 'working' | 'on_break' | 'completed';
@@ -226,4 +226,39 @@ export interface AssignmentRule {
   assigneeDesignationId?: string | null;
   assigneeDesignation: string;
   scope: 'any' | 'direct_reports';
+}
+
+export interface ClientRecord {
+  id: string;
+  profileId: string;
+  companyName: string;
+  primaryContact: string;
+  email: string;
+  status: 'invited' | 'active' | 'inactive';
+  createdAt: string;
+  updatedAt?: string;
+  assignedManagerId?: string | null;
+  assignedManagerName?: string | null;
+  projectCount?: number;
+}
+
+export interface ProjectRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  status: 'active' | 'paused' | 'completed';
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  clientCount?: number;
+  managerCount?: number;
+}
+
+export interface ClientInvitation {
+  id: string;
+  clientId: string;
+  email: string;
+  expiresAt: string;
+  usedAt: string | null;
+  createdAt: string;
 }
