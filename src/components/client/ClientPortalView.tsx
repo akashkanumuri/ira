@@ -200,7 +200,7 @@ function getStorageKey(userId: string, projectId: string) {
 }
 
 interface StoredProjectState {
-  contract: ClientContractData;
+  contract: ClientContractData | null;
   acceptance: ClientAcceptanceRecord[];
   deliverables: ClientDeliverable[];
   changes: ClientChangeRequest[];
@@ -209,191 +209,15 @@ interface StoredProjectState {
   updates: ClientProjectUpdate[];
 }
 
-function createInitialState(project: ClientProject, user: AuthUser): StoredProjectState {
-  const companySlug = (user.companyName || 'IRA').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4);
-  const now = new Date();
-  const assignedStr = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(now);
-
+function createInitialState(): StoredProjectState {
   return {
-    contract: {
-      title: `Master Services Agreement — ${project.name}`,
-      ref: `MSA-${companySlug || 'IRA'}-2026-001`,
-      version: 'v1',
-      url: 'https://drive.google.com/file/d/1ira-contract-sample/view',
-      assigned: assignedStr,
-      status: 'Pending Review',
-      acceptedAt: '',
-      acceptedUrl: '',
-    },
-    acceptance: [
-      {
-        id: 1,
-        version: 'v0.9 (Draft)',
-        url: 'https://drive.google.com/file/d/1ira-contract-draft/view',
-        who: project.managerName,
-        at: '1 Oct 2026, 11:00 AM',
-        event: 'Draft Published',
-        note: 'Initial scope agreed during briefing.',
-      },
-    ],
-    deliverables: [
-      {
-        id: 'D-001',
-        name: 'Discovery & Architecture Specification',
-        desc: 'Stakeholder interviews, operational workflows, and verified requirements document.',
-        qty: '1',
-        due: '28 Aug 2026',
-        deps: '—',
-        ref: 'https://drive.google.com/requirements',
-        owner: project.managerName,
-        status: 'Completed',
-        updated: '28 Aug 2026',
-      },
-      {
-        id: 'D-002',
-        name: 'Interactive UI Prototypes & Experience Flow',
-        desc: 'High-fidelity wireframes and responsive click-through prototypes for key stakeholder views.',
-        qty: '4',
-        due: '25 Sep 2026',
-        deps: 'D-001',
-        ref: 'https://figma.com/ira-prototypes',
-        owner: 'Priya Nair',
-        status: 'Completed',
-        updated: '26 Sep 2026',
-      },
-      {
-        id: 'D-003',
-        name: 'Core System Implementation & Operations Panel',
-        desc: 'Live dashboard, active resource tracking, real-time alerting, and administrative controls.',
-        qty: '1',
-        due: '12 Nov 2026',
-        deps: 'D-002',
-        ref: 'https://github.com/ira/core-panel',
-        owner: 'Aarav Mehta',
-        status: 'In Progress',
-        updated: '12 Oct 2026',
-      },
-      {
-        id: 'D-004',
-        name: 'Mobile Operations Client Application',
-        desc: 'On-the-go management app featuring offline synchronization and quick check actions.',
-        qty: '1',
-        due: '30 Nov 2026',
-        deps: 'D-002',
-        ref: '—',
-        owner: 'Vikram Rao',
-        status: 'In Progress',
-        updated: '9 Oct 2026',
-      },
-      {
-        id: 'D-005',
-        name: 'User Acceptance Testing & Defect Resolution',
-        desc: 'Supervised client operational trial and comprehensive verification cycles.',
-        qty: '2',
-        due: '10 Dec 2026',
-        deps: 'D-003, D-004',
-        ref: '—',
-        owner: 'Rohan Kapoor',
-        status: 'Not Started',
-        updated: '3 Aug 2026',
-      },
-      {
-        id: 'D-006',
-        name: 'Production Handover & Operations Runbook',
-        desc: 'Final infrastructure provisioning, executive handover sign-off, and staff runbook documentation.',
-        qty: '1',
-        due: '18 Dec 2026',
-        deps: 'D-005',
-        ref: '—',
-        owner: project.managerName,
-        status: 'Not Started',
-        updated: '3 Aug 2026',
-      },
-    ],
-    changes: [
-      {
-        id: 'CR-001',
-        del: 'D-003',
-        delName: 'Core System Implementation & Operations Panel',
-        field: 'Timeline',
-        prev: '12 Nov 2026',
-        next: '20 Nov 2026',
-        by: user.primaryContact || user.name,
-        at: '13 Oct 2026, 04:12 PM',
-        status: 'Pending Review',
-        reason: 'Client operations review scheduled for mid-November before beta rollout.',
-        reviewer: '',
-        comment: '',
-      },
-      {
-        id: 'CR-002',
-        del: 'D-002',
-        delName: 'Interactive UI Prototypes & Experience Flow',
-        field: 'Quantity',
-        prev: '3',
-        next: '4',
-        by: user.primaryContact || user.name,
-        at: '14 Sep 2026, 11:30 AM',
-        status: 'Approved Change',
-        reason: 'Added executive overview screen prototype.',
-        reviewer: project.managerName,
-        comment: 'Approved. Included within scope.',
-      },
-    ],
-    installments: [
-      {
-        id: 1,
-        name: 'Advance on contract acceptance',
-        basis: '25%',
-        amount: 250000,
-        due: '5 Aug 2026',
-        status: 'Paid',
-        ref: 'NEFT-882194',
-        paidOn: '6 Aug 2026',
-      },
-      {
-        id: 2,
-        name: 'Prototype & design approval',
-        basis: '25%',
-        amount: 250000,
-        due: '30 Sep 2026',
-        status: 'Paid',
-        ref: 'NEFT-915421',
-        paidOn: '1 Oct 2026',
-      },
-      {
-        id: 3,
-        name: 'Core system beta release milestone',
-        basis: '30%',
-        amount: 300000,
-        due: '20 Oct 2026',
-        status: 'Due',
-        ref: '',
-        paidOn: '',
-      },
-      {
-        id: 4,
-        name: 'Final acceptance & deployment',
-        basis: '20%',
-        amount: 200000,
-        due: '18 Dec 2026',
-        status: 'Upcoming',
-        ref: '',
-        paidOn: '',
-      },
-    ],
-    milestones: [
-      { id: 1, name: 'Discovery & requirements signed off', date: '28 Aug 2026', state: 'Completed' },
-      { id: 2, name: 'Prototype approval & design acceptance', date: '26 Sep 2026', state: 'Completed' },
-      { id: 3, name: 'Beta core release', date: '12 Nov 2026', state: 'In Progress' },
-      { id: 4, name: 'User acceptance testing complete', date: '10 Dec 2026', state: 'Upcoming' },
-      { id: 5, name: 'Production go-live & handover', date: '18 Dec 2026', state: 'Upcoming' },
-    ],
-    updates: [
-      { id: 1, title: 'Operations panel: real-time live map module completed', meta: `12 Oct 2026 · ${project.managerName}` },
-      { id: 2, title: 'Mobile client app: offline queue passed initial integration tests', meta: `9 Oct 2026 · ${project.managerName}` },
-      { id: 3, title: 'UI prototypes completed, demonstrated, and accepted', meta: '26 Sep 2026', tone: 'ok' },
-    ],
+    contract: null,
+    acceptance: [],
+    deliverables: [],
+    changes: [],
+    installments: [],
+    milestones: [],
+    updates: [],
   };
 }
 
@@ -483,12 +307,18 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
           id: p.id,
           name: p.name,
           description: p.description,
-          status: p.status === 'active' ? 'On Track' : p.status,
-          stage: 'Build',
-          managerName: mgrMap[p.id]?.name || 'IRA Project Lead',
+          status: p.status === 'active' ? 'Active' : p.status || 'Active',
+          stage: p.status === 'active' ? 'Active' : p.status || '—',
+          managerName: mgrMap[p.id]?.name || 'Unassigned',
           managerEmail: mgrMap[p.id]?.email || null,
-          startDate: '3 Aug 2026',
-          targetDate: '18 Dec 2026',
+          startDate: p.created_at
+            ? new Intl.DateTimeFormat('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              }).format(new Date(p.created_at))
+            : '—',
+          targetDate: '—',
         }));
 
         setProjects(mapped);
@@ -534,39 +364,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
         }));
         setNotifications(mapped);
       } else {
-        // Fallback default notifications if none recorded in Supabase yet
-        setNotifications([
-          {
-            id: 'n-1',
-            title: 'Contract awaiting your review',
-            body: `Master services agreement v1 for ${selectedProject?.name || 'your assigned project'}.`,
-            when: 'Today, 9:30 AM',
-            ref: 'Contracts',
-            unread: true,
-            email: 'Sent',
-            actionUrl: 'contracts',
-          },
-          {
-            id: 'n-2',
-            title: 'Payment reminder',
-            body: 'Installment 3 of 4 is due on 20 Oct 2026.',
-            when: 'Today, 8:00 AM',
-            ref: 'Payments',
-            unread: true,
-            email: 'Sent',
-            actionUrl: 'payments',
-          },
-          {
-            id: 'n-3',
-            title: 'Progress update',
-            body: 'Core operations panel is in progress; milestone beta planned for 12 Nov.',
-            when: '12 Oct, 11:00 AM',
-            ref: 'Project Progress',
-            unread: false,
-            email: 'Not Sent',
-            actionUrl: 'progress',
-          },
-        ]);
+        setNotifications([]);
       }
     } catch (err) {
       console.error('[ClientPortal] Failed to load notifications:', err);
@@ -592,6 +390,22 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
     if (existing) {
       try {
         const parsed = JSON.parse(existing);
+        // Clean out any legacy dummy/seed data cached in browser storage
+        const hasDummyContract =
+          parsed.contract?.url?.includes('sample') || parsed.contract?.ref?.includes('2026-001');
+        const hasDummyDeliverables = parsed.deliverables?.some(
+          (d: any) => d.id === 'D-001' && d.name?.includes('Discovery & Architecture')
+        );
+        const hasDummyInstallments = parsed.installments?.some(
+          (i: any) => i.ref === 'NEFT-882194' || i.name?.includes('Advance on contract')
+        );
+
+        if (hasDummyContract || hasDummyDeliverables || hasDummyInstallments) {
+          localStorage.removeItem(storageKey);
+          setState(createInitialState());
+          return;
+        }
+
         setState(parsed);
         return;
       } catch (e) {
@@ -599,8 +413,8 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
       }
     }
 
-    // Initialize fresh realistic state
-    const initial = createInitialState(selectedProject, user);
+    // Initialize fresh empty state with zero dummy data
+    const initial = createInitialState();
     localStorage.setItem(storageKey, JSON.stringify(initial));
     setState(initial);
   }, [selectedProject?.id, user.id]);
@@ -643,8 +457,9 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
   };
 
   const unreadNotifCount = notifications.filter(n => n.unread).length;
-  const contractPending = state?.contract.status === 'Pending Review';
-  const paymentDueCount = state?.installments.filter(i => ['Due', 'Overdue'].includes(i.status)).length || 0;
+  const contractPending = Boolean(state?.contract && state.contract.status === 'Pending Review');
+  const paymentDueCount =
+    state?.installments?.filter(i => ['Due', 'Overdue'].includes(i.status)).length || 0;
 
   /* =========================================================================
      Navigation Definition
@@ -887,6 +702,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
             user={user}
             project={selectedProject}
             state={state}
+            notifications={notifications}
             go={setPage}
           />
         );
@@ -1130,11 +946,13 @@ function ClientDashboardView({
   user,
   project,
   state,
+  notifications,
   go,
 }: {
   user: AuthUser;
   project: ClientProject;
   state: StoredProjectState;
+  notifications: ClientNotificationItem[];
   go: (p: ClientNavPage) => void;
 }) {
   const { contract, deliverables, changes, installments, milestones, updates } = state;
@@ -1155,7 +973,7 @@ function ClientDashboardView({
     cta: string;
   }[] = [];
 
-  if (contract.status === 'Pending Review') {
+  if (contract && contract.status === 'Pending Review') {
     actionItems.push({
       icon: FileSignature,
       title: `Review and accept contract ${contract.version}`,
@@ -1183,6 +1001,7 @@ function ClientDashboardView({
   }).format(new Date());
 
   const progressPct = deliverables.length > 0 ? Math.round((done / deliverables.length) * 100) : 0;
+  const activeMilestones = milestones.filter(m => m.state !== 'Completed');
 
   return (
     <>
@@ -1243,7 +1062,14 @@ function ClientDashboardView({
               items={[
                 ['Current stage', project.stage],
                 ['Target completion', project.targetDate],
-                ['Contract', <Status key="c" s={contract.status} />],
+                [
+                  'Contract',
+                  contract ? (
+                    <Status key="c" s={contract.status} />
+                  ) : (
+                    <span className="text-xs text-ink-3 font-medium">Not Assigned</span>
+                  ),
+                ],
               ]}
             />
             <div className="mt-5 pt-5 border-t border-line">
@@ -1284,10 +1110,11 @@ function ClientDashboardView({
                 </button>
               }
             />
-            <Timeline
-              items={milestones
-                .filter(m => m.state !== 'Completed')
-                .map(m => ({
+            {activeMilestones.length === 0 ? (
+              <p className="text-[13px] text-ink-3">No upcoming milestones scheduled.</p>
+            ) : (
+              <Timeline
+                items={activeMilestones.map(m => ({
                   tone: m.state === 'In Progress' ? 'warn' : undefined,
                   title: (
                     <span className="flex items-center gap-2 flex-wrap">
@@ -1297,19 +1124,24 @@ function ClientDashboardView({
                   ),
                   meta: m.date,
                 }))}
-            />
+              />
+            )}
           </Card>
 
           {/* Recent Project Updates */}
           <Card>
             <CardHead title="Recent project updates" />
-            <Timeline
-              items={updates.map(u => ({
-                title: u.title,
-                meta: u.meta,
-                tone: u.tone,
-              }))}
-            />
+            {updates.length === 0 ? (
+              <p className="text-[13px] text-ink-3">No recent updates posted.</p>
+            ) : (
+              <Timeline
+                items={updates.map(u => ({
+                  title: u.title,
+                  meta: u.meta,
+                  tone: u.tone,
+                }))}
+              />
+            )}
           </Card>
         </div>
 
@@ -1344,7 +1176,7 @@ function ClientDashboardView({
                 </div>
               </div>
             ) : (
-              <p className="text-[13px] text-ink-3">No upcoming installments.</p>
+              <p className="text-[13px] text-ink-3">No upcoming installments scheduled.</p>
             )}
           </Card>
 
@@ -1388,22 +1220,18 @@ function ClientDashboardView({
                 </button>
               }
             />
-            <ul className="space-y-3 text-[13px]">
-              <li>
-                <div className="font-medium text-ink">
-                  {contract.status === 'Pending Review'
-                    ? 'Contract awaiting your review'
-                    : 'Contract on record'}
-                </div>
-                <div className="text-xs text-ink-3">
-                  {contract.status === 'Pending Review' ? 'Assigned recently' : 'Accepted'}
-                </div>
-              </li>
-              <li>
-                <div className="font-medium text-ink">Payment schedule active</div>
-                <div className="text-xs text-ink-3">Installment reminder sent</div>
-              </li>
-            </ul>
+            {notifications.length === 0 ? (
+              <p className="text-[13px] text-ink-3">No recent notifications.</p>
+            ) : (
+              <ul className="space-y-3 text-[13px]">
+                {notifications.slice(0, 3).map(n => (
+                  <li key={n.id}>
+                    <div className="font-medium text-ink truncate">{n.title}</div>
+                    <div className="text-xs text-ink-3">{n.when}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         </div>
       </div>
@@ -1432,6 +1260,24 @@ function ClientContractsView({
   const [dlg, setDlg] = useState<'accept' | 'decline' | null>(null);
   const [declineReason, setDeclineReason] = useState('');
 
+  if (!contract) {
+    return (
+      <>
+        <PageHeader
+          title="Contracts"
+          desc="Review and confirm acceptance of contracts and scope agreements."
+        />
+        <Card pad={false}>
+          <Empty
+            icon={FileSignature}
+            title="No contract assigned"
+            desc="Your project team has not attached a contract document for this project yet. Contracts will appear here once assigned by IRA management."
+          />
+        </Card>
+      </>
+    );
+  }
+
   const accepted = contract.status === 'Accepted';
 
   const handleConfirmAcceptance = () => {
@@ -1444,40 +1290,46 @@ function ClientContractsView({
       hour12: true,
     }).format(new Date());
 
-    updateState(prev => ({
-      ...prev,
-      contract: {
-        ...prev.contract,
-        status: 'Accepted',
-        acceptedAt: nowStr,
-        acceptedUrl: prev.contract.url,
-      },
-      acceptance: [
-        {
-          id: Date.now(),
-          version: prev.contract.version,
-          url: prev.contract.url,
-          who: user.primaryContact || user.name,
-          at: nowStr,
-          event: 'Accepted',
-          note: `Officially accepted and signed off by ${user.companyName || user.name}.`,
+    updateState(prev => {
+      if (!prev.contract) return prev;
+      return {
+        ...prev,
+        contract: {
+          ...prev.contract,
+          status: 'Accepted',
+          acceptedAt: nowStr,
+          acceptedUrl: prev.contract.url,
         },
-        ...prev.acceptance,
-      ],
-    }));
+        acceptance: [
+          {
+            id: Date.now(),
+            version: prev.contract.version,
+            url: prev.contract.url,
+            who: user.primaryContact || user.name,
+            at: nowStr,
+            event: 'Accepted',
+            note: `Officially accepted and signed off by ${user.companyName || user.name}.`,
+          },
+          ...prev.acceptance,
+        ],
+      };
+    });
 
     setDlg(null);
     toast('Contract accepted and recorded successfully');
   };
 
   const handleConfirmDecline = () => {
-    updateState(prev => ({
-      ...prev,
-      contract: {
-        ...prev.contract,
-        status: 'Declined',
-      },
-    }));
+    updateState(prev => {
+      if (!prev.contract) return prev;
+      return {
+        ...prev,
+        contract: {
+          ...prev.contract,
+          status: 'Declined',
+        },
+      };
+    });
     setDlg(null);
     toast('Your response has been sent to the project team', 'info');
   };
@@ -1518,7 +1370,7 @@ function ClientContractsView({
                 ['Version', contract.version],
                 [
                   'Contract link',
-                  <LinkRef key="l" url={contract.url} label="drive.google.com/contract-terms" />,
+                  <LinkRef key="l" url={contract.url} label="Document link" />,
                 ],
                 ['Status', contract.status],
                 ['Accepted on', accepted ? contract.acceptedAt || 'Accepted' : 'Not yet accepted'],
@@ -1530,12 +1382,6 @@ function ClientContractsView({
                 href={contract.url}
                 target="_blank"
                 rel="noreferrer"
-                onClick={e => {
-                  if (contract.url.includes('sample')) {
-                    e.preventDefault();
-                    toast('Opens external contract document in a new tab', 'info');
-                  }
-                }}
               >
                 <Button icon={ExternalLink}>Open contract</Button>
               </a>
@@ -1595,40 +1441,44 @@ function ClientContractsView({
             title="Acceptance history"
             desc="Every acceptance keeps its exact link and version on record."
           />
-          <Timeline
-            items={[
-              ...(accepted
-                ? [
-                    {
-                      tone: 'ok' as const,
-                      title: `${contract.version} accepted`,
-                      meta: `${user.primaryContact || user.name} · ${contract.acceptedAt}`,
-                      body: <span className="break-all text-xs">{contract.acceptedUrl}</span>,
-                    },
-                  ]
-                : []),
-              ...(contract.status === 'Declined'
-                ? [
-                    {
-                      tone: 'err' as const,
-                      title: `${contract.version} declined`,
-                      meta: `${user.primaryContact || user.name} · Response sent`,
-                    },
-                  ]
-                : []),
-              ...acceptance.map(a => ({
-                tone: 'ok' as const,
-                title: `${a.version} ${a.event.toLowerCase()}`,
-                meta: `${a.who} · ${a.at}`,
-                body: (
-                  <div className="text-xs">
-                    <span className="break-all block text-ink-3">{a.url}</span>
-                    {a.note && <span className="block mt-1 text-ink-2">{a.note}</span>}
-                  </div>
-                ),
-              })),
-            ]}
-          />
+          {acceptance.length === 0 && !accepted ? (
+            <p className="text-[13px] text-ink-3">No acceptance history on record.</p>
+          ) : (
+            <Timeline
+              items={[
+                ...(accepted
+                  ? [
+                      {
+                        tone: 'ok' as const,
+                        title: `${contract.version} accepted`,
+                        meta: `${user.primaryContact || user.name} · ${contract.acceptedAt}`,
+                        body: <span className="break-all text-xs">{contract.acceptedUrl}</span>,
+                      },
+                    ]
+                  : []),
+                ...(contract.status === 'Declined'
+                  ? [
+                      {
+                        tone: 'err' as const,
+                        title: `${contract.version} declined`,
+                        meta: `${user.primaryContact || user.name} · Response sent`,
+                      },
+                    ]
+                  : []),
+                ...acceptance.map(a => ({
+                  tone: 'ok' as const,
+                  title: `${a.version} ${a.event.toLowerCase()}`,
+                  meta: `${a.who} · ${a.at}`,
+                  body: (
+                    <div className="text-xs">
+                      <span className="break-all block text-ink-3">{a.url}</span>
+                      {a.note && <span className="block mt-1 text-ink-2">{a.note}</span>}
+                    </div>
+                  ),
+                })),
+              ]}
+            />
+          )}
         </Card>
       </div>
 
@@ -1757,6 +1607,24 @@ function ClientDeliverablesView({
     setReqReason('');
     toast('Change request submitted. Your project team will review it.');
   };
+
+  if (deliverables.length === 0) {
+    return (
+      <>
+        <PageHeader
+          title="Deliverables"
+          desc="Everything included in your project scope. Approved changes update the deliverable and are preserved in history."
+        />
+        <Card pad={false}>
+          <Empty
+            icon={Package}
+            title="No deliverables configured"
+            desc="No deliverables have been configured for this project yet. Deliverables will appear here once assigned by your project manager."
+          />
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>
@@ -2100,23 +1968,27 @@ function ClientProgressView({
 
           <Card>
             <CardHead title="Milestones" />
-            <Timeline
-              items={milestones.map(m => ({
-                tone:
-                  m.state === 'Completed'
-                    ? 'ok'
-                    : m.state === 'In Progress'
-                    ? 'warn'
-                    : undefined,
-                title: (
-                  <span className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-ink">{m.name}</span>
-                    <Status s={m.state} />
-                  </span>
-                ),
-                meta: m.date,
-              }))}
-            />
+            {milestones.length === 0 ? (
+              <p className="text-[13px] text-ink-3">No milestones scheduled yet.</p>
+            ) : (
+              <Timeline
+                items={milestones.map(m => ({
+                  tone:
+                    m.state === 'Completed'
+                      ? 'ok'
+                      : m.state === 'In Progress'
+                      ? 'warn'
+                      : undefined,
+                  title: (
+                    <span className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-ink">{m.name}</span>
+                      <Status s={m.state} />
+                    </span>
+                  ),
+                  meta: m.date,
+                }))}
+              />
+            )}
           </Card>
         </div>
 
@@ -2125,7 +1997,7 @@ function ClientProgressView({
           <Card>
             <CardHead title="Needs your attention" />
             <ul className="space-y-3 text-[13px]">
-              {contract.status === 'Pending Review' && (
+              {contract && contract.status === 'Pending Review' && (
                 <li className="flex justify-between gap-2">
                   <span>Contract {contract.version} to review</span>
                   <button
@@ -2163,7 +2035,7 @@ function ClientProgressView({
                   </button>
                 </li>
               )}
-              {contract.status !== 'Pending Review' &&
+              {!(contract && contract.status === 'Pending Review') &&
                 pendChangesCount === 0 &&
                 !dueInstallment && (
                   <li className="text-ink-3">Nothing pending. You are completely up to date.</li>
@@ -2173,13 +2045,17 @@ function ClientProgressView({
 
           <Card>
             <CardHead title="Recent updates" />
-            <Timeline
-              items={updates.map(u => ({
-                title: u.title,
-                meta: u.meta,
-                tone: u.tone,
-              }))}
-            />
+            {updates.length === 0 ? (
+              <p className="text-[13px] text-ink-3">No recent updates posted.</p>
+            ) : (
+              <Timeline
+                items={updates.map(u => ({
+                  title: u.title,
+                  meta: u.meta,
+                  tone: u.tone,
+                }))}
+              />
+            )}
           </Card>
         </div>
       </div>
@@ -2243,6 +2119,24 @@ function ClientPaymentsView({
   };
 
   const hasPendingVerification = installments.some(i => i.status === 'Pending Verification');
+
+  if (installments.length === 0) {
+    return (
+      <>
+        <PageHeader
+          title="Payments"
+          desc={`${project.name} — your agreed installment schedule. An installment is marked Paid after verified bank receipt.`}
+        />
+        <Card pad={false}>
+          <Empty
+            icon={CreditCard}
+            title="No payment schedule configured"
+            desc="No payment installments have been scheduled for this project yet. Installments will appear here once configured by the finance department."
+          />
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>

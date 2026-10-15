@@ -135,7 +135,7 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
                     if (resetError) setResetError('');
                   }}
                   autoComplete="username"
-                  placeholder="dev@northwind.example"
+                  placeholder="client@company.com"
                   required
                   className="w-full h-9 px-3 rounded-md border border-[#e5e8ef] bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15"
                 />
@@ -206,7 +206,7 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
               if (validationError) setValidationError(false);
             }}
             autoComplete="username"
-            placeholder="dev@northwind.example"
+            placeholder="client@company.com"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
