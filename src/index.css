@@ -1,5 +1,63 @@
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #243b64;
+  --color-primary-hover: #1c2f50;
+  --color-primary-soft: #eaeef6;
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-ink: #172033;
+  --color-ink-2: #697386;
+  --color-ink-3: #8a93a5;
+  --color-line: #e5e8ef;
+  --color-ok: #16845b;
+  --color-ok-soft: #e7f4ee;
+  --color-warn: #b7791f;
+  --color-warn-soft: #fbf3e2;
+  --color-err: #d64545;
+  --color-err-soft: #fceeee;
+  --color-info: #3478d4;
+  --color-info-soft: #e9f1fb;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+@keyframes slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pulse-bg {
+  50% {
+    opacity: 0.5;
+  }
+}
+.anim-slide {
+  animation: slide-in 0.18s ease-out;
+}
+.anim-fade {
+  animation: fade-in 0.15s ease-out;
+}
+.skeleton {
+  background: #e9ecf2;
+  border-radius: 4px;
+  animation: pulse-bg 1.4s ease-in-out infinite;
+}
+
 /* =========================================================
    IRA HOSPITALITY V2 — CANONICAL DESIGN SYSTEM & STYLES
    Colors:

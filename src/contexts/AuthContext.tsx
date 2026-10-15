@@ -141,8 +141,8 @@ export interface CurrentEmployeeRow {
   avatar_url: string | null;
 }
 
-const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => {
-  if (!isSupabaseConfigured) return null;
+const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | null; error?: string | null }> => {
+  if (!isSupabaseConfigured) return { user: null, error: 'Database service is not configured.' };
 
   const db = supabase as any;
   const { data: profile, error: profileError } = await db
@@ -151,57 +151,104 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
     .eq('id', supabaseUser.id)
     .maybeSingle();
 
-  if (profileError || !profile) {
+  if (profileError) {
     console.error('[Auth] Profile lookup failed:', profileError);
-    return null;
-  }
-
-  if (profile.role === 'admin') {
     return {
-      id: supabaseUser.id,
-      email: supabaseUser.email ?? ADMIN_AUTH_EMAIL,
-      role: 'admin',
-      empId: null,
-      employeeDbId: null,
-      loginId: 'IRA',
-      name: 'IRA',
-      avatar: null,
-      department: null,
-      designation: null,
-      designationId: null,
-      departmentId: null,
-      status: 'active',
+      user: null,
+      error: profileError.code === '42501'
+        ? 'Access permission denied while reading profile. Please contact the administrator.'
+        : 'Database error while reading user profile. Please try again.',
     };
   }
 
-  if (profile.role === 'client') {
-    const { data: client, error: clientError } = await db
+  // Self-healing: If profile record is missing but user metadata indicates role
+  let effectiveRole = profile?.role;
+  if (!profile) {
+    const metaRole = supabaseUser.app_metadata?.role || supabaseUser.user_metadata?.role;
+    if (metaRole === 'client') {
+      console.warn('[Auth] Profiles row missing for client user, attempting fallback lookup...');
+      effectiveRole = 'client';
+    } else {
+      console.error('[Auth] Profile record not found for user:', supabaseUser.id);
+      return { user: null, error: 'User profile record not found. Please contact the administrator.' };
+    }
+  }
+
+  if (effectiveRole === 'admin') {
+    return {
+      user: {
+        id: supabaseUser.id,
+        email: supabaseUser.email ?? ADMIN_AUTH_EMAIL,
+        role: 'admin',
+        empId: null,
+        employeeDbId: null,
+        loginId: 'IRA',
+        name: 'IRA',
+        avatar: null,
+        department: null,
+        designation: null,
+        designationId: null,
+        departmentId: null,
+        status: 'active',
+      },
+    };
+  }
+
+  if (effectiveRole === 'client') {
+    // 1. Primary lookup by profile_id
+    let { data: client, error: clientError } = await db
       .from('clients')
       .select('id, company_name, primary_contact, email, status')
       .eq('profile_id', supabaseUser.id)
       .maybeSingle();
 
-    if (clientError || !client) {
+    if (clientError) {
       console.error('[Auth] Client profile lookup failed:', clientError);
-      return null;
+      return {
+        user: null,
+        error: clientError.code === '42501'
+          ? 'Access permission denied for client portal data. Please contact the administrator.'
+          : 'Unable to load client portal profile. Please try again.',
+      };
+    }
+
+    // 2. Fallback lookup by email if profile_id linkage was missing
+    if (!client && supabaseUser.email) {
+      console.warn('[Auth] Client not found by profile_id, trying email fallback for:', supabaseUser.email);
+      const { data: clientByEmail, error: emailError } = await db
+        .from('clients')
+        .select('id, company_name, primary_contact, email, status')
+        .eq('email', supabaseUser.email.toLowerCase())
+        .maybeSingle();
+
+      if (!emailError && clientByEmail) {
+        client = clientByEmail;
+      }
+    }
+
+    if (!client) {
+      console.error('[Auth] No client record found matching user:', supabaseUser.id);
+      return { user: null, error: 'Client account record not found. Please contact your IRA project manager.' };
     }
 
     return {
-      id: supabaseUser.id,
-      email: client.email ?? supabaseUser.email ?? '',
-      role: 'client',
-      empId: null,
-      employeeDbId: null,
-      loginId: client.email ?? supabaseUser.email ?? null,
-      name: client.company_name ?? 'Client Representative',
-      companyName: client.company_name,
-      primaryContact: client.primary_contact,
-      avatar: null,
-      department: null,
-      designation: 'Client Representative',
-      designationId: null,
-      departmentId: null,
-      status: client.status === 'inactive' ? 'inactive' : 'active',
+      user: {
+        id: supabaseUser.id,
+        email: client.email ?? supabaseUser.email ?? '',
+        role: 'client',
+        empId: null,
+        employeeDbId: null,
+        loginId: client.email ?? supabaseUser.email ?? null,
+        name: client.company_name ?? 'Client Representative',
+        companyName: client.company_name,
+        primaryContact: client.primary_contact,
+        avatar: null,
+        department: null,
+        designation: 'Client Representative',
+        designationId: null,
+        departmentId: null,
+        status: client.status === 'inactive' ? 'inactive' : 'active',
+      },
     };
   }
 
@@ -211,9 +258,19 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
     .eq('profile_id', supabaseUser.id)
     .maybeSingle();
 
-  if (employeeError || !employee) {
+  if (employeeError) {
     console.error('[Auth] Employee lookup failed:', employeeError);
-    return null;
+    return {
+      user: null,
+      error: employeeError.code === '42501'
+        ? 'Access permission denied while reading employee record.'
+        : 'Unable to load employee profile.',
+    };
+  }
+
+  if (!employee) {
+    console.error('[Auth] Employee lookup failed: no employee record found for user', supabaseUser.id);
+    return { user: null, error: 'Employee account record not found. Please contact HR.' };
   }
 
   const [{ data: department }, { data: designation }, { data: manager }, { data: salary }] = await Promise.all([
@@ -230,29 +287,31 @@ const loadUserProfile = async (supabaseUser: User): Promise<AuthUser | null> => 
   ]);
 
   return {
-    id: supabaseUser.id,
-    email: employee.work_email ?? supabaseUser.email ?? loginIdToAuthEmail(employee.login_id),
-    role: 'employee',
-    empId: employee.emp_id,
-    employeeDbId: employee.id,
-    loginId: employee.login_id,
-    name: employee.name,
-    avatar: employee.avatar_url ?? null,
-    department: department?.name ?? null,
-    designation: designation?.name ?? null,
-    designationId: employee.designation_id,
-    departmentId: employee.department_id,
-    phone: employee.phone ?? undefined,
-    shift: employee.shift_start ?? undefined,
-    shiftEnd: employee.shift_end ?? undefined,
-    manager: manager?.name ?? null,
-    managerId: employee.manager_id ?? null,
-    status: employee.status,
-    workMode: employee.work_mode,
-    wfhBalance: 0,
-    leaveBalance: 0,
-    currentSalary: salary?.monthly_salary == null ? undefined : Number(salary.monthly_salary),
-    joinDate: employee.join_date,
+    user: {
+      id: supabaseUser.id,
+      email: employee.work_email ?? supabaseUser.email ?? loginIdToAuthEmail(employee.login_id),
+      role: 'employee',
+      empId: employee.emp_id,
+      employeeDbId: employee.id,
+      loginId: employee.login_id,
+      name: employee.name,
+      avatar: employee.avatar_url ?? null,
+      department: department?.name ?? null,
+      designation: designation?.name ?? null,
+      designationId: employee.designation_id,
+      departmentId: employee.department_id,
+      phone: employee.phone ?? undefined,
+      shift: employee.shift_start ?? undefined,
+      shiftEnd: employee.shift_end ?? undefined,
+      manager: manager?.name ?? null,
+      managerId: employee.manager_id ?? null,
+      status: employee.status,
+      workMode: employee.work_mode,
+      wfhBalance: 0,
+      leaveBalance: 0,
+      currentSalary: salary?.monthly_salary == null ? undefined : Number(salary.monthly_salary),
+      joinDate: employee.join_date,
+    },
   };
 };
 
@@ -272,7 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!mounted) return;
       setSession(data.session);
       if (data.session?.user) {
-        const profile = await loadUserProfile(data.session.user);
+        const { user: profile } = await loadUserProfile(data.session.user);
         if (mounted) setUser(profile);
       }
       if (mounted) setLoading(false);
@@ -288,7 +347,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       window.setTimeout(() => {
-        void loadUserProfile(nextSession.user).then((profile) => {
+        void loadUserProfile(nextSession.user).then(({ user: profile }) => {
           if (!mounted) return;
           setUser(profile);
           setLoading(false);
@@ -331,7 +390,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
         return;
       }
-      const current = await loadUserProfile(data.user);
+      const { user: current } = await loadUserProfile(data.user);
       if (!current || current.status === 'inactive') {
         await supabase.auth.signOut();
         if (active) {
@@ -375,10 +434,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error || !data.user) return { error: 'Invalid credentials. Please check your details and try again.' };
 
-      const authUser = await loadUserProfile(data.user);
+      const { user: authUser, error: profileLoadError } = await loadUserProfile(data.user);
       if (!authUser) {
         await supabase.auth.signOut();
-        return { error: 'Your account is not fully configured. Please contact the administrator.' };
+        return { error: profileLoadError || 'Your account is not fully configured. Please contact the administrator.' };
       }
 
       if (authUser.status === 'inactive') {

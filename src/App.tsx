@@ -594,7 +594,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       </div>
       <div className="min-h-screen text-slate-900 flex ira-app-bg">
         <Sidebar
-          activeRole={user.role} activeTab={activeTab} onSelectTab={navigate} currentUser={user}
+          activeRole={user.role === 'admin' ? 'admin' : 'employee'} activeTab={activeTab} onSelectTab={navigate} currentUser={user}
           pendingTaskCount={user.role === 'admin' ? adminSubmittedTasks : employeeOpenTasks}
           pendingWfhCount={user.role === 'admin' ? wfhRequests.filter(x => x.status === 'pending').length : undefined}
           pendingLeaveCount={user.role === 'admin' ? leaveRequests.filter(x => x.status === 'pending').length : undefined}

@@ -178,11 +178,19 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // 3. Update Supabase Auth user password and confirm email
+      // 3. Update Supabase Auth user password, confirm email, and set app_metadata role
       const { error: authError } = await admin.auth.admin.updateUserById(updated.client_id, {
         password,
         email_confirm: true,
+        app_metadata: {
+          role: 'client',
+        },
       });
+
+      // Ensure profile role is client in public.profiles
+      await admin
+        .from('profiles')
+        .upsert({ id: updated.client_id, role: 'client' });
 
       if (authError) {
         console.error('[client-setup] Auth password update failed:', authError.message);

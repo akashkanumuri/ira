@@ -1,12 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, EyeOff, LockKeyhole, AlertCircle, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, TimerOff } from 'lucide-react';
 import { invokeClientSetup } from '../../lib/v2';
+import { ClientAuthLayout } from './ClientAuthLayout';
+import { ClientAlert } from './ClientAlert';
 
 export const ClientPasswordSetupScreen: React.FC = () => {
   const [token, setToken] = useState<string>('');
   const [verifying, setVerifying] = useState(true);
   const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [clientInfo, setClientInfo] = useState<{ companyName: string; primaryContact: string; email: string } | null>(null);
+  const [clientInfo, setClientInfo] = useState<{
+    companyName: string;
+    primaryContact: string;
+    email: string;
+  } | null>(null);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,7 +43,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
             email: res.email,
           });
         } else {
-          setVerifyError(res?.error || 'Invitation is invalid or has expired.');
+          setVerifyError(res?.error || 'This invitation link is invalid or has expired.');
         }
       } catch (err) {
         setVerifyError(err instanceof Error ? err.message : 'Unable to verify invitation link.');
@@ -48,13 +54,15 @@ export const ClientPasswordSetupScreen: React.FC = () => {
   }, []);
 
   // Password rules validation
-  const hasMinLength = password.length >= 12;
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  const hasSymbol = /[^A-Za-z0-9]/.test(password);
-  const passwordsMatch = password.length > 0 && password === confirmPassword;
-  const isFormValid = hasMinLength && hasUpper && hasLower && hasNumber && hasSymbol && passwordsMatch;
+  const rules = [
+    ['At least 12 characters', password.length >= 12],
+    ['Contains a number', /\d/.test(password)],
+    ['Contains uppercase & lowercase', /[A-Z]/.test(password) && /[a-z]/.test(password)],
+    ['Contains a special character', /[^A-Za-z0-9]/.test(password)],
+    ['Passwords match', !!password && password === confirmPassword],
+  ] as const;
+
+  const isFormValid = rules.every(([, ok]) => ok);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,181 +88,182 @@ export const ClientPasswordSetupScreen: React.FC = () => {
     }
   }
 
+  // 1. Verifying Token State
+  if (verifying) {
+    return (
+      <ClientAuthLayout
+        tag="Account setup"
+        line="Choose a password you’ll use to sign in from now on."
+      >
+        <div className="py-12 text-center text-[#697386] text-[13px] flex flex-col items-center gap-3">
+          <Loader2 size={24} className="animate-spin text-[#243b64]" />
+          <span>Verifying your invitation link…</span>
+        </div>
+      </ClientAuthLayout>
+    );
+  }
+
+  // 2. Invalid or Expired Token State
+  if (verifyError) {
+    return (
+      <ClientAuthLayout
+        tag="Invitation"
+        line="Secure links expire to keep your account safe."
+      >
+        <div className="w-10 h-10 rounded-md bg-[#fbf3e2] text-[#b7791f] grid place-items-center mb-4">
+          <TimerOff size={18} />
+        </div>
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#172033]">
+          This invitation link has expired
+        </h1>
+        <p className="text-[13px] text-[#697386] mt-1.5 mb-6 leading-relaxed">
+          {verifyError}
+        </p>
+        <a
+          href="/client/login"
+          className="inline-flex items-center gap-1.5 text-[13px] text-[#697386] hover:text-[#172033] transition-colors"
+        >
+          <ArrowLeft size={14} /> Back to sign in
+        </a>
+      </ClientAuthLayout>
+    );
+  }
+
+  // 3. Success State
+  if (setupSuccess) {
+    return (
+      <ClientAuthLayout
+        tag="Account setup"
+        line="Choose a password you’ll use to sign in from now on."
+      >
+        <div className="w-10 h-10 rounded-md bg-[#e7f4ee] text-[#16845b] grid place-items-center mb-4">
+          <CheckCircle2 size={18} />
+        </div>
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#172033]">
+          Password set
+        </h1>
+        <p className="text-[13px] text-[#697386] mt-1.5 mb-6 leading-relaxed">
+          Your account is ready. Sign in with{' '}
+          <span className="font-medium text-[#172033]">{clientInfo?.email}</span> and your new password.
+        </p>
+        <a
+          href="/client/login"
+          className="w-full h-10 inline-flex items-center justify-center rounded-md font-medium text-[13px] bg-[#243b64] text-white hover:bg-[#1c2f50] border border-[#243b64] transition-colors no-underline"
+        >
+          Continue to sign in
+        </a>
+      </ClientAuthLayout>
+    );
+  }
+
+  // 4. Setup Form State
   return (
-    <main className="ira-login-page">
-      <div className="ira-fluid-background" aria-hidden="true">
-        <div className="ira-fluid-blob ira-fluid-blob-one" />
-        <div className="ira-fluid-blob ira-fluid-blob-two" />
-      </div>
+    <ClientAuthLayout
+      tag="Account setup"
+      line="Choose a password you’ll use to sign in from now on."
+    >
+      <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[#172033]">
+        Set your password
+      </h1>
+      <p className="text-[13px] text-[#697386] mt-1.5 mb-6">
+        For {clientInfo?.email || 'your account'}
+        {clientInfo?.companyName ? ` · ${clientInfo.companyName}` : ''}
+      </p>
 
-      <div className="ira-login-container">
-        {/* Left Panel: Brand overview */}
-        <section className="ira-login-brand-panel hidden lg:flex" aria-label="Client Portal">
-          <div className="ira-welcome-container">
-            <div className="ira-welcome-glow" aria-hidden="true" />
-            <h2 className="ira-welcome-title">Client Portal</h2>
-            <p className="text-slate-400 text-sm mt-3 max-w-sm leading-relaxed">
-              Activate your client account to collaborate on projects, track deliverables, and manage operational milestones with IRA.
-            </p>
+      {submitError && (
+        <ClientAlert tone="err" title="Unable to set password" className="mb-4">
+          {submitError}
+        </ClientAlert>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <div>
+          <label htmlFor="setup-new-password" className="block text-xs font-medium text-[#172033] mb-1.5">
+            New password <span className="text-[#d64545]">*</span>
+          </label>
+          <div className="relative">
+            <input
+              id="setup-new-password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => {
+                setPassword(e.target.value);
+                if (submitError) setSubmitError(null);
+              }}
+              autoComplete="new-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+              className="w-full h-9 pl-3 pr-9 rounded-md border border-[#e5e8ef] bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15"
+            />
+            <button
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPassword(v => !v)}
+              className="absolute right-0 top-0 h-9 w-9 grid place-items-center text-[#8a93a5] hover:text-[#172033] transition-colors cursor-pointer"
+            >
+              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
           </div>
-        </section>
+        </div>
 
-        {/* Right Panel: Setup Form */}
-        <section className="ira-login-form-panel">
-          <div className="ira-login-form-box">
-            <div className="ira-form-header">
-              <img
-                src="/ira-hospitality-logo.png"
-                alt="IRA Hospitality"
-                className="ira-form-logo"
-              />
-              <h1 className="ira-form-title">ACCOUNT SETUP</h1>
-              <p className="ira-form-subtitle">Choose a secure password to activate your account</p>
-            </div>
+        <div>
+          <label htmlFor="setup-confirm-password" className="block text-xs font-medium text-[#172033] mb-1.5">
+            Confirm password <span className="text-[#d64545]">*</span>
+          </label>
+          <input
+            id="setup-confirm-password"
+            type={showPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={e => {
+              setConfirmPassword(e.target.value);
+              if (submitError) setSubmitError(null);
+            }}
+            autoComplete="new-password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            required
+            className="w-full h-9 px-3 rounded-md border border-[#e5e8ef] bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15"
+          />
+        </div>
 
-            {verifying ? (
-              <div className="py-12 text-center text-slate-300 text-sm flex flex-col items-center gap-3">
-                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <span>Verifying your invitation link…</span>
-              </div>
-            ) : verifyError ? (
-              <div className="space-y-4">
-                <div className="ira-login-error" role="alert">
-                  <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
-                  <span>{verifyError}</span>
-                </div>
-                <div className="text-center pt-2">
-                  <a
-                    href="/client/login"
-                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center gap-1 font-semibold"
-                  >
-                    Go to Client Login <ArrowRight className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-            ) : setupSuccess ? (
-              <div className="space-y-5 text-center py-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Password Configured!</h3>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                    Your password has been set securely. You can now log in to access your projects.
-                  </p>
-                </div>
-                <a
-                  href="/client/login"
-                  className="ira-submit-btn inline-flex items-center justify-center text-center no-underline"
-                >
-                  SIGN IN TO CLIENT PORTAL
-                </a>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="ira-login-form space-y-4" noValidate>
-                {/* Client Company Info */}
-                {clientInfo && (
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-3.5 text-xs space-y-1">
-                    <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Account Assigned</div>
-                    <div className="font-bold text-white text-sm">{clientInfo.companyName}</div>
-                    <div className="text-slate-300">Contact: {clientInfo.primaryContact} ({clientInfo.email})</div>
-                  </div>
-                )}
+        {/* Security checklist matching reference */}
+        <ul className="space-y-1.5 pt-1">
+          {rules.map(([text, ok]) => (
+            <li
+              key={text}
+              className={`flex items-center gap-2 text-xs transition-colors ${
+                ok ? 'text-[#16845b]' : 'text-[#8a93a5]'
+              }`}
+            >
+              <CheckCircle2 size={13} strokeWidth={ok ? 2.5 : 2} className="shrink-0" />
+              <span>{text}</span>
+            </li>
+          ))}
+        </ul>
 
-                {submitError && (
-                  <div className="ira-login-error" role="alert">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                    <span>{submitError}</span>
-                  </div>
-                )}
+        <button
+          type="submit"
+          disabled={submitting || !isFormValid}
+          className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-md font-medium text-[13px] bg-[#243b64] text-white hover:bg-[#1c2f50] border border-[#243b64] transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={14} className="animate-spin" />
+              <span>Saving password…</span>
+            </>
+          ) : (
+            'Save password'
+          )}
+        </button>
+      </form>
 
-                {/* Password Input */}
-                <label className="ira-form-field">
-                  <span className="sr-only">New Password</span>
-                  <div className="ira-input-wrapper">
-                    <LockKeyhole className="ira-input-icon" aria-hidden="true" />
-                    <input
-                      id="ira-client-password"
-                      value={password}
-                      onChange={e => {
-                        setPassword(e.target.value);
-                        if (submitError) setSubmitError(null);
-                      }}
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="Create Password"
-                      aria-label="New Password"
-                      className="ira-input pr-12"
-                    />
-                    <button
-                      type="button"
-                      className="ira-password-toggle"
-                      onClick={() => setShowPassword(v => !v)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </label>
-
-                {/* Confirm Password Input */}
-                <label className="ira-form-field">
-                  <span className="sr-only">Confirm Password</span>
-                  <div className="ira-input-wrapper">
-                    <LockKeyhole className="ira-input-icon" aria-hidden="true" />
-                    <input
-                      id="ira-client-confirm-password"
-                      value={confirmPassword}
-                      onChange={e => {
-                        setConfirmPassword(e.target.value);
-                        if (submitError) setSubmitError(null);
-                      }}
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="Confirm Password"
-                      aria-label="Confirm Password"
-                      className="ira-input"
-                    />
-                  </div>
-                </label>
-
-                {/* Security Requirements Checklist */}
-                <div className="rounded-xl bg-slate-900/60 border border-white/5 p-3 text-[11px] space-y-1.5 text-slate-400">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-300 text-[10px] uppercase tracking-wider mb-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-blue-400" /> Password Requirements
-                  </div>
-                  <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-400' : ''}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current" /> Minimum 12 characters
-                  </div>
-                  <div className={`flex items-center gap-1.5 ${hasUpper && hasLower ? 'text-emerald-400' : ''}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current" /> Uppercase and lowercase letters
-                  </div>
-                  <div className={`flex items-center gap-1.5 ${hasNumber && hasSymbol ? 'text-emerald-400' : ''}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current" /> At least one number and special character
-                  </div>
-                  <div className={`flex items-center gap-1.5 ${passwordsMatch ? 'text-emerald-400' : ''}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current" /> Passwords match
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submitting || !isFormValid}
-                  className="ira-submit-btn"
-                >
-                  {submitting ? 'SETTING PASSWORD…' : 'ACTIVATE ACCOUNT'}
-                </button>
-              </form>
-            )}
-          </div>
-        </section>
-      </div>
-    </main>
+      <p className="text-xs text-[#8a93a5] mt-5 flex gap-1.5 leading-relaxed">
+        <ShieldCheck size={13} className="shrink-0 mt-0.5 text-[#243b64]" />
+        <span>Passwords are stored securely and can’t be viewed by anyone, including administrators.</span>
+      </p>
+    </ClientAuthLayout>
   );
 };

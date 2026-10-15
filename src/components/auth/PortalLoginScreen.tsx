@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle } from 'lucide-react';
+import { ClientLoginView } from '../client/ClientLoginView';
 
 type Portal = 'employee' | 'admin' | 'client';
 
@@ -59,6 +60,10 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     } finally {
       setLoading(false);
     }
+  }
+
+  if (activePortal === 'client') {
+    return <ClientLoginView onSwitchToStaff={() => switchPortal('employee')} />;
   }
 
   return (
@@ -207,15 +212,13 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
                     ADMIN LOGIN
                   </button>
                 )}
-                {activePortal !== 'client' && (
-                  <button
-                    type="button"
-                    className="ira-switch-btn"
-                    onClick={() => switchPortal('client')}
-                  >
-                    CLIENT LOGIN
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="ira-switch-btn"
+                  onClick={() => switchPortal('client')}
+                >
+                  CLIENT LOGIN
+                </button>
               </div>
             </div>
           </div>

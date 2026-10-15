@@ -436,6 +436,9 @@ async function createClientAccount(
       primary_contact: primaryContact,
       role: 'client',
     },
+    app_metadata: {
+      role: 'client',
+    },
   });
 
   if (authError || !authUser.user) {
@@ -447,11 +450,10 @@ async function createClientAccount(
   let createdProjectId: string | null = null;
 
   try {
-    // 1. Update profiles role to 'client'
+    // 1. Ensure profiles role is 'client' (upsert handles both immediate insert or post-trigger state)
     const { error: profileError } = await admin
       .from('profiles')
-      .update({ role: 'client' })
-      .eq('id', userId);
+      .upsert({ id: userId, role: 'client' });
 
     if (profileError) throw profileError;
 
