@@ -81,6 +81,10 @@ const ManagerClientWorkInternal: React.FC<Props> = ({ user, employees }) => {
         const pIds = (pmList || []).map((pm: any) => pm.project_id);
         if (pIds.length > 0) {
           pQuery = pQuery.in('id', pIds);
+        } else {
+          setProjects([]);
+          setLoading(false);
+          return;
         }
       }
 

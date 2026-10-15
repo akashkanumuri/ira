@@ -6,7 +6,6 @@ import { useAuth, type AuthUser, loginIdToAuthEmail } from './contexts/AuthConte
 import { AdminLoginScreen, EmployeeLoginScreen, ClientLoginScreen } from './components/auth/PortalLoginScreen';
 import { ClientPasswordSetupScreen } from './components/client/ClientPasswordSetupScreen';
 import { ClientPortalView } from './components/client/ClientPortalView';
-import { ClientDirectoryView } from './components/admin/ClientDirectoryView';
 import { AdminClientCenter } from './components/admin/AdminClientCenter';
 import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { Sidebar } from './components/common/Sidebar';
@@ -132,7 +131,7 @@ function LiveClockDisplay() {
     return () => window.clearInterval(timer);
   }, []);
   return (
-    <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700 shadow-xs">
+    <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-xs">
       <span className="ira-live-dot" />
       <span>{time.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
     </div>
@@ -1596,9 +1595,28 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
                       : 'Monday–Saturday working day'}
             </p>
           </div>
-          <div className="text-left lg:text-right">
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Live clock</p>
-            <p className="font-mono text-xl sm:text-2xl font-bold text-slate-950 mt-0.5">{formatKolkataTime(now, true)}</p>
+          <div className="flex items-center lg:justify-end">
+            {state === 'working' ? (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Working Session Active
+              </span>
+            ) : state === 'on_break' ? (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-bold text-amber-700">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                On Break
+              </span>
+            ) : state === 'checked_out' ? (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600">
+                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                Checked Out Today
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                Not Checked In
+              </span>
+            )}
           </div>
         </div>
 

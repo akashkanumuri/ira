@@ -11,11 +11,12 @@ export const ClientAuthLayout: React.FC<ClientAuthLayoutProps> = ({ children, ta
     <div className="min-h-screen grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] bg-[#f7f8fa] text-[#172033]">
       {/* Left panel: IRA branding, client portal introduction, and supporting text (Desktop only) */}
       <div className="hidden lg:flex flex-col justify-between bg-[#243b64] text-white p-12 select-none">
-        <div className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-md bg-white text-[#243b64] grid place-items-center font-bold text-sm">
-            I
-          </span>
-          <span className="text-lg font-semibold tracking-[0.08em] text-white">IRA</span>
+        <div className="flex items-center gap-3">
+          <img
+            src="/ira-hospitality-logo.png"
+            alt="IRA Hospitality"
+            className="h-10 w-auto max-w-[200px] object-contain object-left brightness-0 invert"
+          />
         </div>
         <div>
           <div className="text-xs uppercase tracking-[0.14em] text-white/60 mb-4 font-medium">{tag}</div>
@@ -31,10 +32,11 @@ export const ClientAuthLayout: React.FC<ClientAuthLayoutProps> = ({ children, ta
         <div className="w-full max-w-[380px]">
           {/* Mobile branding */}
           <div className="lg:hidden flex items-center gap-2.5 mb-8 select-none">
-            <span className="w-8 h-8 rounded-md bg-[#243b64] text-white grid place-items-center font-bold text-sm">
-              I
-            </span>
-            <span className="text-lg font-semibold tracking-[0.08em] text-[#172033]">IRA</span>
+            <img
+              src="/ira-hospitality-logo.png"
+              alt="IRA Hospitality"
+              className="h-9 w-auto max-w-[170px] object-contain object-left"
+            />
           </div>
           {children}
         </div>
