@@ -7,6 +7,8 @@ import { AdminLoginScreen, EmployeeLoginScreen, ClientLoginScreen } from './comp
 import { ClientPasswordSetupScreen } from './components/client/ClientPasswordSetupScreen';
 import { ClientPortalView } from './components/client/ClientPortalView';
 import { ClientDirectoryView } from './components/admin/ClientDirectoryView';
+import { AdminClientCenter } from './components/admin/AdminClientCenter';
+import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { Sidebar } from './components/common/Sidebar';
 import { ToastHost } from './components/common/ToastHost';
 import { notify, type NotificationCategory } from './lib/toast';
@@ -40,7 +42,8 @@ import {
   Activity, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight,
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
-  Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles
+  Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
+  FolderKanban
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -144,7 +147,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       if (validAdminTabs.includes(p)) return p;
       return 'admin-dashboard';
     } else {
-      const validEmpTabs = ['emp-dashboard', 'emp-attendance', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-corrections', 'emp-holidays', 'emp-payroll', 'emp-profile'];
+      const validEmpTabs = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-corrections', 'emp-holidays', 'emp-payroll', 'emp-profile'];
       if (validEmpTabs.includes(p)) return p;
       return 'emp-dashboard';
     }
@@ -527,6 +530,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const employeeNav = [
     ['emp-dashboard', 'Dashboard', LayoutDashboard],
     ['emp-attendance', 'My Attendance', Clock3],
+    ['emp-client-work', 'Client Projects', FolderKanban],
     ['emp-tasks', 'Work & Assignments', BriefcaseBusiness],
     ['emp-leave', 'Leave', CalendarDays],
     ['emp-wfh', 'WFH', Home],
@@ -735,6 +739,7 @@ function getPageTitle(tab: string) {
     'admin-settings': 'Settings',
     'emp-dashboard': 'Dashboard',
     'emp-attendance': 'My Attendance',
+    'emp-client-work': 'Client Projects',
     'emp-tasks': 'Work & Assignments',
     'emp-leave': 'Leave',
     'emp-wfh': 'WFH',
@@ -746,7 +751,7 @@ function getPageTitle(tab: string) {
 
 function AdminContent(props: any) {
   const { activeTab, user, onRefresh, onSelectTab } = props;
-  if (activeTab === 'admin-clients') return <ClientDirectoryView employees={props.employees} />;
+  if (activeTab === 'admin-clients') return <AdminClientCenter employees={props.employees} />;
   if (activeTab === 'admin-employees') return <EmployeesAdmin {...props} />;
   if (activeTab === 'admin-attendance') return <AttendanceAdmin {...props} />;
   if (activeTab === 'admin-tasks') return <TasksAdmin {...props} />;
@@ -761,6 +766,7 @@ function AdminContent(props: any) {
 function EmployeeContent(props: any) {
   const { activeTab } = props;
   if (activeTab === 'emp-attendance') return <AttendanceEmployee {...props} />;
+  if (activeTab === 'emp-client-work') return <ManagerClientWork user={props.user} employees={props.employees} />;
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
   if (activeTab === 'emp-leave') return <LeaveEmployee {...props} />;
   if (activeTab === 'emp-wfh') return <WfhEmployee {...props} />;

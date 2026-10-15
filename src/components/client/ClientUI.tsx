@@ -631,7 +631,7 @@ export type Col<T> = {
   head: string;
   render: (r: T) => ReactNode;
   w?: string;
-  align?: 'right';
+  align?: 'right' | 'center' | 'left';
   sortable?: boolean;
   mobile?: 'title' | 'hide' | 'meta';
 };
@@ -691,7 +691,8 @@ export function DataTable<T extends { id: string | number }>({
                       style={{ width: c.w }}
                       className={cx(
                         'h-10 px-4 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-2 whitespace-nowrap',
-                        c.align === 'right' && 'text-right'
+                        c.align === 'right' && 'text-right',
+                        c.align === 'center' && 'text-center'
                       )}
                     >
                       {c.head}
@@ -715,7 +716,8 @@ export function DataTable<T extends { id: string | number }>({
                         key={c.key}
                         className={cx(
                           'px-4 align-middle text-ink',
-                          c.align === 'right' && 'text-right tnum'
+                          c.align === 'right' && 'text-right tnum',
+                          c.align === 'center' && 'text-center'
                         )}
                       >
                         {c.render(r)}

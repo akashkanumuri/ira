@@ -96,6 +96,8 @@ export interface ClientProject {
 }
 
 export interface ClientContractData {
+  id?: string;
+  dbId?: string;
   title: string;
   ref: string;
   version: string;
@@ -107,7 +109,7 @@ export interface ClientContractData {
 }
 
 export interface ClientAcceptanceRecord {
-  id: number;
+  id: number | string;
   version: string;
   url: string;
   who: string;
@@ -118,6 +120,7 @@ export interface ClientAcceptanceRecord {
 
 export interface ClientDeliverable {
   id: string;
+  dbId?: string;
   name: string;
   desc: string;
   qty: string;
@@ -131,6 +134,7 @@ export interface ClientDeliverable {
 
 export interface ClientChangeRequest {
   id: string;
+  dbId?: string;
   del: string;
   delName: string;
   field: string;
@@ -146,6 +150,7 @@ export interface ClientChangeRequest {
 
 export interface ClientInstallment {
   id: number;
+  dbId?: string;
   name: string;
   basis: string;
   amount: number;
@@ -382,55 +387,166 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
     return projects.find(p => p.id === selectedProjectId) || projects[0] || null;
   }, [projects, selectedProjectId]);
 
-  /* ---------- Sync Project State with LocalStorage ---------- */
-  useEffect(() => {
-    if (!selectedProject || !user.id) return;
-    const storageKey = getStorageKey(user.id, selectedProject.id);
-    const existing = localStorage.getItem(storageKey);
-    if (existing) {
-      try {
-        const parsed = JSON.parse(existing);
-        // Clean out any legacy dummy/seed data cached in browser storage
-        const hasDummyContract =
-          parsed.contract?.url?.includes('sample') || parsed.contract?.ref?.includes('2026-001');
-        const hasDummyDeliverables = parsed.deliverables?.some(
-          (d: any) => d.id === 'D-001' && d.name?.includes('Discovery & Architecture')
-        );
-        const hasDummyInstallments = parsed.installments?.some(
-          (i: any) => i.ref === 'NEFT-882194' || i.name?.includes('Advance on contract')
-        );
+  /* ---------- Load Project State from Supabase Backend ---------- */
+  const loadProjectState = useCallback(async (projectId: string) => {
+    try {
+      const db = supabase as any;
+      const [
+        { data: contractData },
+        { data: acceptancesData },
+        { data: deliverablesData },
+        { data: changesData },
+        { data: installmentsData },
+        { data: milestonesData },
+        { data: updatesData },
+      ] = await Promise.all([
+        db.from('contracts').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('contract_acceptances').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        db.from('deliverables').select('*').eq('project_id', projectId).order('deliverable_number', { ascending: true }),
+        db.from('change_requests').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+        db.from('payment_installments').select('*').eq('project_id', projectId).order('installment_number', { ascending: true }),
+        db.from('milestones').select('*').eq('project_id', projectId).order('sort_order', { ascending: true }),
+        db.from('project_updates').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+      ]);
 
-        if (hasDummyContract || hasDummyDeliverables || hasDummyInstallments) {
-          localStorage.removeItem(storageKey);
-          setState(createInitialState());
-          return;
-        }
+      const contract: ClientContractData | null = contractData
+        ? {
+            id: contractData.id,
+            dbId: contractData.id,
+            title: contractData.title,
+            ref: contractData.ref,
+            version: contractData.version,
+            url: contractData.url,
+            status: contractData.status,
+            assigned: new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+              new Date(contractData.assigned_date || contractData.created_at)
+            ),
+            acceptedAt: contractData.accepted_at
+              ? new Intl.DateTimeFormat('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }).format(new Date(contractData.accepted_at))
+              : '',
+            acceptedUrl: contractData.accepted_url || '',
+          }
+        : null;
 
-        setState(parsed);
-        return;
-      } catch (e) {
-        console.error('[ClientPortal] Error parsing stored state:', e);
-      }
+      const acceptance: ClientAcceptanceRecord[] = (acceptancesData || []).map((a: any) => ({
+        id: a.id,
+        version: a.version,
+        url: a.url,
+        who: a.who,
+        at: new Intl.DateTimeFormat('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date(a.created_at)),
+        event: a.event,
+        note: a.note || '',
+      }));
+
+      const deliverables: ClientDeliverable[] = (deliverablesData || []).map((d: any) => ({
+        id: d.deliverable_number,
+        dbId: d.id,
+        name: d.name,
+        desc: d.description || '—',
+        qty: d.quantity,
+        due: d.due_date,
+        deps: d.dependencies || '—',
+        ref: d.reference_url || '—',
+        owner: d.responsible_name || 'Project Team',
+        status: d.status,
+        updated: new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+          new Date(d.updated_at || d.created_at)
+        ),
+      }));
+
+      const changes: ClientChangeRequest[] = (changesData || []).map((c: any) => ({
+        id: c.request_number,
+        dbId: c.id,
+        del: c.deliverable_id,
+        delName: c.field,
+        field: c.field,
+        prev: c.previous_value || '—',
+        next: c.requested_value,
+        by: c.requested_by_name || 'Client',
+        at: new Intl.DateTimeFormat('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date(c.created_at)),
+        status: c.status,
+        reason: c.reason || '',
+        reviewer: c.reviewer_name || '',
+        comment: c.reviewer_comment || '',
+      }));
+
+      const installments: ClientInstallment[] = (installmentsData || []).map((i: any) => ({
+        id: i.installment_number,
+        dbId: i.id,
+        name: i.name,
+        basis: i.basis || '—',
+        amount: Number(i.amount),
+        due: i.due_date,
+        status: i.status,
+        ref: i.payment_reference || '',
+        paidOn: i.paid_on || '',
+      }));
+
+      const milestones: ClientMilestone[] = (milestonesData || []).map((m: any, idx: number) => ({
+        id: idx + 1,
+        name: m.name,
+        date: m.target_date,
+        state: m.state,
+      }));
+
+      const updates: ClientProjectUpdate[] = (updatesData || []).map((u: any, idx: number) => ({
+        id: idx + 1,
+        title: u.title,
+        meta: u.meta,
+        tone: (u.tone as any) || undefined,
+      }));
+
+      setState({
+        contract,
+        acceptance,
+        deliverables,
+        changes,
+        installments,
+        milestones,
+        updates,
+      });
+    } catch (err) {
+      console.error('[ClientPortal] Failed to load project data from database:', err);
     }
+  }, []);
 
-    // Initialize fresh empty state with zero dummy data
-    const initial = createInitialState();
-    localStorage.setItem(storageKey, JSON.stringify(initial));
-    setState(initial);
-  }, [selectedProject?.id, user.id]);
+  useEffect(() => {
+    if (selectedProject?.id) {
+      void loadProjectState(selectedProject.id);
+    } else {
+      setState(createInitialState());
+    }
+  }, [selectedProject?.id, loadProjectState]);
+
+  const reloadCurrentProject = useCallback(async () => {
+    if (selectedProject?.id) {
+      await loadProjectState(selectedProject.id);
+    }
+  }, [selectedProject?.id, loadProjectState]);
 
   const updateState = useCallback(
     (updater: (prev: StoredProjectState) => StoredProjectState) => {
-      if (!selectedProject || !user.id) return;
-      setState(current => {
-        if (!current) return current;
-        const next = updater(current);
-        const storageKey = getStorageKey(user.id, selectedProject.id);
-        localStorage.setItem(storageKey, JSON.stringify(next));
-        return next;
-      });
+      setState(current => (current ? updater(current) : current));
     },
-    [selectedProject?.id, user.id]
+    []
   );
 
   const markNotificationRead = async (id: string | number) => {
@@ -714,6 +830,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
             project={selectedProject}
             state={state}
             updateState={updateState}
+            onReload={reloadCurrentProject}
           />
         );
 
@@ -724,6 +841,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
             project={selectedProject}
             state={state}
             updateState={updateState}
+            onReload={reloadCurrentProject}
           />
         );
 
@@ -744,6 +862,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
             project={selectedProject}
             state={state}
             updateState={updateState}
+            onReload={reloadCurrentProject}
           />
         );
 
@@ -1248,11 +1367,13 @@ function ClientContractsView({
   project,
   state,
   updateState,
+  onReload,
 }: {
   user: AuthUser;
   project: ClientProject;
   state: StoredProjectState;
   updateState: (updater: (prev: StoredProjectState) => StoredProjectState) => void;
+  onReload?: () => Promise<void> | void;
 }) {
   const toast = useToast();
   const { contract, acceptance } = state;
@@ -1280,7 +1401,8 @@ function ClientContractsView({
 
   const accepted = contract.status === 'Accepted';
 
-  const handleConfirmAcceptance = () => {
+  const handleConfirmAcceptance = async () => {
+    const nowIso = new Date().toISOString();
     const nowStr = new Intl.DateTimeFormat('en-IN', {
       day: 'numeric',
       month: 'short',
@@ -1289,6 +1411,33 @@ function ClientContractsView({
       minute: '2-digit',
       hour12: true,
     }).format(new Date());
+
+    try {
+      if (contract.dbId) {
+        const db = supabase as any;
+        await db
+          .from('contracts')
+          .update({
+            status: 'Accepted',
+            accepted_at: nowIso,
+            accepted_url: contract.url,
+            updated_at: nowIso,
+          })
+          .eq('id', contract.dbId);
+
+        await db.from('contract_acceptances').insert({
+          contract_id: contract.dbId,
+          project_id: project.id,
+          version: contract.version,
+          url: contract.url,
+          who: user.primaryContact || user.name,
+          event: 'Accepted',
+          note: `Officially accepted and signed off by ${user.companyName || user.name}.`,
+        });
+      }
+    } catch (e) {
+      console.error('[ClientContractsView] Failed to persist contract acceptance:', e);
+    }
 
     updateState(prev => {
       if (!prev.contract) return prev;
@@ -1317,9 +1466,25 @@ function ClientContractsView({
 
     setDlg(null);
     toast('Contract accepted and recorded successfully');
+    await onReload?.();
   };
 
-  const handleConfirmDecline = () => {
+  const handleConfirmDecline = async () => {
+    try {
+      if (contract.dbId) {
+        const db = supabase as any;
+        await db
+          .from('contracts')
+          .update({
+            status: 'Declined',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', contract.dbId);
+      }
+    } catch (e) {
+      console.error('[ClientContractsView] Failed to record decline:', e);
+    }
+
     updateState(prev => {
       if (!prev.contract) return prev;
       return {
@@ -1332,6 +1497,7 @@ function ClientContractsView({
     });
     setDlg(null);
     toast('Your response has been sent to the project team', 'info');
+    await onReload?.();
   };
 
   return (
@@ -1535,11 +1701,13 @@ function ClientDeliverablesView({
   project,
   state,
   updateState,
+  onReload,
 }: {
   user: AuthUser;
   project: ClientProject;
   state: StoredProjectState;
   updateState: (updater: (prev: StoredProjectState) => StoredProjectState) => void;
+  onReload?: () => Promise<void> | void;
 }) {
   const toast = useToast();
   const { deliverables, changes } = state;
@@ -1570,7 +1738,7 @@ function ClientDeliverablesView({
     ? (activeDeliverable as any)[FIELD_KEYS[reqField]] || ''
     : '';
 
-  const handleSubmitChangeRequest = () => {
+  const handleSubmitChangeRequest = async () => {
     if (!activeDeliverable || !reqValue.trim()) return;
 
     const nowStr = new Intl.DateTimeFormat('en-IN', {
@@ -1582,8 +1750,30 @@ function ClientDeliverablesView({
       hour12: true,
     }).format(new Date());
 
+    const reqNum = `CR-00${changes.length + 1}`;
+
+    try {
+      if (activeDeliverable.dbId) {
+        const db = supabase as any;
+        await db.from('change_requests').insert({
+          project_id: project.id,
+          deliverable_id: activeDeliverable.dbId,
+          request_number: reqNum,
+          field: reqField,
+          previous_value: currentValue || '—',
+          requested_value: reqValue.trim(),
+          reason: reqReason.trim() || null,
+          requested_by: user.id,
+          requested_by_name: user.primaryContact || user.name,
+          status: 'Pending Review',
+        });
+      }
+    } catch (e) {
+      console.error('[ClientDeliverablesView] Failed to save change request to database:', e);
+    }
+
     const newChange: ClientChangeRequest = {
-      id: `CR-00${changes.length + 1}`,
+      id: reqNum,
       del: activeDeliverable.id,
       delName: activeDeliverable.name,
       field: reqField,
@@ -1606,6 +1796,7 @@ function ClientDeliverablesView({
     setReqValue('');
     setReqReason('');
     toast('Change request submitted. Your project team will review it.');
+    await onReload?.();
   };
 
   if (deliverables.length === 0) {
@@ -2072,11 +2263,13 @@ function ClientPaymentsView({
   project,
   state,
   updateState,
+  onReload,
 }: {
   user: AuthUser;
   project: ClientProject;
   state: StoredProjectState;
   updateState: (updater: (prev: StoredProjectState) => StoredProjectState) => void;
+  onReload?: () => Promise<void> | void;
 }) {
   const toast = useToast();
   const { installments } = state;
@@ -2096,8 +2289,24 @@ function ClientPaymentsView({
 
   const activeInstallment = installments.find(i => i.id === selectedInstallmentId);
 
-  const handleSubmitReference = () => {
+  const handleSubmitReference = async () => {
     if (!activeInstallment || !refInput.trim()) return;
+
+    try {
+      if (activeInstallment.dbId) {
+        const db = supabase as any;
+        await db
+          .from('payment_installments')
+          .update({
+            status: 'Pending Verification',
+            payment_reference: refInput.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', activeInstallment.dbId);
+      }
+    } catch (e) {
+      console.error('[ClientPaymentsView] Failed to save payment reference to database:', e);
+    }
 
     updateState(prev => ({
       ...prev,
@@ -2116,6 +2325,7 @@ function ClientPaymentsView({
     setSelectedInstallmentId(null);
     setRefInput('');
     toast('Payment reference submitted for verification by the IRA finance team');
+    await onReload?.();
   };
 
   const hasPendingVerification = installments.some(i => i.status === 'Pending Verification');
