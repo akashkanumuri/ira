@@ -107,10 +107,12 @@ export default function App() {
   useEffect(() => {
     if (user?.role === 'client' || clientPath) {
       document.title = 'IRA Client Portal';
+    } else if (adminPath) {
+      document.title = 'IRA Admin Portal';
     } else {
       document.title = 'IRA Attendance';
     }
-  }, [user?.role, clientPath]);
+  }, [user?.role, clientPath, adminPath]);
 
   useEffect(() => {
     void registerServiceWorker();
