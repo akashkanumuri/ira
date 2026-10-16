@@ -90,7 +90,16 @@ const authEmployee = (u: AuthUser): Employee => ({
 
 export default function App() {
   const { user, loading, signOut } = useAuth();
-  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const [currentPath, setCurrentPath] = useState(() => (typeof window !== 'undefined' ? window.location.pathname : ''));
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const adminPath = currentPath.startsWith('/admin');
   const clientSetupPath = currentPath.startsWith('/client/setup');
   const clientPath = currentPath.startsWith('/client');

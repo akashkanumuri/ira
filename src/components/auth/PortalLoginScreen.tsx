@@ -33,7 +33,8 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     setError('');
     setShowPassword(false);
     const path = next === 'admin' ? '/admin/login' : next === 'client' ? '/client/login' : '/login';
-    window.history.replaceState({}, '', path);
+    window.history.pushState({}, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
   async function submit(e: React.FormEvent) {
