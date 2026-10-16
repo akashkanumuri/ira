@@ -261,15 +261,15 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
           )}
         </div>
 
-        <div className="flex items-center justify-between">
-          <label className="flex items-start gap-2.5 cursor-pointer text-[13px] text-[#172033] leading-5 select-none">
+        <div className="flex items-center justify-between gap-2 text-xs sm:text-[13px]">
+          <label className="flex items-center gap-2 cursor-pointer text-[#172033] leading-5 select-none shrink-0">
             <input
               type="checkbox"
               checked={keepSignedIn}
               onChange={e => setKeepSignedIn(e.target.checked)}
               className="peer sr-only"
             />
-            <span className="mt-0.5 w-4 h-4 shrink-0 rounded-[4px] border border-[#b9c0cf] bg-white grid place-items-center peer-checked:bg-[#243b64] peer-checked:border-[#243b64] peer-focus-visible:outline-2 peer-focus-visible:outline-[#3478d4] peer-focus-visible:outline-offset-2 text-transparent peer-checked:text-white transition-colors">
+            <span className="w-4 h-4 shrink-0 rounded-[4px] border border-[#b9c0cf] bg-white grid place-items-center peer-checked:bg-[#243b64] peer-checked:border-[#243b64] peer-focus-visible:outline-2 peer-focus-visible:outline-[#3478d4] peer-focus-visible:outline-offset-2 text-transparent peer-checked:text-white transition-colors">
               <Check size={11} strokeWidth={3.5} />
             </span>
             <span>Keep me signed in</span>
@@ -280,7 +280,7 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
               setScreen('forgot');
               setError('');
             }}
-            className="text-[13px] text-[#3478d4] hover:underline cursor-pointer"
+            className="text-[#3478d4] hover:underline cursor-pointer shrink-0"
           >
             Forgot password?
           </button>
