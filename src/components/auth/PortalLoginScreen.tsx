@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Check, Eye, EyeOff, Loader2, XCircle } from 'lucide-react';
 import { ClientLoginView } from '../client/ClientLoginView';
 import { ClientAuthLayout } from '../client/ClientAuthLayout';
 import { ClientAlert } from '../client/ClientAlert';
@@ -125,7 +125,7 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({
 
         <div>
           <label htmlFor="portal-identifier" className="block text-xs font-medium text-[#172033] mb-1.5">
-            {isAdmin ? 'Admin ID' : 'Login ID or work email'} <span className="text-[#d64545]">*</span>
+            {isAdmin ? 'Admin ID' : 'Login ID or work email'} <span className="text-[#d64545] ml-0.5">*</span>
           </label>
           <input
             id="portal-identifier"
@@ -147,15 +147,15 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({
             } bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15`}
           />
           {validationError && !identifier.trim() && (
-            <span className="block text-xs text-[#d64545] mt-1.5">
-              {isAdmin ? 'Enter your Admin ID' : 'Enter your Login ID'}
+            <span className="flex items-center gap-1 text-xs text-[#d64545] mt-1.5">
+              <XCircle size={12} /> {isAdmin ? 'Enter your Admin ID' : 'Enter your Login ID'}
             </span>
           )}
         </div>
 
         <div>
           <label htmlFor="portal-password" className="block text-xs font-medium text-[#172033] mb-1.5">
-            Password <span className="text-[#d64545]">*</span>
+            Password <span className="text-[#d64545] ml-0.5">*</span>
           </label>
           <div className="relative">
             <input
@@ -186,20 +186,23 @@ export const PortalLoginScreen: React.FC<PortalLoginScreenProps> = ({
             </button>
           </div>
           {validationError && !password && (
-            <span className="block text-xs text-[#d64545] mt-1.5">
-              Enter your password
+            <span className="flex items-center gap-1 text-xs text-[#d64545] mt-1.5">
+              <XCircle size={12} /> Enter your password
             </span>
           )}
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#172033] select-none">
+          <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#172033] leading-5 select-none">
             <input
               type="checkbox"
               checked={keepSignedIn}
               onChange={e => setKeepSignedIn(e.target.checked)}
-              className="rounded border-[#b9c0cf] text-[#243b64] focus:ring-[#243b64]"
+              className="peer sr-only"
             />
+            <span className="w-4 h-4 shrink-0 rounded-[4px] border border-[#b9c0cf] bg-white grid place-items-center peer-checked:bg-[#243b64] peer-checked:border-[#243b64] peer-focus-visible:outline-2 peer-focus-visible:outline-[#3478d4] peer-focus-visible:outline-offset-2 text-transparent peer-checked:text-white transition-colors">
+              <Check size={11} strokeWidth={3.5} />
+            </span>
             <span>Keep me signed in</span>
           </label>
         </div>

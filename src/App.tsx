@@ -109,6 +109,14 @@ export default function App() {
   }, [adminPath, staffPath, clientPath]);
 
   useEffect(() => {
+    if (user?.role === 'client' || activeAuthScreen === 'client') {
+      document.title = 'IRA Client Portal';
+    } else {
+      document.title = 'IRA Attendance';
+    }
+  }, [user?.role, activeAuthScreen]);
+
+  useEffect(() => {
     void registerServiceWorker();
   }, []);
 

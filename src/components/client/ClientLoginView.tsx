@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Check, Eye, EyeOff, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, Loader2, Mail, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { ClientAuthLayout } from './ClientAuthLayout';
@@ -124,7 +124,7 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
             <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
               <div>
                 <label htmlFor="client-reset-email" className="block text-xs font-medium text-[#172033] mb-1.5">
-                  Login ID or email <span className="text-[#d64545]">*</span>
+                  Login ID or email <span className="text-[#d64545] ml-0.5">*</span>
                 </label>
                 <input
                   id="client-reset-email"
@@ -135,7 +135,7 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
                     if (resetError) setResetError('');
                   }}
                   autoComplete="username"
-                  placeholder="client@company.com"
+                  placeholder="dev@northwind.example"
                   required
                   className="w-full h-9 px-3 rounded-md border border-[#e5e8ef] bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15"
                 />
@@ -194,7 +194,7 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
       <form onSubmit={handleLogin} className="space-y-4" noValidate>
         <div>
           <label htmlFor="client-id" className="block text-xs font-medium text-[#172033] mb-1.5">
-            Login ID or email <span className="text-[#d64545]">*</span>
+            Login ID or email <span className="text-[#d64545] ml-0.5">*</span>
           </label>
           <input
             id="client-id"
@@ -206,7 +206,7 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
               if (validationError) setValidationError(false);
             }}
             autoComplete="username"
-            placeholder="client@company.com"
+            placeholder="dev@northwind.example"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -216,15 +216,15 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
             } bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15`}
           />
           {validationError && !identifier.trim() && (
-            <span className="block text-xs text-[#d64545] mt-1.5">
-              Enter your login ID
+            <span className="flex items-center gap-1 text-xs text-[#d64545] mt-1.5">
+              <XCircle size={12} /> Enter your login ID
             </span>
           )}
         </div>
 
         <div>
           <label htmlFor="client-password" className="block text-xs font-medium text-[#172033] mb-1.5">
-            Password <span className="text-[#d64545]">*</span>
+            Password <span className="text-[#d64545] ml-0.5">*</span>
           </label>
           <div className="relative">
             <input
@@ -255,8 +255,8 @@ export const ClientLoginView: React.FC<ClientLoginViewProps> = ({ onSwitchToStaf
             </button>
           </div>
           {validationError && !password && (
-            <span className="block text-xs text-[#d64545] mt-1.5">
-              Enter your password
+            <span className="flex items-center gap-1 text-xs text-[#d64545] mt-1.5">
+              <XCircle size={12} /> Enter your password
             </span>
           )}
         </div>
