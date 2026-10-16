@@ -93,28 +93,15 @@ export default function App() {
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const adminPath = currentPath.startsWith('/admin');
   const clientSetupPath = currentPath.startsWith('/client/setup');
-  const staffPath = currentPath.startsWith('/login') || currentPath.startsWith('/staff') || currentPath.startsWith('/employee');
   const clientPath = currentPath.startsWith('/client');
 
-  const [activeAuthScreen, setActiveAuthScreen] = useState<'client' | 'staff' | 'admin'>(() => {
-    if (adminPath) return 'admin';
-    if (staffPath) return 'staff';
-    return 'client';
-  });
-
   useEffect(() => {
-    if (adminPath) setActiveAuthScreen('admin');
-    else if (staffPath) setActiveAuthScreen('staff');
-    else if (clientPath) setActiveAuthScreen('client');
-  }, [adminPath, staffPath, clientPath]);
-
-  useEffect(() => {
-    if (user?.role === 'client' || activeAuthScreen === 'client') {
+    if (user?.role === 'client' || clientPath) {
       document.title = 'IRA Client Portal';
     } else {
       document.title = 'IRA Attendance';
     }
-  }, [user?.role, activeAuthScreen]);
+  }, [user?.role, clientPath]);
 
   useEffect(() => {
     void registerServiceWorker();
@@ -132,34 +119,9 @@ export default function App() {
 
   if (loading) return <LoadingScreen />;
   if (!user) {
-    if (activeAuthScreen === 'admin' || (adminPath && activeAuthScreen !== 'client')) {
-      return (
-        <AdminLoginScreen
-          onSwitchToClient={() => {
-            setActiveAuthScreen('client');
-            if (typeof window !== 'undefined') window.history.replaceState({}, '', '/client/login');
-          }}
-        />
-      );
-    }
-    if (activeAuthScreen === 'staff' || (staffPath && activeAuthScreen !== 'client')) {
-      return (
-        <EmployeeLoginScreen
-          onSwitchToClient={() => {
-            setActiveAuthScreen('client');
-            if (typeof window !== 'undefined') window.history.replaceState({}, '', '/client/login');
-          }}
-        />
-      );
-    }
-    return (
-      <ClientLoginScreen
-        onSwitchToStaff={() => {
-          setActiveAuthScreen('staff');
-          if (typeof window !== 'undefined') window.history.replaceState({}, '', '/login');
-        }}
-      />
-    );
+    if (adminPath) return <AdminLoginScreen />;
+    if (clientPath) return <ClientLoginScreen />;
+    return <EmployeeLoginScreen />;
   }
   if (!isSupabaseConfigured) return <LoadingScreen label="Supabase is not configured." />;
 
