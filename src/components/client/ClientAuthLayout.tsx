@@ -4,9 +4,10 @@ interface ClientAuthLayoutProps {
   children: ReactNode;
   tag: string;
   line: string;
+  notice?: string;
 }
 
-export const ClientAuthLayout: React.FC<ClientAuthLayoutProps> = ({ children, tag, line }) => {
+export const ClientAuthLayout: React.FC<ClientAuthLayoutProps> = ({ children, tag, line, notice }) => {
   return (
     <div className="min-h-screen w-full flex flex-col lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] bg-[#f7f8fa] text-[#172033] font-['Inter',ui-sans-serif,system-ui,sans-serif]">
       {/* Left panel: IRA branding, client portal introduction, and supporting text (Desktop only) */}
@@ -26,7 +27,7 @@ export const ClientAuthLayout: React.FC<ClientAuthLayoutProps> = ({ children, ta
           <p className="text-[32px] leading-[40px] font-semibold tracking-[-0.02em] max-w-sm">{line}</p>
         </div>
         <div className="text-xs text-white/50 leading-relaxed max-w-xs">
-          Accounts are created by your administrator. There is no public registration.
+          {notice || 'Accounts are created by your administrator. There is no public registration.'}
         </div>
       </div>
 
