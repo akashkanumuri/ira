@@ -1210,4 +1210,4 @@ grant execute on function private.can_view_project_finance(uuid) to authenticate
 grant execute on function private.project_permission(uuid, text) to authenticated;
 grant execute on function private.is_assigned_to_project(uuid) to authenticated;
 grant execute on function private.can_read_file(uuid) to authenticated;
-grant usage on sequence public.invoice_number_seq to authenticated;
+revoke all on sequence public.invoice_number_seq from anon, authenticated;

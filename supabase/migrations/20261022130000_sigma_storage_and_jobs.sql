@@ -45,3 +45,18 @@ begin
   end if;
   perform cron.schedule('sigma-billing-refresh', '7 * * * *', 'select private.refresh_billing_state();');
 end $$;
+
+-- Least privilege for tables created by the SIGMA migrations (Supabase grants
+-- broad default privileges on new public tables).
+do $$
+declare r record;
+begin
+  for r in select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'public' and c.relkind in ('r','p','v','m')
+  loop
+    execute format('revoke truncate, trigger, references on public.%I from anon, authenticated', r.relname);
+  end loop;
+end $$;
+revoke insert, update, delete on public.audit_logs, public.contract_versions, public.deliverable_versions,
+  public.deliverable_lock_events, public.files, public.payments, public.deliverable_dependencies,
+  public.roles, public.permissions from authenticated;
