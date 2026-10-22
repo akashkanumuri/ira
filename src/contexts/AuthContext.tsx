@@ -30,6 +30,8 @@ export interface AuthUser {
   joinDate?: string;
   companyName?: string;
   primaryContact?: string;
+  clientId?: string;
+  clientRole?: 'client_admin' | 'client_user';
 }
 
 export type LoginPortal = 'employee' | 'admin' | 'client';
@@ -195,15 +197,15 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
   }
 
   if (effectiveRole === 'client') {
-    // 1. Primary lookup by profile_id
-    let { data: client, error: clientError } = await db
-      .from('clients')
-      .select('id, company_name, primary_contact, email, status')
+    // Organisation membership (supports multiple users per client organisation).
+    const { data: membership, error: clientError } = await db
+      .from('client_users')
+      .select('role, status, full_name, clients:client_id (id, company_name, primary_contact, email, status)')
       .eq('profile_id', supabaseUser.id)
       .maybeSingle();
 
     if (clientError) {
-      console.error('[Auth] Client profile lookup failed:', clientError);
+      console.error('[Auth] Client profile lookup failed:', clientError.message);
       return {
         user: null,
         error: clientError.code === '42501'
@@ -212,18 +214,9 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
       };
     }
 
-    // 2. Fallback lookup by email if profile_id linkage was missing
-    if (!client && supabaseUser.email) {
-      console.warn('[Auth] Client not found by profile_id, trying email fallback for:', supabaseUser.email);
-      const { data: clientByEmail, error: emailError } = await db
-        .from('clients')
-        .select('id, company_name, primary_contact, email, status')
-        .eq('email', supabaseUser.email.toLowerCase())
-        .maybeSingle();
-
-      if (!emailError && clientByEmail) {
-        client = clientByEmail;
-      }
+    const client = membership?.clients ?? null;
+    if (membership?.status === 'inactive') {
+      return { user: null, error: 'Your client portal access has been deactivated. Please contact your IRA account manager.' };
     }
 
     if (!client) {
@@ -234,14 +227,16 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
     return {
       user: {
         id: supabaseUser.id,
-        email: client.email ?? supabaseUser.email ?? '',
+        email: supabaseUser.email ?? client.email ?? '',
         role: 'client',
         empId: null,
         employeeDbId: null,
-        loginId: client.email ?? supabaseUser.email ?? null,
+        loginId: supabaseUser.email ?? client.email ?? null,
         name: client.company_name ?? 'Client Representative',
         companyName: client.company_name,
-        primaryContact: client.primary_contact,
+        primaryContact: membership?.full_name || client.primary_contact,
+        clientId: client.id,
+        clientRole: membership?.role === 'client_user' ? 'client_user' : 'client_admin',
         avatar: null,
         department: null,
         designation: 'Client Representative',
