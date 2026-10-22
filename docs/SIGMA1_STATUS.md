@@ -3,7 +3,7 @@
 Branch: `sigma1/core-lifecycle` · Source spec: *SIGMA 1 Product Requirements & Functional Specification v1.0*
 
 Legend: **Done** = code + database + authorization written and build/typecheck verified ·
-**Pending verification** = waiting for the database test run / browser check ·
+**Done\*** = database behaviour verified by the automated suite ·
 **Not started** = no implementation yet.
 
 ## Security fixes (found in the live database on 22 Oct 2026)
@@ -45,7 +45,7 @@ Legend: **Done** = code + database + authorization written and build/typecheck v
 | 48 Mobile OTP, optional 2FA | Not started | Email/password + invitation flow exist. |
 | 60 Soft delete | Done* | `deleted_at` on clients, projects, contracts, deliverables, milestones, files; delete grants revoked. |
 
-\* Pending verification: database migrations are written and statically reviewed; the automated SQL suite (`supabase/tests/sigma_lifecycle_test.sql`, ~45 assertions) must run against the database before these are considered complete.
+\* Database verified on 22 Oct 2026: migrations applied to production; `supabase/tests/sigma_lifecycle_test.sql` run against the live database inside a rolled-back transaction — **55 / 55 passed**, no test data persisted. Browser checks of each portal follow the production deploy.
 
 ## Decisions taken (please confirm)
 
