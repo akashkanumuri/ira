@@ -689,7 +689,7 @@ function getPageTitle(tab: string) {
     'admin-requests': 'Requests',
     'admin-payroll': 'Payroll',
     'admin-holidays': 'Holidays',
-    'admin-export': 'Reports / Excel',
+    'admin-export': 'Reports',
     'admin-settings': 'Settings',
     'emp-dashboard': 'Dashboard',
     'emp-attendance': 'My Attendance',
@@ -1596,39 +1596,67 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
     } finally { setBusy(false); }
   }
 
-  return <PageShell title="Payroll" subtitle="Monthly salary snapshots with a review-before-finalize workflow.">
-    <div className="grid lg:grid-cols-3 gap-4">
-      <section className="card p-5">
-        <p className="label">Payroll month</p>
-        <input type="month" value={month} onChange={e => { setMonth(e.target.value); setMessage('') }} className="input" />
-        <div className="mt-4 text-xs text-slate-500 space-y-2">
-          <div className="flex justify-between"><span>Paid-leave accrual</span><b className="text-slate-900">{settings.monthly}</b></div>
-          <div className="flex justify-between"><span>Divisor</span><b className="text-slate-900">{settings.divisor === 'calendar_days' ? 'Calendar days' : 'Working days'}</b></div>
-          {period && <div className="flex justify-between"><span>Days in divisor</span><b className="text-slate-900">{period.dayDivisor}</b></div>}
-          {period && <div className="flex justify-between"><span>Status</span><StatusBadge label={period.status} /></div>}
+  const totalPay = records.reduce((sum, r) => sum + r.finalPay, 0);
+  const totalDeduction = records.reduce((sum, r) => sum + r.leaveDeduction, 0);
+  const unpaidDays = records.reduce((sum, r) => sum + Number(r.unpaidLeaveDays || 0), 0);
+  const step = !period ? 1 : period.status === 'draft' ? 2 : 3;
+  const monthName = new Date(`${month}-01T12:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const steps = [
+    { n: 1, title: 'Generate draft', text: 'Snapshot salaries and leave for the month' },
+    { n: 2, title: 'Review', text: 'Check every amount and deduction' },
+    { n: 3, title: 'Finalize & lock', text: 'Employees see it as their payslip' },
+  ];
+  return (
+    <PageShell
+      title="Payroll"
+      subtitle="Generate a draft, review it, then finalize. Finalized months are locked."
+      actions={<input type="month" value={month} onChange={e => { setMonth(e.target.value); setMessage('') }} className="input !w-auto !rounded-full !min-h-[42px]" aria-label="Payroll month" />}
+    >
+      <section className="card rise p-5 sm:p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8">
+          <div className="min-w-0">
+            <p className="eyebrow">{monthName}</p>
+            <p className="font-display text-2xl font-bold text-ink-950 mt-1">{!period ? 'Not started' : period.status === 'draft' ? 'Draft ready for review' : 'Finalized and locked'}</p>
+            <p className="text-[13px] text-ink-500 mt-1">Leave accrual {settings.monthly}/month · daily rate uses {settings.divisor === 'calendar_days' ? 'calendar days' : 'working days'}{period ? ` (${period.dayDivisor})` : ''}</p>
+          </div>
+          <ol className="flex-1 grid sm:grid-cols-3 gap-2">
+            {steps.map((x) => (
+              <li key={x.n} className={`rounded-2xl px-4 py-3 ${step === x.n ? 'bg-ink-950 text-white' : step > x.n ? 'bg-mint-50 text-mint-800' : 'inset-tile text-ink-500'}`}>
+                <span className="text-[11px] font-bold opacity-70">STEP {x.n}{step > x.n ? ' · DONE' : ''}</span>
+                <span className="block text-sm font-bold mt-0.5">{x.title}</span>
+                <span className="block text-[11px] opacity-75 mt-0.5">{x.text}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="flex gap-2 shrink-0">
+            {period?.status !== 'finalized' && <button disabled={busy} onClick={() => void generate()} className={period ? 'btn-secondary' : 'btn-primary'}>{busy && !period ? 'Generating…' : period ? 'Regenerate draft' : 'Generate draft'}</button>}
+            {period && period.status === 'draft' && <button disabled={busy || !records.length} onClick={() => void finalize()} className="btn-primary">{busy ? 'Working…' : 'Finalize'}</button>}
+          </div>
         </div>
-        <div className="flex gap-2 mt-5">
-          <button disabled={busy || period?.status === 'finalized'} onClick={() => void generate()} className="btn-primary flex-1">{busy ? 'Generating…' : period?.status === 'finalized' ? 'Finalized & locked' : 'Generate draft'}</button>
-          {period && period.status === 'draft' && <button disabled={busy} onClick={() => void finalize()} className="btn-secondary">Finalize</button>}
-        </div>
-        {message && <p className="text-xs mt-3 text-slate-600">{message}</p>}
+        {message && <p className="text-[13px] mt-4 text-ink-600">{message}</p>}
       </section>
-      <section className="lg:col-span-2 card overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div><h3 className="font-bold text-sm">Payroll records</h3><p className="text-xs text-slate-500 mt-1">{period ? period.status : 'No payroll period generated'} · {records.length} employee record(s)</p></div>
-        </div>
+
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <Stat index={1} icon={<WalletCards className="w-5 h-5" />} tone="brand" label="Total payout" value={records.length ? money(totalPay) : '—'} caption={`${records.length} employee${records.length === 1 ? '' : 's'}`} />
+        <Stat index={2} label="Leave deductions" value={records.length ? money(totalDeduction) : '—'} caption={`${unpaidDays} unpaid day${unpaidDays === 1 ? '' : 's'} in total`} />
+        <Stat index={3} label="Paid leave used" value={records.reduce((sum, r) => sum + Number(r.paidLeaveDays || 0), 0)} caption="Days across the team" />
+        <Stat index={4} label="Status" value={period ? (period.status === 'draft' ? 'Draft' : 'Locked') : '—'} caption={period?.finalizedAt ? `Finalized ${new Date(period.finalizedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })}` : 'Not finalized'} />
+      </div>
+
+      <section className="card overflow-hidden">
+        <div className="p-5 sm:p-6"><h2 className="font-display text-lg font-bold text-ink-950">Payroll records</h2><p className="text-[13px] text-ink-500 mt-1">Salary is the snapshot taken when the draft was generated.</p></div>
         <div className="overflow-x-auto">
           <table className="data-table">
-            <thead><tr><Th>Employee</Th><Th>Salary Snapshot</Th><Th>Paid Leave</Th><Th>Unpaid Leave</Th><Th>Deduction</Th><Th>Final Pay</Th></tr></thead>
+            <thead><tr><Th>Employee</Th><Th>Salary</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Deduction</Th><Th>Final pay</Th></tr></thead>
             <tbody>
-              {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td>{money(r.leaveDeduction)}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
-              {!records.length && <EmptyRow colSpan={6} text={period ? 'No records for this period. Generate the payroll draft.' : 'Select a month and generate the payroll draft.'} />}
+              {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td mono>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td mono>{r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
+              {!records.length && <EmptyRow colSpan={6} text={period ? 'No records for this period. Regenerate the draft.' : 'Generate the draft for this month to see records.'} />}
             </tbody>
           </table>
         </div>
       </section>
-    </div>
-  </PageShell>;
+    </PageShell>
+  );
 }
 
 function HolidaysAdmin({ holidays, user, onRefresh }: any) {
@@ -1781,34 +1809,318 @@ function ProfileEmployee({ user, onRefresh }: any) {
   async function savePhoto(file: File) { try { if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Use a JPG, PNG or WebP image.'); if (file.size > 5 * 1024 * 1024) throw new Error('Profile images must be 5 MB or smaller.'); const url = await uploadAvatar(user.employeeDbId, file); const { error: err } = await (supabase as any).from('employees').update({ avatar_url: url }).eq('id', user.employeeDbId); if (err) throw err; await onRefresh(); setMessage('Profile photo updated.'); notify('Profile photo updated.', 'success') } catch (e) { setError(e instanceof Error ? e.message : 'Unable to update photo.'); notify(e instanceof Error ? e.message : 'Unable to update photo.', 'error') } }
   async function password() { setError(''); setMessage(''); if (!currentPassword) { setError('Enter your current password.'); return } if (!validateStrongPassword(newPassword)) { setError('Password must be at least 12 characters and include uppercase, lowercase, number and symbol.'); return } if (newPassword !== confirm) { setError('New passwords do not match.'); return } setSaving(true); try { const authEmail = user.role === 'admin' ? 'ira.admin@ira-presence.local' : (user.loginId ? loginIdToAuthEmail(user.loginId) : ''); if (!authEmail) throw new Error('Unable to determine the account email.'); const { error: reauthError } = await supabase.auth.signInWithPassword({ email: authEmail, password: currentPassword }); if (reauthError) throw new Error('Current password is incorrect.'); if (await isPasswordLeaked(newPassword)) throw new Error('Choose a different password. This password has appeared in known data breaches.'); const { error: change } = await supabase.auth.updateUser({ password: newPassword }); if (change) throw change; setMessage('Password changed successfully.'); notify('Password changed successfully.', 'success'); setCurrentPassword(''); setNewPassword(''); setConfirm('') } catch (e) { setError(e instanceof Error ? e.message : 'Unable to change password.') } finally { setSaving(false) } }
   async function viewDocument(doc: EmployeeDocument) { try { const url = await getSignedDocumentUrl(doc.storagePath); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { setError(e instanceof Error ? e.message : 'Unable to open document.') } }
-  return <PageShell title="Profile" subtitle="Personal details, HR documents and password."><div className="space-y-4">{(error || message) && <div>{error && <Notice type="error" text={error} />} {message && <Notice type="success" text={message} />}</div>}<div className="grid lg:grid-cols-2 gap-4"><section className="card p-5"><div className="flex items-center gap-4"><div className="relative">{user.avatar ? <img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover ring-1 ring-slate-200" /> : <div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl font-bold">{user.name.slice(0, 1)}</div>}<label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer shadow-sm"><Upload className="w-4 h-4" /><input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void savePhoto(f) }} /></label></div><div><p className="text-lg font-bold">{user.name}</p><p className="text-xs text-slate-500">{user.designation} · {user.department}</p></div></div><div className="grid gap-4 mt-6"><Field label="Name"><input value={name} onChange={e => setName(e.target.value)} className="input" /></Field><Field label="Phone"><input value={phone} onChange={e => setPhone(e.target.value)} className="input" /></Field><InfoRow label="Login ID" value={user.loginId ?? '—'} /><InfoRow label="Employee ID" value={user.empId ?? '—'} /><InfoRow label="Work mode" value={user.workMode === 'remote' ? 'Remote' : 'Office'} /><InfoRow label="Designation" value={user.designation ?? '—'} /><InfoRow label="Manager" value={user.manager ?? '—'} /><InfoRow label="Monthly salary" value={money(user.currentSalary)} /><button disabled={saving} onClick={() => void save()} className="btn-primary w-fit">{saving ? 'Saving…' : 'Save personal details'}</button></div></section><section className="card p-5"><div className="flex items-center gap-2"><LockKeyhole className="w-4 h-4 text-blue-600" /><div><h3 className="font-bold text-sm">Change password</h3><p className="text-xs text-slate-500">Verify your current password before changing it.</p></div></div><div className="space-y-4 mt-5"><Field label="Current password"><input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="input" /></Field><Field label="New password"><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="input" minLength={12} /></Field><Field label="Confirm new password"><input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="input" minLength={12} /></Field><button disabled={saving} onClick={() => void password()} className="btn-primary">Change password</button></div></section></div><section className="card p-5"><div className="flex items-center justify-between gap-3 flex-wrap"><div><div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-600" /><h3 className="font-bold text-sm">Phone Push Notifications</h3></div><p className="text-xs text-slate-500 mt-1">Receive real-time alerts on your phone lock screen for assignments and approvals.</p></div><div className="flex items-center gap-2"><button type="button" disabled={pushBusy} onClick={() => void handleTogglePush()} className={isSubscribed ? 'btn-secondary text-rose-600' : 'btn-primary text-xs'}>{pushBusy ? 'Updating…' : isSubscribed ? 'Disable on this phone' : 'Enable phone notifications'}</button></div></div>{pushFeedback && <div className={`mt-3 p-3 rounded-xl border text-xs ${pushFeedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>{pushFeedback.message}</div>}{isIosNeedsHomeScreen() && <div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1"><p className="font-bold">iPhone Setup Required</p><p className="text-[11px]">To enable push alerts on iOS, tap the Safari <b>Share</b> button, choose <b>Add to Home Screen</b>, and open the app from your home screen.</p></div>}</section><section className="card overflow-hidden"><div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600" /><div><h3 className="font-bold text-sm">HR Documents</h3><p className="text-xs text-slate-500">Your secure employee records.</p></div></div>{documentsLoading ? <div className="p-6 text-sm text-slate-500">Loading documents…</div> : documents.length ? <div className="divide-y divide-slate-100">{documents.map(doc => <div key={doc.id} className="px-5 py-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm font-semibold truncate">{doc.fileName}</p><p className="text-[11px] text-slate-500 mt-1">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0, 10))}</p></div><button className="btn-secondary shrink-0" onClick={() => void viewDocument(doc)}><Eye className="w-3.5 h-3.5 mr-1" />View</button></div>)}</div> : <div className="p-6 text-sm text-slate-500">No HR documents uploaded yet.</div>}</section></div></PageShell>;
+  const pwChecks = [
+    { ok: newPassword.length >= 12, text: '12+ characters' },
+    { ok: /[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword), text: 'Upper & lower case' },
+    { ok: /\d/.test(newPassword), text: 'A number' },
+    { ok: /[^A-Za-z0-9]/.test(newPassword), text: 'A symbol' },
+  ];
+  const dirty = name.trim() !== user.name || (phone.trim() || '') !== (user.phone ?? '');
+  return (
+    <PageShell title="Profile" subtitle="Your details, password, phone alerts and HR documents.">
+      <div className="space-y-4">
+        {error && <UiNotice tone="rose">{error}</UiNotice>}
+        {message && !error && <UiNotice tone="mint">{message}</UiNotice>}
+
+        <section className="card overflow-hidden rise" style={{ ['--i' as any]: 0 }}>
+          <div className="h-20 sm:h-24 bg-gradient-to-r from-brand-600 via-brand-500 to-brand-400 relative">
+            <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '14px 14px' }} />
+          </div>
+          <div className="px-5 sm:px-6 pb-5 -mt-10 flex flex-col sm:flex-row sm:items-end gap-4">
+            <div className="relative w-fit">
+              {user.avatar ? <img src={user.avatar} alt="" className="w-20 h-20 rounded-full object-cover ring-4 ring-white" /> : <div className="w-20 h-20 rounded-full ring-4 ring-white"><Avatar name={user.name} size={80} /></div>}
+              <label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-ink-200 flex items-center justify-center cursor-pointer shadow-sm hover:bg-ink-50" title="Change photo">
+                <Upload className="w-4 h-4 text-ink-700" />
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void savePhoto(f); e.target.value = '' }} />
+              </label>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-xl font-bold text-ink-900 truncate">{user.name}</p>
+              <p className="text-[13px] text-ink-500">{[user.designation, user.department].filter(Boolean).join(' · ') || '—'}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {user.empId && <Badge tone="brand">{user.empId}</Badge>}
+              <Badge tone={user.workMode === 'remote' ? 'sky' : 'mint'} dot>{user.workMode === 'remote' ? 'Remote' : 'Office'}</Badge>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-4 lg:grid-cols-2 items-start">
+          <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 1 }}>
+            <div className="flex items-center gap-3"><IconChip icon={<UserRound className="w-5 h-5" />} size="sm" /><div><h3 className="font-display font-bold text-[15px] text-ink-900">Personal details</h3><p className="text-[12px] text-ink-500">You can update your name and phone.</p></div></div>
+            <div className="grid gap-4 mt-5">
+              <Field label="Name"><input value={name} onChange={e => setName(e.target.value)} className="input" autoComplete="name" /></Field>
+              <Field label="Phone"><input value={phone} onChange={e => setPhone(e.target.value)} className="input" inputMode="tel" autoComplete="tel" /></Field>
+              <div className="flex justify-end"><button disabled={saving || !dirty} onClick={() => void save()} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">{saving ? 'Saving…' : 'Save changes'}</button></div>
+            </div>
+            <div className="mt-6 pt-5 border-t border-ink-100">
+              <p className="eyebrow mb-3">Work details · set by HR</p>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
+                {[['Login ID', user.loginId ?? '—'], ['Employee ID', user.empId ?? '—'], ['Designation', user.designation ?? '—'], ['Department', user.department ?? '—'], ['Manager', user.manager ?? '—'], ['Monthly salary', money(user.currentSalary)]].map(([k, v]) => (
+                  <div key={k} className="min-w-0"><dt className="text-ink-400 text-[11px] font-semibold uppercase tracking-wide">{k}</dt><dd className="text-ink-900 font-semibold truncate tnum mt-0.5">{v}</dd></div>
+                ))}
+              </dl>
+            </div>
+          </section>
+
+          <div className="space-y-4">
+            <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 2 }}>
+              <div className="flex items-center gap-3"><IconChip icon={<LockKeyhole className="w-5 h-5" />} size="sm" tone="ink" /><div><h3 className="font-display font-bold text-[15px] text-ink-900">Password</h3><p className="text-[12px] text-ink-500">Confirm your current password to change it.</p></div></div>
+              <div className="space-y-4 mt-5">
+                <Field label="Current password"><input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="input" autoComplete="current-password" /></Field>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="New password"><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="input" minLength={12} autoComplete="new-password" /></Field>
+                  <Field label="Confirm"><input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="input" minLength={12} autoComplete="new-password" /></Field>
+                </div>
+                {newPassword && (
+                  <ul className="flex flex-wrap gap-1.5">{pwChecks.map(c => <li key={c.text} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${c.ok ? 'bg-mint-50 text-mint-700' : 'bg-ink-50 text-ink-500'}`}>{c.ok ? <Check className="w-3 h-3" /> : <span className="w-1.5 h-1.5 rounded-full bg-current opacity-50" />}{c.text}</li>)}{confirm && <li className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${confirm === newPassword ? 'bg-mint-50 text-mint-700' : 'bg-rose-50 text-rose-700'}`}>{confirm === newPassword ? 'Matches' : 'Doesn’t match'}</li>}</ul>
+                )}
+                <div className="flex justify-end"><button disabled={saving || !currentPassword || !newPassword} onClick={() => void password()} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">Change password</button></div>
+              </div>
+            </section>
+
+            <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 3 }}>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3"><IconChip icon={<Smartphone className="w-5 h-5" />} size="sm" tone="mint" /><div><h3 className="font-display font-bold text-[15px] text-ink-900">Phone alerts</h3><p className="text-[12px] text-ink-500">Lock-screen alerts for assignments and approvals.</p></div></div>
+                <Badge tone={isSubscribed ? 'mint' : pushState === 'denied' ? 'rose' : 'ink'} dot>{isSubscribed ? 'On for this device' : pushState === 'denied' ? 'Blocked in browser' : 'Off'}</Badge>
+              </div>
+              <div className="mt-4 flex justify-end"><button type="button" disabled={pushBusy} onClick={() => void handleTogglePush()} className={isSubscribed ? 'btn-secondary' : 'btn-primary'}>{pushBusy ? 'Updating…' : isSubscribed ? 'Turn off on this device' : 'Turn on for this device'}</button></div>
+              {pushFeedback && <div className="mt-3"><UiNotice tone={pushFeedback.type === 'success' ? 'mint' : 'rose'}>{pushFeedback.message}</UiNotice></div>}
+              {isIosNeedsHomeScreen() && <div className="mt-3"><UiNotice tone="amber" title="iPhone needs one extra step">In Safari, tap <b>Share</b> → <b>Add to Home Screen</b>, then open the app from your home screen to allow alerts.</UiNotice></div>}
+            </section>
+          </div>
+        </div>
+
+        <section className="card overflow-hidden rise" style={{ ['--i' as any]: 4 }}>
+          <div className="px-5 sm:px-6 py-4 border-b border-ink-100 flex items-center gap-3"><IconChip icon={<FileText className="w-5 h-5" />} size="sm" tone="sky" /><div><h3 className="font-display font-bold text-[15px] text-ink-900">HR documents</h3><p className="text-[12px] text-ink-500">Shared with you by HR. Links open securely and expire.</p></div></div>
+          {documentsLoading ? <div className="p-5 space-y-3">{[0, 1].map(i => <div key={i} className="skeleton h-12 rounded-2xl" />)}</div> : documents.length ? (
+            <ul className="divide-y divide-ink-100">{documents.map(doc => (
+              <li key={doc.id} className="px-5 sm:px-6 py-3.5 flex items-center gap-4">
+                <span className="w-9 h-9 rounded-xl bg-ink-50 text-ink-500 flex items-center justify-center shrink-0"><FileText className="w-4 h-4" /></span>
+                <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink-900 truncate">{doc.fileName}</p><p className="text-[11px] text-ink-500 mt-0.5">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0, 10))}</p></div>
+                <button className="btn-secondary btn-sm shrink-0" onClick={() => void viewDocument(doc)}><Eye className="w-3.5 h-3.5" />View</button>
+              </li>
+            ))}</ul>
+          ) : <EmptyState icon={<FileText className="w-6 h-6" />} title="No documents yet" text="Offer letters, payslips and other HR files appear here once uploaded." className="!py-10" />}
+        </section>
+      </div>
+    </PageShell>
+  );
 }
+
+type ExportSpec = { id: string; group: string; title: string; text: string; icon: React.ReactNode; tone: 'brand' | 'mint' | 'amber' | 'sky' | 'rose' | 'ink'; build: () => Promise<any[]> };
 
 function ExportsAdmin({ employees, payrollPeriods }: any) {
   const [busy, setBusy] = useState<string | null>(null);
-  const download = async (name: string, buildRows: () => Promise<any[]>) => { if (busy) return; setBusy(name); try { const rows = await buildRows(); const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Data'); XLSX.writeFile(wb, `${name}-${today()}.xlsx`); notify(`${rows.length} ${name} record(s) exported.`, 'success') } catch (e) { notify(e instanceof Error ? e.message : 'Unable to export data.', 'error') } finally { setBusy(null) } };
-  async function fetchAll(table: string, orderBy: string) { const rows: any[] = []; let from = 0; const size = 1000; for (; ;) { let q = (supabase as any).from(table).select('*').range(from, from + size - 1); if (orderBy) q = q.order(orderBy, { ascending: false }); const { data, error } = await q; if (error) throw error; const page = data ?? []; rows.push(...page); if (page.length < size) break; from += size } return rows }
+  const [last, setLast] = useState<Record<string, { rows: number; at: string }>>({});
+  const download = async (spec: ExportSpec) => {
+    if (busy) return;
+    setBusy(spec.id);
+    try {
+      const rows = await spec.build();
+      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Note: 'No records' }]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Data');
+      XLSX.writeFile(wb, `${spec.id}-${today()}.xlsx`);
+      setLast(prev => ({ ...prev, [spec.id]: { rows: rows.length, at: formatKolkataTime(new Date()) } }));
+      notify(`${rows.length} ${spec.title.toLowerCase()} record(s) exported.`, 'success');
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Unable to export data.', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  async function fetchAll(table: string, orderBy: string, select = '*') { const rows: any[] = []; let from = 0; const size = 1000; for (; ;) { let q = (supabase as any).from(table).select(select).range(from, from + size - 1); if (orderBy) q = q.order(orderBy, { ascending: false }); const { data, error } = await q; if (error) throw error; const page = data ?? []; rows.push(...page); if (page.length < size) break; from += size } return rows }
   const employeeMap = new Map((employees as Employee[]).map(e => [e.id, e]));
   const payrollPeriodMap = new Map((payrollPeriods as PayrollPeriod[]).map(p => [p.id, p]));
-  return <PageShell title="Reports / Excel" subtitle="Download complete operational datasets without replacing source records."><div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3"><ExportCard disabled={Boolean(busy)} title={busy === 'employees' ? 'Exporting…' : 'Employees'} icon={<Users className="w-5 h-5" />} onClick={() => void download('employees', async () => (employees as Employee[]).map(e => ({ EmployeeID: e.empId, LoginID: e.loginId, Name: e.name, Designation: e.designation, Department: e.department, WorkMode: e.workMode, Salary: e.currentSalary, Status: e.status })))} /><ExportCard disabled={Boolean(busy)} title={busy === 'attendance' ? 'Exporting…' : 'Attendance'} icon={<Clock3 className="w-5 h-5" />} onClick={() => void download('attendance', async () => { const [raw, breaks] = await Promise.all([fetchAll('attendance_effective', 'date'), fetchAll('break_events', 'break_start')]); const breaksBy = new Map<string, any[]>(); for (const b of breaks) { const list = breaksBy.get(b.attendance_id) ?? []; list.push(b); breaksBy.set(b.attendance_id, list) } return raw.map(r => { const m = mapAttendance(r, employeeMap, breaksBy); return { Date: m.date, Employee: m.employeeName, EmployeeID: m.employeeEmpId, Mode: m.mode, CheckIn: m.checkIn ?? '', CheckOut: m.checkOut ?? '', Break: m.breakDuration ?? '', Working: m.workingHours ?? '', Status: m.status } }) })} /><ExportCard disabled={Boolean(busy)} title={busy === 'tasks' ? 'Exporting…' : 'Tasks'} icon={<BriefcaseBusiness className="w-5 h-5" />} onClick={() => void download('tasks', async () => { const rows = await fetchAll('tasks', 'start_date'); return rows.map(r => { const t = mapTask(r, employeeMap); return { Task: t.title, Employee: t.assignedToName, Start: t.startDate, Due: t.dueDate, Priority: t.priority, Status: t.status, SubmittedLink: t.submittedLink ?? '' } }) })} /><ExportCard disabled={Boolean(busy)} title={busy === 'payroll' ? 'Exporting…' : 'Payroll'} icon={<WalletCards className="w-5 h-5" />} onClick={() => void download('payroll', async () => { const rows = await fetchAll('payroll_records', 'created_at'); return rows.map(r => { const p = mapPayrollRecord(r, employeeMap); const period = payrollPeriodMap.get(p.periodId); return { Period: period?.monthStart?.slice(0, 7) ?? '', Status: p.finalizedAt ? 'finalized' : (period?.status ?? 'draft'), Employee: p.employeeName, Salary: p.salarySnapshot, PaidLeave: p.paidLeaveDays, UnpaidLeave: p.unpaidLeaveDays, Deduction: p.leaveDeduction, FinalPay: p.finalPay } }) })} /></div></PageShell>;
+  const empName = (id: string | null | undefined) => (id ? employeeMap.get(id)?.name ?? '' : '');
+  const empCode = (id: string | null | undefined) => (id ? employeeMap.get(id)?.empId ?? '' : '');
+
+  const specs: ExportSpec[] = [
+    { id: 'employees', group: 'People', title: 'Employees', text: 'Directory with designation, department, work mode, salary and status.', icon: <Users className="w-5 h-5" />, tone: 'brand', build: async () => (employees as Employee[]).map(e => ({ EmployeeID: e.empId, LoginID: e.loginId, Name: e.name, Designation: e.designation, Department: e.department, WorkMode: e.workMode, Salary: e.currentSalary, Status: e.status })) },
+    { id: 'attendance', group: 'People', title: 'Attendance', text: 'Every day’s check-in, check-out, breaks and hours. Uses approved corrections.', icon: <Clock3 className="w-5 h-5" />, tone: 'mint', build: async () => { const [raw, breaks] = await Promise.all([fetchAll('attendance_effective', 'date'), fetchAll('break_events', 'break_start')]); const breaksBy = new Map<string, any[]>(); for (const b of breaks) { const list = breaksBy.get(b.attendance_id) ?? []; list.push(b); breaksBy.set(b.attendance_id, list) } return raw.map(r => { const m = mapAttendance(r, employeeMap, breaksBy); return { Date: m.date, Employee: m.employeeName, EmployeeID: m.employeeEmpId, Mode: m.mode, CheckIn: m.checkIn ?? '', CheckOut: m.checkOut ?? '', Break: m.breakDuration ?? '', Working: m.workingHours ?? '', Status: m.status } }) } },
+    { id: 'leave', group: 'People', title: 'Leave requests', text: 'All leave with paid and unpaid days, status and reviewer note.', icon: <CalendarDays className="w-5 h-5" />, tone: 'amber', build: async () => (await fetchAll('leave_requests', 'start_date', 'employee_id, leave_type, start_date, end_date, duration, days, paid_days, unpaid_days, reason, status, review_note, created_at')).map(r => ({ Employee: empName(r.employee_id), EmployeeID: empCode(r.employee_id), Type: r.leave_type, From: r.start_date, To: r.end_date, Duration: r.duration, Days: r.days, PaidDays: r.paid_days, UnpaidDays: r.unpaid_days, Reason: r.reason ?? '', Status: r.status, ReviewNote: r.review_note ?? '', RequestedOn: String(r.created_at ?? '').slice(0, 10) })) },
+    { id: 'wfh', group: 'People', title: 'Work from home', text: 'WFH requests by date, duration and status.', icon: <Home className="w-5 h-5" />, tone: 'sky', build: async () => (await fetchAll('wfh_requests', 'date', 'employee_id, date, duration, reason, status, review_note, created_at')).map(r => ({ Employee: empName(r.employee_id), EmployeeID: empCode(r.employee_id), Date: r.date, Duration: r.duration, Reason: r.reason ?? '', Status: r.status, ReviewNote: r.review_note ?? '', RequestedOn: String(r.created_at ?? '').slice(0, 10) })) },
+    { id: 'payroll', group: 'Money', title: 'Payroll', text: 'Monthly payroll records with leave deductions and final pay.', icon: <WalletCards className="w-5 h-5" />, tone: 'brand', build: async () => { const rows = await fetchAll('payroll_records', 'created_at'); return rows.map(r => { const p = mapPayrollRecord(r, employeeMap); const period = payrollPeriodMap.get(p.periodId); return { Period: period?.monthStart?.slice(0, 7) ?? '', Status: p.finalizedAt ? 'finalized' : (period?.status ?? 'draft'), Employee: p.employeeName, Salary: p.salarySnapshot, PaidLeave: p.paidLeaveDays, UnpaidLeave: p.unpaidLeaveDays, Deduction: p.leaveDeduction, FinalPay: p.finalPay } }) } },
+    { id: 'billing', group: 'Money', title: 'Billing milestones', text: 'Every payment milestone with invoice number, due date, amount and balance.', icon: <BadgeIndianRupee className="w-5 h-5" />, tone: 'mint', build: async () => (await fetchAll('payment_installments', 'due_date', 'installment_number, name, amount, tax_amount, amount_paid, status, due_date, invoice_number, deleted_at, projects:project_id (name), clients:client_id (company_name)')).filter(r => !r.deleted_at).map(r => { const total = Number(r.amount ?? 0) + Number(r.tax_amount ?? 0); const paid = Number(r.amount_paid ?? 0); return { Client: r.clients?.company_name ?? '', Project: r.projects?.name ?? '', Number: r.installment_number ?? '', Milestone: r.name, Invoice: r.invoice_number ?? '', Due: r.due_date ?? '', Amount: Number(r.amount ?? 0), Tax: Number(r.tax_amount ?? 0), Total: total, Paid: paid, Balance: Math.max(0, total - paid), Status: r.status } }) },
+    { id: 'payments', group: 'Money', title: 'Payments', text: 'Client payment submissions and verified receipts with references.', icon: <CheckCircle2 className="w-5 h-5" />, tone: 'amber', build: async () => (await fetchAll('payments', 'submitted_at', 'amount, reference, method, paid_on, submitted_at, status, rejection_reason, projects:project_id (name), clients:client_id (company_name), payment_installments:installment_id (name)')).map(r => ({ Client: r.clients?.company_name ?? '', Project: r.projects?.name ?? '', Milestone: r.payment_installments?.name ?? '', Amount: Number(r.amount ?? 0), Reference: r.reference ?? '', Method: r.method ?? '', PaidOn: r.paid_on ?? '', SubmittedAt: String(r.submitted_at ?? '').slice(0, 16).replace('T', ' '), Status: r.status, RejectionReason: r.rejection_reason ?? '' })) },
+    { id: 'tasks', group: 'Work', title: 'Tasks', text: 'Assigned work with dates, priority, status and handed-in links.', icon: <BriefcaseBusiness className="w-5 h-5" />, tone: 'sky', build: async () => { const rows = await fetchAll('tasks', 'start_date'); return rows.map(r => { const t = mapTask(r, employeeMap); return { Task: t.title, Employee: t.assignedToName, Start: t.startDate, Due: t.dueDate, Priority: t.priority, Status: t.status, SubmittedLink: t.submittedLink ?? '' } }) } },
+    { id: 'clients', group: 'Work', title: 'Clients & projects', text: 'Client directory with each project, its status and dates.', icon: <Building2 className="w-5 h-5" />, tone: 'ink', build: async () => { const [clients, projects] = await Promise.all([fetchAll('clients', 'company_name', 'id, company_name, primary_contact, email, phone, industry, gstin, status, deleted_at'), fetchAll('projects', 'created_at', 'client_id, name, status, start_date, target_date, deleted_at')]); const out: any[] = []; for (const c of clients.filter(c => !c.deleted_at)) { const ps = projects.filter(p => p.client_id === c.id && !p.deleted_at); const base = { Client: c.company_name, Contact: c.primary_contact ?? '', Email: c.email ?? '', Phone: c.phone ?? '', Industry: c.industry ?? '', GSTIN: c.gstin ?? '', ClientStatus: c.status }; if (!ps.length) out.push({ ...base, Project: '', ProjectStatus: '', Start: '', Target: '' }); for (const p of ps) out.push({ ...base, Project: p.name, ProjectStatus: p.status, Start: p.start_date ?? '', Target: p.target_date ?? '' }) } return out } },
+  ];
+  const groups = ['People', 'Money', 'Work'];
+
+  return (
+    <PageShell title="Reports" subtitle="Download complete datasets as Excel files. Exports are read-only — nothing in the system changes.">
+      <div className="space-y-6">
+        {groups.map(g => (
+          <section key={g} className="space-y-3">
+            <p className="eyebrow">{g}</p>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {specs.filter(s => s.group === g).map((s, i) => {
+                const running = busy === s.id;
+                const done = last[s.id];
+                return (
+                  <div key={s.id} className="card p-5 flex flex-col rise" style={{ ['--i' as any]: i }}>
+                    <div className="flex items-start gap-3">
+                      <IconChip icon={s.icon} tone={s.tone} />
+                      <div className="min-w-0">
+                        <p className="font-display font-bold text-[15px] text-ink-900">{s.title}</p>
+                        <p className="text-[13px] text-ink-500 mt-0.5 leading-snug">{s.text}</p>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-5 flex items-center justify-between gap-3">
+                      <span className="text-[12px] text-ink-400 tnum">{done ? `${done.rows} rows · ${done.at}` : 'Excel (.xlsx)'}</span>
+                      <button type="button" disabled={Boolean(busy)} onClick={() => void download(s)} className="btn-secondary btn-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        {running ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        {running ? 'Preparing…' : 'Export'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </PageShell>
+  );
 }
 
-function ExportCard({ title, icon, onClick, disabled = false }: { title: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }) { return <button disabled={disabled} onClick={onClick} className="export-card text-left disabled:opacity-50 disabled:cursor-not-allowed"><div className="w-10 h-10 rounded-2xl bg-blue-50/85 border border-blue-100 text-blue-600 flex items-center justify-center">{icon}</div><p className="font-bold text-sm mt-4 text-slate-950">{title}</p><p className="text-xs text-slate-500 mt-1">Download XLSX</p><div className="mt-4 text-xs font-bold text-blue-600 inline-flex items-center gap-1">Export <Download className="w-3.5 h-3.5" /></div></button> }
-
 function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
-  const [tab, setTab] = useState('rules');
+  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll'>('rules');
   const [name, setName] = useState(''); const [canAssign, setCanAssign] = useState(false);
+  const [deptName, setDeptName] = useState('');
   const [payrollDivisor, setPayrollDivisor] = useState<'calendar_days' | 'working_days'>('calendar_days');
+  const [savedDivisor, setSavedDivisor] = useState<'calendar_days' | 'working_days' | null>(null);
   const [payrollPolicyStatus, setPayrollPolicyStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [payrollPolicyLoadKey, setPayrollPolicyLoadKey] = useState(0);
   const [assigner, setAssigner] = useState(''); const [assignee, setAssignee] = useState(''); const [scope, setScope] = useState<'any' | 'direct_reports'>('direct_reports');
-  useEffect(() => { let cancelled = false; (async () => { setPayrollPolicyStatus('loading'); try { const { data, error } = await (supabase as any).from('payroll_settings').select('divisor_mode').eq('id', true).maybeSingle(); if (error || !data || (data.divisor_mode !== 'calendar_days' && data.divisor_mode !== 'working_days')) throw error ?? new Error('Payroll policy is unavailable.'); if (cancelled) return; setPayrollDivisor(data.divisor_mode); setPayrollPolicyStatus('ready') } catch { if (!cancelled) setPayrollPolicyStatus('error') } })(); return () => { cancelled = true } }, [payrollPolicyLoadKey]);
-  async function addDesignation() { const value = name.trim(); if (!value) { notify('Enter a designation name.', 'error'); return; } try { const { error } = await (supabase as any).from('designations').insert({ name: value, can_assign_tasks: canAssign }); if (error) throw error; notify('Designation added.', 'success'); setName(''); setCanAssign(false); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add designation.', 'error') } }
-  async function addDepartment() { const value = name.trim(); if (!value) { notify('Enter a department name.', 'error'); return; } try { const { error } = await (supabase as any).from('departments').insert({ name: value }); if (error) throw error; notify('Department added.', 'success'); setName(''); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add department.', 'error') } }
-  async function addRule() { if (!assigner) { notify('Select an assigner designation.', 'error'); return; } try { const { error } = await (supabase as any).from('task_assignment_rules').insert({ assigner_designation_id: assigner, assignee_designation_id: assignee || null, scope }); if (error) throw error; notify('Assignment rule added.', 'success'); setAssigner(''); setAssignee(''); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add rule.', 'error') } }
+  const [saving, setSaving] = useState<string | null>(null);
+  useEffect(() => { let cancelled = false; (async () => { setPayrollPolicyStatus('loading'); try { const { data, error } = await (supabase as any).from('payroll_settings').select('divisor_mode').eq('id', true).maybeSingle(); if (error || !data || (data.divisor_mode !== 'calendar_days' && data.divisor_mode !== 'working_days')) throw error ?? new Error('Payroll policy is unavailable.'); if (cancelled) return; setPayrollDivisor(data.divisor_mode); setSavedDivisor(data.divisor_mode); setPayrollPolicyStatus('ready') } catch { if (!cancelled) setPayrollPolicyStatus('error') } })(); return () => { cancelled = true } }, [payrollPolicyLoadKey]);
+  const run = async (key: string, fn: () => Promise<void>) => { if (saving) return; setSaving(key); try { await fn() } finally { setSaving(null) } };
+  async function addDesignation() { const value = name.trim(); if (!value) { notify('Enter a designation name.', 'error'); return; } if ((designations as Designation[]).some(d => d.name.toLowerCase() === value.toLowerCase())) { notify('That designation already exists.', 'error'); return; } await run('designation', async () => { try { const { error } = await (supabase as any).from('designations').insert({ name: value, can_assign_tasks: canAssign }); if (error) throw error; notify('Designation added.', 'success'); setName(''); setCanAssign(false); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add designation.', 'error') } }) }
+  async function addDepartment() { const value = deptName.trim(); if (!value) { notify('Enter a department name.', 'error'); return; } if ((departments as Department[]).some(d => d.name.toLowerCase() === value.toLowerCase())) { notify('That department already exists.', 'error'); return; } await run('department', async () => { try { const { error } = await (supabase as any).from('departments').insert({ name: value }); if (error) throw error; notify('Department added.', 'success'); setDeptName(''); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add department.', 'error') } }) }
+  async function addRule() { if (!assigner) { notify('Select who can assign.', 'error'); return; } await run('rule', async () => { try { const { error } = await (supabase as any).from('task_assignment_rules').insert({ assigner_designation_id: assigner, assignee_designation_id: assignee || null, scope }); if (error) throw error; notify('Assignment rule added.', 'success'); setAssigner(''); setAssignee(''); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add rule.', 'error') } }) }
   async function deleteRule(id: string) { if (!(await confirmDialog({ title: 'Delete this assignment rule?', message: 'People with this designation will no longer be able to assign work to the other designation.', confirmLabel: 'Delete rule', danger: true }))) return; try { const { error } = await (supabase as any).from('task_assignment_rules').delete().eq('id', id); if (error) throw error; notify('Assignment rule removed.', 'success'); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to remove rule.', 'error') } }
-  async function savePayroll() { if (payrollPolicyStatus !== 'ready') { notify('Load the current payroll policy before saving.', 'error'); return } try { const { data, error } = await (supabase as any).from('payroll_settings').update({ divisor_mode: payrollDivisor }).eq('id', true).select('id').maybeSingle(); if (error) throw error; if (!data) throw new Error('Payroll policy could not be found. Refresh and try again.'); notify('Payroll policy saved.', 'success') } catch (error) { notify(error instanceof Error ? error.message : 'Unable to save payroll policy.', 'error') } }
-  return <PageShell title="Settings" subtitle="Configure designations, assignment rules, departments and the payroll divisor policy."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['rules', 'Assignment rules'], ['designations', 'Designations'], ['departments', 'Departments'], ['payroll', 'Payroll policy']].map(([id, l]) => <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>{l}</button>)}</div>{tab === 'rules' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="card p-5"><h3 className="font-bold text-sm">Add assignment rule</h3><div className="space-y-4 mt-4"><Field label="Assigner designation"><select value={assigner} onChange={e => setAssigner(e.target.value)} className="input"><option value="">Select</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Assignee designation"><select value={assignee} onChange={e => setAssignee(e.target.value)} className="input"><option value="">Any designation</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Scope"><select value={scope} onChange={e => setScope(e.target.value as any)} className="input"><option value="direct_reports">Direct reports</option><option value="any">Any employee</option></select></Field><button onClick={() => void addRule()} className="btn-primary">Add rule</button></div></div><div className="card overflow-hidden"><div className="p-5 border-b border-slate-100"><h3 className="font-bold text-sm">Current rules</h3></div>{rules.map((r: AssignmentRule) => <div key={r.id} className="p-4 border-b border-slate-100 flex items-center justify-between gap-3"><p className="text-xs"><b>{r.assignerDesignation}</b> → {r.assigneeDesignation} <span className="text-slate-400">· {r.scope}</span></p><button onClick={() => void deleteRule(r.id)} className="icon-btn text-rose-500"><Trash2 className="w-4 h-4" /></button></div>)}{!rules.length && <EmptyCard text="No assignment rules." />}</div></section>}{tab === 'designations' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="card p-5"><h3 className="font-bold text-sm">Add designation</h3><div className="space-y-4 mt-4"><Field label="Name"><input value={name} onChange={e => setName(e.target.value)} className="input" /></Field><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={canAssign} onChange={e => setCanAssign(e.target.checked)} />Can assign tasks</label><button onClick={() => void addDesignation()} className="btn-primary">Add designation</button></div></div><div className="card p-5">{designations.map((d: Designation) => <div key={d.id} className="flex justify-between p-3 border-b border-slate-100 last:border-0 text-xs"><b>{d.name}</b><span className="text-slate-500">{d.canAssignTasks ? 'Assigns tasks' : 'Receives tasks'}</span></div>)}</div></section>}{tab === 'departments' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="card p-5"><h3 className="font-bold text-sm">Add department</h3><div className="flex gap-2 mt-4"><input value={name} onChange={e => setName(e.target.value)} className="input" /><button onClick={() => void addDepartment()} className="btn-primary">Add</button></div></div><div className="card p-5">{departments.map((d: Department) => <div key={d.id} className="p-3 border-b border-slate-100 last:border-0 text-xs font-bold">{d.name}</div>)}</div></section>}{tab === 'payroll' && <section className="mt-4 card p-5 max-w-xl"><p className="text-sm font-bold">Payroll divisor</p><p className="text-xs text-slate-500 mt-1">Keep this configurable until the company confirms the final payroll policy.</p>{payrollPolicyStatus === 'loading' && <p role="status" className="text-xs text-slate-500 mt-3">Loading current payroll policy…</p>}{payrollPolicyStatus === 'error' && <div role="alert" className="mt-3 text-xs text-rose-700">Could not load the current payroll policy. Saving is disabled until it can be reloaded. <button type="button" onClick={() => setPayrollPolicyLoadKey(value => value + 1)} className="font-bold underline ml-1">Retry</button></div>}<select id="payroll-divisor" value={payrollDivisor} disabled={payrollPolicyStatus !== 'ready'} onChange={e => setPayrollDivisor(e.target.value as 'calendar_days' | 'working_days')} className="input mt-4 disabled:opacity-50"><option value="calendar_days">Calendar days</option><option value="working_days">Working days</option></select><button onClick={() => void savePayroll()} disabled={payrollPolicyStatus !== 'ready'} className="btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed">Save policy</button><p className="text-[11px] text-slate-400 mt-3">Paid leave accrual remains 1.5 days per month and carries forward.</p></section>}</PageShell>;
+  async function savePayroll() { if (payrollPolicyStatus !== 'ready') { notify('Load the current payroll policy before saving.', 'error'); return } await run('payroll', async () => { try { const { data, error } = await (supabase as any).from('payroll_settings').update({ divisor_mode: payrollDivisor }).eq('id', true).select('id').maybeSingle(); if (error) throw error; if (!data) throw new Error('Payroll policy could not be found. Refresh and try again.'); setSavedDivisor(payrollDivisor); notify('Payroll policy saved.', 'success') } catch (error) { notify(error instanceof Error ? error.message : 'Unable to save payroll policy.', 'error') } }) }
+
+  return (
+    <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments and the payroll policy.">
+      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'payroll', label: 'Payroll policy' }]} />
+
+      {tab === 'rules' && (
+        <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="rules">
+          <div className="card p-5 sm:p-6">
+            <p className="font-display font-bold text-[15px] text-ink-900">New rule</p>
+            <p className="text-[13px] text-ink-500 mt-0.5">Decide which job titles can hand work to which.</p>
+            <div className="space-y-4 mt-5">
+              <Field label="Who can assign"><select value={assigner} onChange={e => setAssigner(e.target.value)} className="input"><option value="">Select a designation</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field>
+              <Field label="To whom"><select value={assignee} onChange={e => setAssignee(e.target.value)} className="input"><option value="">Any designation</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field>
+              <Field label="Reach">
+                <div className="grid grid-cols-2 gap-2">
+                  {([['direct_reports', 'Direct reports', 'Only people who report to them'], ['any', 'Anyone', 'Across the whole company']] as const).map(([id, l, h]) => (
+                    <button key={id} type="button" onClick={() => setScope(id)} className={`text-left rounded-2xl border px-3.5 py-3 transition-colors ${scope === id ? 'border-brand-400 bg-brand-50 ring-2 ring-brand-100' : 'border-ink-200 bg-white hover:border-ink-300'}`}>
+                      <span className="block text-[13px] font-bold text-ink-900">{l}</span>
+                      <span className="block text-[11px] text-ink-500 mt-0.5 leading-snug">{h}</span>
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <button onClick={() => void addRule()} disabled={saving === 'rule'} className="btn-primary w-full disabled:opacity-60"><Plus className="w-4 h-4" />{saving === 'rule' ? 'Adding…' : 'Add rule'}</button>
+            </div>
+          </div>
+          <div className="card overflow-hidden">
+            <div className="px-5 sm:px-6 py-4 border-b border-ink-100"><p className="font-display font-bold text-[15px] text-ink-900">Current rules</p></div>
+            {rules.length ? (
+              <ul className="divide-y divide-ink-100">
+                {rules.map((r: AssignmentRule) => (
+                  <li key={r.id} className="px-5 sm:px-6 py-3.5 flex items-center gap-3">
+                    <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2 text-[13px]">
+                      <Badge tone="brand">{r.assignerDesignation}</Badge>
+                      <ArrowRight className="w-3.5 h-3.5 text-ink-300" />
+                      <Badge tone={r.assigneeDesignation && r.assigneeDesignation !== 'Any' ? 'mint' : 'ink'}>{r.assigneeDesignation || 'Any designation'}</Badge>
+                      <span className="text-ink-400 text-[12px]">{r.scope === 'any' ? 'anyone' : 'direct reports only'}</span>
+                    </div>
+                    <button onClick={() => void deleteRule(r.id)} className="icon-btn text-rose-500 hover:bg-rose-50" title="Delete rule" aria-label="Delete rule"><Trash2 className="w-4 h-4" /></button>
+                  </li>
+                ))}
+              </ul>
+            ) : <EmptyState icon={<ShieldCheck className="w-6 h-6" />} title="No assignment rules" text="Without rules, only administrators can assign work." />}
+          </div>
+        </section>
+      )}
+
+      {tab === 'designations' && (
+        <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="designations">
+          <div className="card p-5 sm:p-6">
+            <p className="font-display font-bold text-[15px] text-ink-900">New designation</p>
+            <div className="space-y-4 mt-5">
+              <Field label="Name"><input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void addDesignation() }} className="input" placeholder="e.g. Senior Designer" /></Field>
+              <label className="flex items-start gap-3 rounded-2xl border border-ink-200 px-3.5 py-3 cursor-pointer hover:border-ink-300">
+                <input type="checkbox" checked={canAssign} onChange={e => setCanAssign(e.target.checked)} className="mt-0.5 accent-[var(--brand)]" />
+                <span><span className="block text-[13px] font-bold text-ink-900">Can assign tasks</span><span className="block text-[11px] text-ink-500">Also needs an assignment rule to say to whom.</span></span>
+              </label>
+              <button onClick={() => void addDesignation()} disabled={saving === 'designation'} className="btn-primary w-full disabled:opacity-60"><Plus className="w-4 h-4" />{saving === 'designation' ? 'Adding…' : 'Add designation'}</button>
+            </div>
+          </div>
+          <div className="card overflow-hidden">
+            {designations.length ? (
+              <ul className="divide-y divide-ink-100">
+                {designations.map((d: Designation) => (
+                  <li key={d.id} className="px-5 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-ink-900">{d.name}</span>
+                    <Badge tone={d.canAssignTasks ? 'brand' : 'ink'} dot>{d.canAssignTasks ? 'Assigns tasks' : 'Receives tasks'}</Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : <EmptyState icon={<BriefcaseBusiness className="w-6 h-6" />} title="No designations yet" text="Add the job titles used in your company." />}
+          </div>
+        </section>
+      )}
+
+      {tab === 'departments' && (
+        <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="departments">
+          <div className="card p-5 sm:p-6">
+            <p className="font-display font-bold text-[15px] text-ink-900">New department</p>
+            <div className="space-y-4 mt-5">
+              <Field label="Name"><input value={deptName} onChange={e => setDeptName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void addDepartment() }} className="input" placeholder="e.g. Design" /></Field>
+              <button onClick={() => void addDepartment()} disabled={saving === 'department'} className="btn-primary w-full disabled:opacity-60"><Plus className="w-4 h-4" />{saving === 'department' ? 'Adding…' : 'Add department'}</button>
+            </div>
+          </div>
+          <div className="card p-5 sm:p-6">
+            {departments.length ? (
+              <div className="flex flex-wrap gap-2">{departments.map((d: Department) => <span key={d.id} className="inline-flex items-center gap-2 rounded-full bg-ink-50 border border-ink-100 px-3.5 py-2 text-[13px] font-semibold text-ink-800"><Building2 className="w-3.5 h-3.5 text-ink-400" />{d.name}</span>)}</div>
+            ) : <EmptyState icon={<Building2 className="w-6 h-6" />} title="No departments yet" text="Departments group employees in reports and the directory." />}
+          </div>
+        </section>
+      )}
+
+      {tab === 'payroll' && (
+        <section className="card p-5 sm:p-6 max-w-2xl anim-fade" key="payroll">
+          <p className="font-display font-bold text-[15px] text-ink-900">Daily rate for leave deductions</p>
+          <p className="text-[13px] text-ink-500 mt-0.5">Unpaid leave is deducted at monthly salary ÷ this number of days. Changes apply to payroll you generate from now on; finalized months stay locked.</p>
+          {payrollPolicyStatus === 'loading' && <div className="mt-5 grid sm:grid-cols-2 gap-3"><div className="skeleton h-24 rounded-2xl" /><div className="skeleton h-24 rounded-2xl" /></div>}
+          {payrollPolicyStatus === 'error' && <div className="mt-5"><UiNotice tone="rose" title="Couldn’t load the current policy" action={<button type="button" onClick={() => setPayrollPolicyLoadKey(v => v + 1)} className="btn-secondary btn-sm">Retry</button>}>Saving is disabled until it loads.</UiNotice></div>}
+          {payrollPolicyStatus === 'ready' && (
+            <>
+              <div className="mt-5 grid sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Payroll divisor">
+                {([['calendar_days', 'Calendar days', 'All days in the month (28–31).'], ['working_days', 'Working days', 'Excludes Sundays and company holidays.']] as const).map(([id, l, h]) => (
+                  <button key={id} type="button" role="radio" aria-checked={payrollDivisor === id} onClick={() => setPayrollDivisor(id)} className={`text-left rounded-2xl border px-4 py-4 transition-colors ${payrollDivisor === id ? 'border-brand-400 bg-brand-50 ring-2 ring-brand-100' : 'border-ink-200 bg-white hover:border-ink-300'}`}>
+                    <span className="flex items-center justify-between"><span className="text-sm font-bold text-ink-900">{l}</span>{savedDivisor === id && <Badge tone="mint">Current</Badge>}</span>
+                    <span className="block text-[12px] text-ink-500 mt-1">{h}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[12px] text-ink-400">Paid leave accrues 1.5 days a month and carries forward.</p>
+                <button onClick={() => void savePayroll()} disabled={payrollDivisor === savedDivisor || saving === 'payroll'} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">{saving === 'payroll' ? 'Saving…' : 'Save policy'}</button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+    </PageShell>
+  );
 }
 
 function PageShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
