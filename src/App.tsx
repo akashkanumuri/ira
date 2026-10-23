@@ -328,13 +328,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           }
           setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
         }
-        const taskPeople = new Map<string, Employee>(employeeMap);
-        if (!peopleR.error) {
-          for (const p of (peopleR.data ?? []) as Array<{ id: string; profile_id: string | null; name: string; designation: string | null; avatar_url: string | null }>) {
-            if (!taskPeople.has(p.id)) taskPeople.set(p.id, { ...emp, id: p.id, profileId: p.profile_id, name: p.name, designation: p.designation ?? '', avatar: p.avatar_url ?? '', managerId: null, manager: null } as Employee);
-          }
-        }
-        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, taskPeople)));
+        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
         if (!leaveR.error) setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
         if (!wfhR.error) setWfhRequests((wfhR.data ?? []).map((r: any) => mapWfh(r, employeeMap)));
         if (!corrR.error) {
@@ -422,7 +416,13 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
           }
         }
-        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
+        const taskPeople = new Map<string, Employee>(employeeMap);
+        if (!peopleR.error) {
+          for (const p of (peopleR.data ?? []) as Array<{ id: string; profile_id: string | null; name: string; designation: string | null; avatar_url: string | null }>) {
+            if (!taskPeople.has(p.id)) taskPeople.set(p.id, { ...emp, id: p.id, profileId: p.profile_id, name: p.name, designation: p.designation ?? '', avatar: p.avatar_url ?? '', managerId: null, manager: null } as Employee);
+          }
+        }
+        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, taskPeople)));
         if (!leaveR.error) setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
         if (!wfhR.error) setWfhRequests((wfhR.data ?? []).map((r: any) => mapWfh(r, employeeMap)));
         if (!corrR.error) {
@@ -884,7 +884,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   const overdueCount = mineOpen.filter((t) => t.dueDate < today()).length;
   const weekEnd = (() => { const d = new Date(`${today()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); })();
   const dueThisWeek = mineOpen.filter((t) => t.dueDate >= today() && t.dueDate <= weekEnd).length;
-  const linkable = useLinkableDeliverables(canAssign);
+  const linkable = useLinkableDeliverables(true);
   const deliverableName = (id?: string | null) => { const d = id ? linkable.all.find((x) => x.id === id) : null; return d ? `${d.number ? d.number + ' · ' : ''}${d.name}` : null; };
 
   const myRules = (rules as AssignmentRule[]).filter(r => r.assignerDesignationId === user.designationId);
