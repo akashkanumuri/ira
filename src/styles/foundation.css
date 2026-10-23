@@ -264,6 +264,9 @@ textarea.input { min-height: 96px; resize: vertical; }
 @keyframes ui-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 @keyframes ui-pulse-dot { 0%, 100% { box-shadow: 0 0 0 0 rgb(52 168 119 / 0.45); } 50% { box-shadow: 0 0 0 5px rgb(52 168 119 / 0); } }
 
+@keyframes ui-slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+.anim-fade { animation: ui-fade 0.18s ease-out both; }
+.anim-slide { animation: ui-slide-in 0.28s var(--ease-out) both; }
 .rise { animation: ui-rise 0.42s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms); }
 .ira-section-transition { animation: ui-fade 0.2s ease-out both; }
 .grow-y { transform-origin: bottom; animation: ui-grow-y 0.7s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
@@ -283,7 +286,7 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise, .grow-y, .ira-section-transition, .ira-modal, .ira-modal-overlay, .skeleton, .live-dot, .ira-live-dot,
+  .rise, .grow-y, .ira-section-transition, .anim-fade, .anim-slide, .ira-modal, .ira-modal-overlay, .skeleton, .live-dot, .ira-live-dot,
   .card-interactive, .export-card {
     animation: none !important;
     transition: none !important;

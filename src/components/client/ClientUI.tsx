@@ -47,9 +47,9 @@ export function Button({
   ...p
 }: BtnProps) {
   const v = {
-    primary: 'bg-primary text-white hover:bg-primary-hover border border-primary',
-    secondary: 'bg-surface text-ink border border-line hover:bg-bg hover:border-[#d3d8e2]',
-    ghost: 'text-ink-2 hover:bg-[#eef0f4] hover:text-ink border border-transparent',
+    primary: 'bg-primary text-white hover:bg-primary-hover border border-primary shadow-[0_6px_16px_-8px_rgb(91_53_232/0.6)]',
+    secondary: 'bg-surface text-ink border border-ink-200 hover:bg-ink-50 hover:border-ink-300',
+    ghost: 'text-ink-2 hover:bg-ink-100 hover:text-ink border border-transparent',
     danger: 'bg-surface text-err border border-[#f0c4c4] hover:bg-err-soft',
   }[variant];
 
@@ -58,8 +58,8 @@ export function Button({
       {...p}
       disabled={disabled || loading}
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer',
-        size === 'sm' ? 'h-8 px-2.5 text-[13px]' : 'h-9 px-3.5 text-[13px]',
+        'inline-flex items-center justify-center gap-1.5 rounded-full font-semibold whitespace-nowrap transition-[background-color,border-color,transform] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer',
+        size === 'sm' ? 'h-8 px-3.5 text-xs' : 'h-10 px-4.5 text-[13px]',
         v,
         className
       )}
@@ -73,11 +73,11 @@ export function Button({
 /* ---------- Badges ---------- */
 export type Tone = 'neutral' | 'ok' | 'warn' | 'err' | 'info' | 'primary';
 const tones: Record<Tone, string> = {
-  neutral: 'bg-[#eef0f4] text-ink-2',
+  neutral: 'bg-ink-100 text-ink-600',
   ok: 'bg-ok-soft text-ok',
   warn: 'bg-warn-soft text-warn',
   err: 'bg-err-soft text-err',
-  info: 'bg-info-soft text-[#2a64b5]',
+  info: 'bg-brand-50 text-brand-700',
   primary: 'bg-primary-soft text-primary',
 };
 const toneIcon: Partial<Record<Tone, LucideIcon>> = {
@@ -100,7 +100,7 @@ export function Badge({
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1 h-5 px-1.5 rounded text-[11px] font-medium whitespace-nowrap',
+        'inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-bold whitespace-nowrap',
         tones[tone]
       )}
     >
@@ -204,7 +204,7 @@ export const Card = ({
   className?: string;
   pad?: boolean;
 }) => (
-  <section className={cx('bg-surface border border-line rounded-lg', pad && 'p-5', className)}>
+  <section className={cx('card rise', pad && 'p-5 sm:p-6', className)}>
     {children}
   </section>
 );
@@ -221,8 +221,8 @@ export function CardHead({
   return (
     <div className="flex items-start justify-between gap-3 mb-4">
       <div className="min-w-0">
-        <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
-        {desc && <p className="text-xs text-ink-2 mt-0.5">{desc}</p>}
+        <h3 className="font-display text-lg font-bold text-ink-950 leading-tight">{title}</h3>
+        {desc && <p className="text-[13px] text-ink-500 mt-1">{desc}</p>}
       </div>
       {action}
     </div>
@@ -241,7 +241,7 @@ export function PageHeader({
   crumbs?: string[];
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
+    <div className="rise flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
       <div className="min-w-0">
         {crumbs && (
           <div className="flex items-center gap-1 text-xs text-ink-3 mb-1.5">
@@ -253,8 +253,8 @@ export function PageHeader({
             ))}
           </div>
         )}
-        <h1 className="text-[26px] leading-8 font-semibold tracking-[-0.02em] text-ink">{title}</h1>
-        {desc && <p className="text-[13px] text-ink-2 mt-1 max-w-2xl">{desc}</p>}
+        <h1 className="font-display text-[28px] sm:text-[34px] leading-[1.1] font-bold text-ink-950">{title}</h1>
+        {desc && <p className="text-sm text-ink-500 mt-2 max-w-2xl">{desc}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
     </div>
@@ -279,18 +279,18 @@ export function Stat({
     <El
       onClick={onClick}
       className={cx(
-        'bg-surface border border-line rounded-lg p-4 text-left',
-        onClick && 'hover:border-[#c8c6d6] transition-colors cursor-pointer'
+        'card rise p-5 text-left w-full',
+        onClick && 'card-interactive cursor-pointer'
       )}
     >
-      <div className="text-xs text-ink-2">{label}</div>
-      <div className="text-[26px] leading-9 font-semibold tracking-[-0.02em] tnum mt-1 text-ink">
+      <div className="text-[13px] font-semibold text-ink-600">{label}</div>
+      <div className="stat-value text-[32px] sm:text-[36px] mt-4 text-ink-950">
         {value}
       </div>
       {sub && (
         <div
           className={cx(
-            'text-xs mt-0.5',
+            'text-[13px] mt-2',
             tone === 'warn' ? 'text-warn' : tone === 'err' ? 'text-err' : 'text-ink-3'
           )}
         >
@@ -312,7 +312,7 @@ export const Avatar = ({ name, size = 28 }: { name: string; size?: number }) => 
   return (
     <span
       style={{ width: size, height: size, fontSize: size * 0.38 }}
-      className="rounded-full bg-primary-soft text-primary font-semibold grid place-items-center shrink-0 select-none"
+      className="rounded-full bg-primary-soft text-primary font-bold grid place-items-center shrink-0 select-none ring-2 ring-white"
     >
       {ini || 'U'}
     </span>
@@ -333,8 +333,8 @@ export function Progress({ value, label }: { value: number; label?: string }) {
   const safe = Math.min(100, Math.max(0, Math.round(value)));
   return (
     <div className="flex items-center gap-2" role="progressbar" aria-valuenow={safe} aria-label={label}>
-      <div className="h-1.5 flex-1 bg-[#e9ecf2] rounded-full overflow-hidden">
-        <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${safe}%` }} />
+      <div className="h-2.5 flex-1 bg-ink-100 rounded-full overflow-hidden">
+        <div className="h-full bg-primary rounded-full transition-[width] duration-700 ease-out" style={{ width: `${safe}%` }} />
       </div>
       <span className="text-xs text-ink-2 tnum w-9 text-right">{safe}%</span>
     </div>
@@ -356,14 +356,14 @@ export function Alert({
   return (
     <div
       className={cx(
-        'flex gap-3 rounded-lg border p-3.5',
+        'rise flex gap-3 rounded-2xl p-4',
         tone === 'warn'
-          ? 'bg-warn-soft border-[#efdcb3]'
+          ? 'bg-warn-soft'
           : tone === 'err'
-          ? 'bg-err-soft border-[#f0c4c4]'
+          ? 'bg-err-soft'
           : tone === 'ok'
-          ? 'bg-ok-soft border-[#bfe0d0]'
-          : 'bg-info-soft border-[#c5daf4]'
+          ? 'bg-ok-soft'
+          : 'bg-info-soft'
       )}
     >
       <I
@@ -380,8 +380,8 @@ export function Alert({
         )}
       />
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-ink">{title}</div>
-        {children && <div className="text-xs text-ink-2 mt-0.5 leading-relaxed">{children}</div>}
+        <div className="text-[13px] font-bold text-ink">{title}</div>
+        {children && <div className="text-[13px] text-ink-2 mt-0.5 leading-relaxed">{children}</div>}
       </div>
       {action}
     </div>
@@ -401,11 +401,11 @@ export function Empty({
 }) {
   return (
     <div className="flex flex-col items-center text-center py-12 px-6">
-      <div className="w-10 h-10 rounded-md bg-[#eef0f4] grid place-items-center text-ink-2 mb-3">
-        <I size={18} />
+      <div className="w-14 h-14 rounded-full bg-ink-100 grid place-items-center text-ink-500 mb-4">
+        <I size={22} />
       </div>
-      <div className="text-sm font-medium text-ink">{title}</div>
-      <p className="text-xs text-ink-2 mt-1 max-w-xs">{desc}</p>
+      <div className="font-display text-lg font-bold text-ink-900">{title}</div>
+      <p className="text-sm text-ink-500 mt-1.5 max-w-sm">{desc}</p>
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -447,7 +447,7 @@ export function Field({
 }) {
   return (
     <label className={cx('block', className)}>
-      <span className="block text-xs font-medium text-ink mb-1.5">
+      <span className="block text-xs font-semibold text-ink-600 mb-1.5">
         {label}
         {required && <span className="text-err ml-0.5" aria-label="required">*</span>}
       </span>
@@ -465,14 +465,14 @@ export function Field({
 }
 
 const ctl =
-  'w-full h-9 px-3 rounded-md border bg-surface text-[13px] text-ink placeholder:text-ink-3 transition-colors hover:border-[#c8c6d6] focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:bg-bg disabled:text-ink-3';
+  'w-full h-11 px-3.5 rounded-xl border bg-surface text-sm text-ink placeholder:text-ink-3 transition-[border-color,box-shadow] hover:border-ink-300 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:bg-bg disabled:text-ink-3';
 
 export const Input = ({
   error,
   className,
   ...p
 }: InputHTMLAttributes<HTMLInputElement> & { error?: boolean }) => (
-  <input {...p} className={cx(ctl, error ? 'border-err' : 'border-line', className)} />
+  <input {...p} className={cx(ctl, error ? 'border-err' : 'border-ink-200', className)} />
 );
 
 export const Select = ({
@@ -484,7 +484,7 @@ export const Select = ({
     {...p}
     className={cx(
       ctl,
-      'pr-8 appearance-none bg-no-repeat bg-[right_10px_center] bg-[length:12px] border-line cursor-pointer',
+      'pr-9 appearance-none bg-no-repeat bg-[right_12px_center] bg-[length:12px] border-ink-200 cursor-pointer',
       className
     )}
     style={{
@@ -502,7 +502,7 @@ export const Textarea = ({
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
   <textarea
     {...p}
-    className={cx(ctl, 'h-auto py-2 min-h-20 resize-y border-line', className)}
+    className={cx(ctl, 'h-auto py-2.5 min-h-24 resize-y border-ink-200', className)}
   />
 );
 
@@ -515,7 +515,7 @@ export function PasswordInput(p: InputHTMLAttributes<HTMLInputElement> & { error
         type="button"
         aria-label={show ? 'Hide password' : 'Show password'}
         onClick={() => setShow(!show)}
-        className="absolute right-0 top-0 h-9 w-9 grid place-items-center text-ink-3 hover:text-ink cursor-pointer"
+        className="absolute right-0 top-0 h-11 w-11 grid place-items-center text-ink-3 hover:text-ink cursor-pointer"
       >
         {show ? <EyeOff size={15} /> : <Eye size={15} />}
       </button>
@@ -536,12 +536,12 @@ export function SearchField({
 }) {
   return (
     <div className={cx('relative', className)}>
-      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
+      <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
       <Input
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-8"
+        className="!pl-10 !rounded-full"
         aria-label={placeholder}
       />
     </div>
@@ -591,7 +591,7 @@ export function Switch({
       onClick={() => onChange(!checked)}
       className={cx(
         'w-9 h-5 rounded-full relative transition-colors shrink-0 cursor-pointer',
-        checked ? 'bg-primary' : 'bg-[#cbd1dc]'
+        checked ? 'bg-primary' : 'bg-ink-300'
       )}
     >
       <span
@@ -616,7 +616,7 @@ export function Tabs({
   return (
     <div
       role="tablist"
-      className="flex gap-1 border-b border-line mb-5 overflow-x-auto -mx-1 px-1"
+      className="flex w-fit max-w-full gap-1 p-1 mb-5 overflow-x-auto rounded-full bg-white border border-ink-100 shadow-[var(--shadow-soft)]"
     >
       {tabs.map(t => (
         <button
@@ -625,20 +625,20 @@ export function Tabs({
           aria-selected={value === t.id}
           onClick={() => onChange(t.id)}
           className={cx(
-            'h-10 px-3 text-[13px] font-medium whitespace-nowrap border-b-2 -mb-px transition-colors flex items-center gap-1.5 cursor-pointer',
+            'h-9 px-4 rounded-full text-[13px] font-semibold whitespace-nowrap transition-colors duration-200 flex items-center gap-1.5 cursor-pointer',
             value === t.id
-              ? 'border-primary text-ink'
-              : 'border-transparent text-ink-2 hover:text-ink'
+              ? 'bg-ink-950 text-white'
+              : 'text-ink-500 hover:text-ink-900'
           )}
         >
           {t.label}
           {t.count !== undefined && (
             <span
               className={cx(
-                'text-[11px] px-1.5 rounded tnum',
+                'text-[10px] min-w-5 h-5 px-1.5 rounded-full tnum inline-flex items-center justify-center font-bold',
                 value === t.id
-                  ? 'bg-primary-soft text-primary font-semibold'
-                  : 'bg-[#eef0f4] text-ink-2'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-ink-100 text-ink-600'
               )}
             >
               {t.count}
@@ -686,7 +686,7 @@ export function DataTable<T extends { id: string | number }>({
 
   if (loading) {
     return (
-      <div className="bg-surface border border-line rounded-lg divide-y divide-line">
+      <div className="card divide-y divide-ink-100">
         {[...Array(5)].map((_, i) => (
           <div key={i} className="flex items-center gap-6 px-4 h-12">
             <Skeleton className="w-8 h-8 rounded-full" />
@@ -701,21 +701,21 @@ export function DataTable<T extends { id: string | number }>({
   }
 
   return (
-    <div className="bg-surface border border-line rounded-lg overflow-hidden">
+    <div className="card rise overflow-hidden">
       {rows.length === 0 ? (
         empty
       ) : (
         <>
           <div className="hidden md:block overflow-auto max-h-[640px]">
             <table className="w-full text-[13px]">
-              <thead className="sticky top-0 z-10 bg-[#fafbfc]">
+              <thead className="sticky top-0 z-10 bg-[#f9f8fc]">
                 <tr className="border-b border-line">
                   {cols.map(c => (
                     <th
                       key={c.key}
                       style={{ width: c.w }}
                       className={cx(
-                        'h-10 px-4 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-2 whitespace-nowrap',
+                        'h-11 px-4 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-ink-3 whitespace-nowrap',
                         c.align === 'right' && 'text-right',
                         c.align === 'center' && 'text-center'
                       )}
@@ -732,8 +732,8 @@ export function DataTable<T extends { id: string | number }>({
                     key={r.id}
                     onClick={() => onRow?.(r)}
                     className={cx(
-                      'h-[52px] border-b border-line last:border-0 transition-colors',
-                      onRow && 'cursor-pointer hover:bg-[#f9fafc]'
+                      'h-[58px] border-b border-ink-100 last:border-0 transition-colors',
+                      onRow && 'cursor-pointer hover:bg-[#faf9fd]'
                     )}
                   >
                     {cols.map(c => (
@@ -786,7 +786,7 @@ export function DataTable<T extends { id: string | number }>({
             ))}
           </ul>
           {rows.length > pageSize && (
-            <div className="flex items-center justify-between px-4 h-12 border-t border-line text-xs text-ink-2">
+            <div className="flex items-center justify-between px-4 h-14 border-t border-ink-100 text-xs text-ink-2">
               <span className="tnum">
                 {page * pageSize + 1}–{Math.min(rows.length, (page + 1) * pageSize)} of {rows.length}
               </span>
@@ -850,7 +850,7 @@ export function Dialog({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-[#14112b]/40 anim-fade"
+      className="ira-modal-overlay !z-50 !items-end sm:!items-center !p-0 sm:!p-6"
       onClick={onClose}
     >
       <div
@@ -858,21 +858,21 @@ export function Dialog({
         aria-modal="true"
         aria-label={title}
         onClick={e => e.stopPropagation()}
-        className="bg-surface w-full sm:max-w-md rounded-t-xl sm:rounded-lg border border-line shadow-[0_12px_40px_rgba(23,32,51,0.18)] anim-slide overflow-hidden"
+        className="ira-modal w-full sm:max-w-md !rounded-b-none sm:!rounded-[28px]"
       >
-        <div className="p-5">
+        <div className="p-6 sm:p-7">
           <h2
             className={cx(
-              'text-[17px] font-semibold tracking-[-0.01em] text-ink',
+              'font-display text-xl font-bold text-ink-950',
               tone === 'danger' && 'text-err'
             )}
           >
             {title}
           </h2>
-          {desc && <p className="text-[13px] text-ink-2 mt-1.5 leading-relaxed">{desc}</p>}
+          {desc && <p className="text-sm text-ink-500 mt-2 leading-relaxed">{desc}</p>}
           {children && <div className="mt-4">{children}</div>}
         </div>
-        <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-line bg-[#fafbfc]">
+        <div className="flex justify-end gap-2 px-6 sm:px-7 pb-6 sm:pb-7 -mt-1">
           {footer}
         </div>
       </div>
@@ -904,29 +904,29 @@ export function SidePanel({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-[#14112b]/30 anim-fade" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-ink-950/35 backdrop-blur-[3px] anim-fade" onClick={onClose}>
       <aside
         role="dialog"
         aria-label={title}
         onClick={e => e.stopPropagation()}
-        className="absolute right-0 top-0 bottom-0 w-full sm:w-[440px] bg-surface border-l border-line flex flex-col anim-slide shadow-[-12px_0_40px_rgba(23,32,51,0.1)]"
+        className="absolute right-0 top-0 bottom-0 sm:top-3 sm:bottom-3 sm:right-3 w-full sm:w-[460px] bg-surface sm:rounded-[28px] flex flex-col anim-slide shadow-[-20px_0_60px_-20px_rgb(20_17_43/0.35)] overflow-hidden"
       >
-        <header className="flex items-start justify-between gap-3 px-5 py-4 border-b border-line bg-surface">
+        <header className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b border-ink-100 bg-surface">
           <div className="min-w-0">
-            <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink truncate">{title}</h2>
-            {sub && <p className="text-xs text-ink-2 mt-0.5 truncate">{sub}</p>}
+            <h2 className="font-display text-xl font-bold text-ink-950 truncate">{title}</h2>
+            {sub && <p className="text-[13px] text-ink-500 mt-1 truncate">{sub}</p>}
           </div>
           <button
             onClick={onClose}
             aria-label="Close panel"
-            className="h-8 w-8 grid place-items-center rounded-md hover:bg-[#eef0f4] text-ink-2 cursor-pointer"
+            className="icon-btn icon-btn-surface"
           >
             <X size={16} />
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        <div className="flex-1 overflow-y-auto p-6">{children}</div>
         {footer && (
-          <footer className="flex justify-end gap-2 px-5 py-3.5 border-t border-line bg-[#fafbfc]">
+          <footer className="flex justify-end gap-2 px-6 py-4 border-t border-ink-100 bg-white">
             {footer}
           </footer>
         )}
@@ -959,7 +959,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={t.id}
-              className="anim-slide pointer-events-auto flex items-center gap-2.5 bg-ink text-white text-[13px] pl-3.5 pr-4 py-2.5 rounded-md shadow-lg max-w-sm"
+              className="anim-slide pointer-events-auto flex items-center gap-2.5 bg-ink-950 text-white text-[13px] font-medium pl-4 pr-5 py-3 rounded-full shadow-[0_18px_40px_-12px_rgb(20_17_43/0.5)] max-w-sm"
             >
               <I
                 size={15}
