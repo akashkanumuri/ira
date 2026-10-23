@@ -676,9 +676,9 @@ async function inviteClientUser(input: InviteClientUserInput, admin: ReturnType<
   if (clientError || !client || client.deleted_at) throw new Error('Client organisation not found.');
   if (client.status === 'inactive') throw new Error('This client organisation is inactive.');
 
-  const { data: existingUser } = await admin.from('client_users').select('id').ilike('email', email).maybeSingle();
+  const { data: existingUser } = await admin.from('client_users').select('id').eq('email', email).maybeSingle();
   if (existingUser) throw new Error('Someone with this email already has portal access.');
-  const { data: existingClient } = await admin.from('clients').select('id').ilike('email', email).maybeSingle();
+  const { data: existingClient } = await admin.from('clients').select('id').eq('email', email).maybeSingle();
   if (existingClient) throw new Error('This email belongs to another client account.');
 
   const initialTempSecret = 'IRA_CLIENT_' + crypto.randomUUID().replace(/-/g, '') + '!Aa9';
