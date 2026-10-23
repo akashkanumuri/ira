@@ -63,3 +63,17 @@ Legend: **Done** = code + database + authorization written and build/typecheck v
 4. Verify client, admin and employee flows on the live site.
 
 Rollback: redeploy the previous Vercel production build. Database changes are additive except the type conversion of `deliverables.quantity/due_date` and `payment_installments.due_date/paid_on` (one existing row affected).
+
+## Review flow (2026-10-23)
+
+Built on `redesign/foundation` (type-checked build passes on Vercel preview):
+
+- Employee task page: brief, Start/Pause timer (+ manual time log), optional estimate, numbered **link-only drafts** with notes, comments, activity, and a per-task scorecard (drafts, approval rate, changes-requested rate, on-time rate, client rounds).
+- Manager **or** admin: approve / request changes per draft, send the approved draft to the client as a numbered version (signed "IRA team"), forward client change requests to the assignee (reopens the task as a new round).
+- Client: sees versions only, approves or requests changes; never sees staff names, internal drafts or internal comments. Final link hidden while payment-locked.
+- Productivity metrics per employee/team (Performance pages): drafts per task, approval and first-draft approval rate, on-time rate, cycle and review times, time vs estimate, client first-time approval.
+- Links instead of uploads for work, contracts and client materials; payment proof is the bank reference. Leave certificates, HR documents and photos still upload.
+- Privacy: `20261023160000_client_privacy.sql` stops copying staff names onto client-readable rows (dry run 4/4).
+
+Not yet applied to production (waiting for owner confirmation of the database tool's `drop` prompt; the drops only replace check constraints and policies on new tables):
+`20261023100000`…`20261023150000` (applied together with all 7 test suites, commit only if all pass), then `20261023160000_client_privacy.sql` together with the frontend release, then `supabase/seed/sample_review_flow.sql` (labelled sample project; `sample_review_flow_cleanup.sql` removes it).
