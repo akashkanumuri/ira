@@ -1978,6 +1978,35 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke execute on function public.task_people() from public, anon;
 grant execute on function public.task_people() to authenticated;
+create or replace function private.deliverables_events()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_url text := '/client/deliverables';
+begin
+  if tg_op = 'UPDATE' and new.status is distinct from old.status then
+    if new.status = 'Awaiting Client Review' then
+      if coalesce(current_setting('sigma.change_reason', true), '') not like 'Version % sent to client' then
+        perform private.notify_client(new.client_id, 'deliverable', 'Deliverable ready for your review',
+          new.deliverable_number || ' · ' || new.name || ' has been submitted for your review.', v_url,
+          'deliv-review:' || new.id || ':' || new.version_no || ':' || extract(epoch from now())::bigint / 3600);
+      end if;
+    elsif new.status = 'Ready for Download' then
+      perform private.notify_client(new.client_id, 'deliverable', 'Deliverable ready for download',
+        new.deliverable_number || ' · ' || new.name || ' is complete and ready to download.', v_url,
+        'deliv-ready:' || new.id || ':' || new.version_no);
+    elsif new.status in ('Modification Requested','Under Internal Review') then
+      perform private.notify_project_staff(new.project_id, 'deliverable', 'Deliverable ' || lower(new.status),
+        new.deliverable_number || ' · ' || new.name || ' is now ' || new.status || '.',
+        '/admin-clients?project=' || new.project_id || '&view=deliverables',
+        'deliv-status:' || new.id || ':' || new.status || ':' || extract(epoch from now())::bigint / 60);
+    end if;
+  end if;
+  if new.responsible_id is not null and (tg_op = 'INSERT' or new.responsible_id is distinct from old.responsible_id) then
+    perform private.notify_employee(new.responsible_id, 'deliverable', 'Deliverable assigned to you',
+      new.deliverable_number || ' · ' || new.name, '/emp-client-work',
+      'deliv-assign:' || new.id || ':' || new.responsible_id);
+  end if;
+  return null;
+end $$;
 create temp table _all(m text);
 do $test$
 declare
