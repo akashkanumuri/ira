@@ -55,3 +55,15 @@ Dashboard (action required, deliverable/contract/payment summaries, ready for do
 
 ## Frontend-only additions (backend already exists)
 Org-wide admin dashboard (clients, delivery, people, finance exceptions) · Finance (invoices, payments, outstanding across clients) · Org-wide audit log · Role & permission management · Task ↔ deliverable linking on assignment · Notifications pages · Invoice PDF · Attendance corrections (submit + review), subject to confirming the review path.
+
+## Status — 23 Oct 2026
+
+Done on `redesign/foundation` (type check and build pass):
+- Admin: Payroll (guided generate → review → finalize), Reports (9 exports, grouped), Settings (segmented rules, duplicate checks, payroll policy cards, read-only Roles & access matrix), Notifications page.
+- Employee: Profile (header card, password rule hints, alert state), Notifications page.
+- Client: Dashboard (progress ring, payment gauge, action list, contract and downloads).
+- Links meant for the other role land on the closest page for the signed-in role.
+
+Deferred to the backend phase (needs data that doesn't exist yet):
+- Invoice PDF: there is no company billing profile (legal name, GSTIN, address, bank details). Generating a tax invoice without it would be incomplete.
+- Editable roles: `has_permission` already reads `user_roles`, but staff screens are chosen by account type. Granting a staff role needs permission-driven navigation first.
