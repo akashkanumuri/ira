@@ -28,11 +28,12 @@ create table if not exists public.deliverable_comments (
 create index if not exists deliverable_comments_deliverable_idx on public.deliverable_comments(deliverable_id, created_at);
 alter table public.deliverable_comments enable row level security;
 
--- Staff who work on this deliverable: admins / project.manage_all, the project's managers, or the responsible employee.
+-- Staff who talk to the client about this deliverable: admins / project.manage_all and the project's managers.
+-- Employees never deal with the client directly; managers forward feedback to them as task comments.
 create or replace function private.is_deliverable_staff(p_deliverable_id uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.deliverables d where d.id = p_deliverable_id
-                 and (private.can_manage_project(d.project_id) or d.responsible_id = private.current_employee_id()))
+                 and private.can_manage_project(d.project_id))
 $$;
 
 -- A client user of this deliverable's client, who may see it (not a draft, not deleted).
@@ -58,8 +59,7 @@ begin
   v_kind := case when v_staff then 'staff' else 'client' end;
   v_vis := case when v_staff and coalesce(p_internal, false) then 'internal' else 'client' end;
   if v_staff then
-    select coalesce(e.name, 'IRA team') into v_name from public.employees e where e.profile_id = auth.uid();
-    v_name := coalesce(v_name, 'IRA team');
+    v_name := 'IRA team';  -- clients never see individual staff names
   else
     select coalesce(cu.full_name, c.company_name) into v_name from public.client_users cu join public.clients c on c.id = cu.client_id
     where cu.profile_id = auth.uid() limit 1;
@@ -71,10 +71,6 @@ begin
   if v_kind = 'client' then
     perform private.notify_project_staff(d.project_id, 'deliverable', 'Client comment on ' || d.name,
       coalesce(v_name, 'The client') || ': ' || left(v_body, 160), '/admin-clients?project=' || d.project_id || '&view=deliverables', 'dcomment_' || v_id);
-    if d.responsible_id is not null then
-      perform private.notify_employee(d.responsible_id, 'deliverable', 'Client comment on ' || d.name,
-        coalesce(v_name, 'The client') || ': ' || left(v_body, 160), '/emp-client-work', 'dcomment_' || v_id);
-    end if;
   elsif v_vis = 'client' and d.client_id is not null then
     perform private.notify_client(d.client_id, 'deliverable', 'New comment on ' || d.name, left(v_body, 160), '/client/deliverables', 'dcomment_' || v_id);
   end if;
@@ -125,13 +121,12 @@ alter table public.support_messages enable row level security;
 
 create sequence if not exists public.support_request_seq;
 
--- Staff who handle a request: admins / client.edit, the managers of its project, or the assignee.
+-- Staff who handle a request: admins / client.edit, or the managers of its project.
 create or replace function private.is_support_staff(p_request_id uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
   select private.current_client_id() is null and exists (
     select 1 from public.support_requests r where r.id = p_request_id
       and (private.is_admin() or private.has_permission('client.edit')
-           or r.assigned_to = private.current_employee_id()
            or (r.project_id is not null and private.is_project_manager(r.project_id))))
 $$;
 
@@ -172,8 +167,7 @@ begin
   perform private.require(length(btrim(coalesce(p_body, ''))) between 1 and 4000, 'Write a message (up to 4000 characters)');
   v_internal := v_staff and coalesce(p_internal, false);
   if v_staff then
-    select coalesce(e.name, 'IRA team') into v_name from public.employees e where e.profile_id = auth.uid();
-    v_name := coalesce(v_name, 'IRA team');
+    v_name := 'IRA team';
   else
     select coalesce(cu.full_name, c.company_name) into v_name from public.client_users cu join public.clients c on c.id = cu.client_id
     where cu.profile_id = auth.uid() limit 1;
@@ -207,7 +201,10 @@ begin
   perform private.require(private.is_support_staff(r.id) or (v_client and p_status in ('resolved','closed')), 'Not allowed');
   perform private.require(p_status in ('open','in_progress','waiting_on_client','resolved','closed'), 'Unknown status');
   perform private.require(p_assigned_to is null or not v_client, 'Not allowed');
-  perform private.require(p_assigned_to is null or exists (select 1 from public.employees e where e.id = p_assigned_to and e.status = 'active'), 'Pick an active employee');
+  perform private.require(p_assigned_to is null or exists (select 1 from public.employees e where e.id = p_assigned_to and e.status = 'active'
+    and (exists (select 1 from public.profiles p where p.id = e.profile_id and p.role = 'admin')
+         or (r.project_id is not null and exists (select 1 from public.project_managers pm where pm.project_id = r.project_id and pm.manager_id = e.id)))),
+    'Assign to an admin or a manager of this project');
   update public.support_requests set status = p_status, updated_at = now(),
     assigned_to = coalesce(p_assigned_to, assigned_to),
     resolved_at = case when p_status in ('resolved','closed') then coalesce(resolved_at, now()) else null end

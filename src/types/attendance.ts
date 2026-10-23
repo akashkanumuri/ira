@@ -189,6 +189,8 @@ export interface Task {
   completedAt?: string | null;
   cancelledAt?: string | null;
   reviewedAt?: string | null;
+  /** Optional estimate set by the assigner (review flow). */
+  estimateMinutes?: number | null;
 }
 
 export interface LeaveLedger {

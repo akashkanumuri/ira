@@ -829,6 +829,13 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
   );
 }
 
+async function setTaskEstimate(taskId: string | null | undefined, hoursRaw: FormDataEntryValue | null) {
+  const hours = Number(hoursRaw ?? '');
+  if (!taskId || !Number.isFinite(hours) || hours <= 0) return;
+  const { error } = await (supabase as any).rpc('task_set_estimate', { p_task_id: taskId, p_minutes: Math.round(hours * 60) });
+  if (error && !/does not exist|could not find/i.test(error.message)) notify(`Task created, but the estimate wasn’t saved: ${error.message}`, 'error', 6000);
+}
+
 async function linkTaskToDeliverable(taskId: string | null | undefined, deliverableId: string) {
   if (!taskId || !deliverableId) return;
   const { error } = await (supabase as any).rpc('staff_link_task_to_deliverable', { p_task_id: taskId, p_deliverable_id: deliverableId });
@@ -889,6 +896,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
       if (error) throw error;
       notify('Task assigned.', 'success');
       await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
+      await setTaskEstimate(createdTaskId, fd.get('estimateHours'));
       void notifyTaskAssigned({ assigneeEmployeeId: to, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current, actorUserId: user.id });
       form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
@@ -965,6 +973,7 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
       const { data: createdTaskId, error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: description, p_assigned_to: toId, p_start_date: start, p_due_date: due, p_priority: priorityValue, p_client_request_id: assignRequestRef.current.id });
       if (error) throw error;
       await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
+      await setTaskEstimate(createdTaskId, fd.get('estimateHours'));
       void notifyTaskAssigned({ assigneeEmployeeId: toId, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current?.id, actorUserId: user?.id ?? '' });
       assignRequestRef.current = null; notify('Task assigned.', 'success'); form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
@@ -1145,6 +1154,12 @@ function TaskAssignForm({
       <label>
         <span className="label">Due Date</span>
         <input type="date" name="dueDate" defaultValue={today()} className="input" required disabled={hasNoTargets} />
+      </label>
+
+      <label>
+        <span className="label">Estimated effort <span className="font-normal text-ink-400">optional · hours</span></span>
+        <input type="number" name="estimateHours" min={0.25} max={999} step={0.25} className="input" placeholder="e.g. 4" disabled={hasNoTargets} />
+        <span className="block text-xs text-ink-400 mt-1.5">Compared with the time the assignee tracks.</span>
       </label>
 
       <div className="md:col-span-2 flex justify-end gap-2 pt-2">

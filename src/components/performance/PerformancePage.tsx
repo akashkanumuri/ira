@@ -9,6 +9,7 @@ import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Notice, Page, Page
 import { Gauge } from '../../ui/charts';
 import { Modal } from '../../ui/Modal';
 import { GrowthTimeline } from './GrowthTimeline';
+import { ReviewScorecard, TeamReviewMetrics } from './ReviewMetrics';
 
 type Data = { cycles: Cycle[]; reviews: Review[]; kras: Kra[] };
 
@@ -52,7 +53,10 @@ export function PerformancePage({ user, employees = [] }: { user: AuthUser; empl
       <PageHeader title="Performance" subtitle="Your KRAs, reviews and career history." />
       {state === 'unavailable' && <Notice tone="sky" title="Performance reviews are almost ready">KRAs and reviews switch on once the performance database update is applied. Your growth history will appear here too.</Notice>}
       {state === 'error' && <Notice tone="rose">{error}</Notice>}
-      {state !== 'unavailable' && <PillTabs value={tab} onChange={setTab} items={tabs} />}
+      <PillTabs value={tab} onChange={setTab} items={tabs} />
+
+      {tab === 'mine' && <ReviewScorecard title="My work quality" />}
+      {tab === 'team' && reports.length > 0 && <TeamReviewMetrics />}
 
       {state === 'loading' && <Card className="p-5 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}</Card>}
 

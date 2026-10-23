@@ -1,3 +1,4 @@
+import { TeamReviewMetrics } from './ReviewMetrics';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Award, CalendarRange, CheckCircle2, Lock, Play, Plus, Target, Trash2, TrendingUp } from 'lucide-react';
 import type { Designation, Employee } from '../../types/attendance';
@@ -11,14 +12,14 @@ import { confirmDialog } from '../../ui/confirm';
 import { GrowthTimeline, MilestoneDialog } from './GrowthTimeline';
 
 export function PerformanceAdmin({ employees = [], designations = [] }: { employees?: Employee[]; designations?: Designation[] }) {
-  const [tab, setTab] = useState<'cycles' | 'promotions' | 'growth'>('cycles');
+  const [tab, setTab] = useState<'cycles' | 'quality' | 'promotions' | 'growth'>('cycles');
   const [available, setAvailable] = useState<boolean | null>(null);
   useEffect(() => { void perfApi.available().then(setAvailable); }, []);
   const active = useMemo(() => employees.filter((e) => e.status === 'active'), [employees]);
 
   return (
     <Page>
-      <PageHeader title="Performance" subtitle="KRAs, review cycles, promotions and each person’s growth history." />
+      <PageHeader title="Performance" subtitle="KRAs, review cycles, work quality, promotions and each person’s growth history." />
       {available === false && (
         <Notice tone="sky" title="Performance switches on with the next database update">
           Review cycles, KRAs, promotions and growth history are built and tested. They appear here once the performance update is applied.
@@ -26,8 +27,9 @@ export function PerformanceAdmin({ employees = [], designations = [] }: { employ
       )}
       {available && (
         <>
-          <PillTabs value={tab} onChange={setTab} items={[{ id: 'cycles', label: 'Review cycles' }, { id: 'promotions', label: 'Promotions' }, { id: 'growth', label: 'Growth history' }]} />
+          <PillTabs value={tab} onChange={setTab} items={[{ id: 'cycles', label: 'Review cycles' }, { id: 'quality', label: 'Work quality' }, { id: 'promotions', label: 'Promotions' }, { id: 'growth', label: 'Growth history' }]} />
           {tab === 'cycles' && <Cycles employees={active} designations={designations} />}
+          {tab === 'quality' && <TeamReviewMetrics />}
           {tab === 'promotions' && <Promotions designations={designations} />}
           {tab === 'growth' && <Growth employees={active} designations={designations} />}
         </>

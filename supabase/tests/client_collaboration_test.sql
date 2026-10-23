@@ -41,19 +41,28 @@ begin
   select count(*) into n from public.notifications where recipient_id = u_pm and title like 'Client comment on%';
   insert into _r values ('project manager told about client comment', n = 1, n::text);
   select count(*) into n from public.notifications where recipient_id = u_designer and title like 'Client comment on%';
-  insert into _r values ('responsible designer told', n = 1, n::text);
+  insert into _r values ('responsible designer NOT told (no client contact)', n = 0, n::text);
   begin perform public.deliverable_add_comment(dl, 'secret', true); select visibility into v from public.deliverable_comments where body = 'secret'; ok := v = 'client';
   exception when others then ok := false; end;
   insert into _r values ('client cannot post internal notes', ok, coalesce(v, ''));
   begin perform public.deliverable_add_comment(dl_draft, 'peek'); ok := false; exception when others then ok := true; end;
   insert into _r values ('client cannot comment on drafts', ok, '');
 
-  -- staff replies
+  -- staff replies (the designer has no access to the client thread)
   perform set_config('request.jwt.claims', json_build_object('sub', u_designer, 'role', 'authenticated')::text, true);
+  begin perform public.deliverable_add_comment(dl, 'hello client'); ok := false; exception when others then ok := true; end;
+  insert into _r values ('designer cannot post to client thread', ok, '');
+  perform set_config('role', 'authenticated', true);
+  select count(*) into n from public.deliverable_comments where deliverable_id = dl;
+  perform set_config('role', 'postgres', true);
+  insert into _r values ('designer cannot read client thread', n = 0, n::text);
+  perform set_config('request.jwt.claims', json_build_object('sub', u_pm, 'role', 'authenticated')::text, true);
   c2 := public.deliverable_add_comment(dl, 'Internal: check brand guide first', true);
   perform public.deliverable_add_comment(dl, 'Sure — new version tomorrow');
   select count(*) into n from public.notifications where recipient_id = u_client and title like 'New comment on%';
   insert into _r values ('client told about staff reply (not the internal note)', n = 1, n::text);
+  select count(*) into n from public.deliverable_comments where deliverable_id = dl and author_kind = 'staff' and author_name <> 'IRA team';
+  insert into _r values ('staff comments signed IRA team', n = 0, n::text);
 
   perform set_config('request.jwt.claims', json_build_object('sub', u_client, 'role', 'authenticated')::text, true);
   perform set_config('role', 'authenticated', true);
@@ -99,7 +108,11 @@ begin
   perform public.support_reply(sr, 'Yes, 18% GST is included.');
   select status into v from public.support_requests where id = sr;
   insert into _r values ('staff reply moves to in progress', v = 'in_progress', v);
-  perform public.support_set_status(sr, 'resolved', e_designer);
+  begin perform public.support_set_status(sr, 'in_progress', e_designer); ok := false; exception when others then ok := true; end;
+  insert into _r values ('cannot assign support to a non-manager employee', ok, '');
+  perform public.support_set_status(sr, 'resolved', e_pm);
+  select count(*) into n from public.support_messages where request_id = sr and author_kind = 'staff' and author_name <> 'IRA team';
+  insert into _r values ('support replies signed IRA team', n = 0, n::text);
   select count(*) into n from public.notifications where recipient_id = u_client and title like '% resolved';
   insert into _r values ('client told it is resolved', n = 1, n::text);
 
@@ -126,7 +139,7 @@ begin
   perform set_config('role', 'authenticated', true);
   select count(*) into n from public.support_requests where id = sr;
   perform set_config('role', 'postgres', true);
-  insert into _r values ('assignee can see the request', n = 1, n::text);
+  insert into _r values ('designer cannot see the request', n = 0, n::text);
 
   perform set_config('request.jwt.claims', json_build_object('sub', u_out, 'role', 'authenticated')::text, true);
   perform set_config('role', 'authenticated', true);

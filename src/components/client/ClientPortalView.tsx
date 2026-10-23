@@ -119,21 +119,13 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
       if (projErr) throw projErr;
-      const ids = (projData ?? []).map((p: any) => p.id);
-      const mgrMap: Record<string, string> = {};
-      if (ids.length) {
-        const { data: mgrData } = await db
-          .from('project_managers')
-          .select('project_id, employees:manager_id (name)')
-          .in('project_id', ids);
-        for (const m of mgrData ?? []) if (m.employees?.name) mgrMap[m.project_id] = m.employees.name;
-      }
+      // Clients deal with “IRA team” only — individual staff names are never loaded here.
       const mapped: WorkspaceProject[] = (projData ?? []).map((p: any) => ({
         id: p.id,
         name: p.name,
         description: p.description,
         status: p.status === 'active' ? 'Active' : p.status === 'paused' ? 'On Hold' : p.status === 'completed' ? 'Completed' : p.status,
-        managerName: mgrMap[p.id] || 'Project team',
+        managerName: 'IRA team',
         startDate: p.start_date ?? p.created_at?.slice(0, 10) ?? null,
         targetDate: p.target_date ?? null,
       }));
@@ -272,7 +264,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
         />
       );
     }
-    if (page === 'support') return <ClientSupport projects={projects.map(p => ({ id: p.id, name: p.name }))} managerName={selectedProject?.managerName} />;
+    if (page === 'support') return <ClientSupport projects={projects.map(p => ({ id: p.id, name: p.name }))} />;
     if (page === 'settings') return <ClientSettingsView user={user} changePassword={changePassword} />;
 
     if (loadingProjects) {
@@ -550,7 +542,7 @@ function ClientSettingsView({
               <Field label="Company Name">
                 <Input defaultValue={user.companyName || '—'} disabled />
               </Field>
-              <Field label="Login ID / Email" hint="Contact your account manager to change your email address.">
+              <Field label="Login ID / Email" hint="Contact the IRA team to change your email address.">
                 <Input defaultValue={user.email} disabled />
               </Field>
               <Field label="Portal role">

@@ -263,6 +263,7 @@ export function mapTask(row: any, employees: Map<string, Employee>): Task {
     completedAt: row.completed_at ?? null,
     cancelledAt: row.cancelled_at ?? null,
     reviewedAt: row.reviewed_at ?? null,
+    estimateMinutes: row.estimate_minutes ?? null,
   };
 }
 

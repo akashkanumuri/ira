@@ -13,8 +13,8 @@ const ago = (iso: string) => {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
 };
 
-/** Staff view of client support requests. RLS limits employees to requests on projects they manage or that are assigned to them. */
-export function SupportInbox({ employees = [], canAssign }: { employees?: Employee[]; canAssign: boolean }) {
+/** Staff view of client support requests. RLS limits this to admins and the managers of the request's project; replies reach the client as “IRA team”. */
+export function SupportInbox({ employees = [] }: { employees?: Employee[]; canAssign?: boolean }) {
   const [rows, setRows] = useState<SupportRequest[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -33,7 +33,6 @@ export function SupportInbox({ employees = [], canAssign }: { employees?: Employ
   const shown = useMemo(() => (tab === 'active' ? active : tab === 'resolved' ? rows.filter((r) => ['resolved', 'closed'].includes(r.status)) : rows)
     .filter((r) => !q || `${r.request_number} ${r.subject} ${r.clients?.company_name ?? ''} ${r.projects?.name ?? ''}`.toLowerCase().includes(q)), [rows, active, tab, q]);
   const open = rows.find((r) => r.id === openId) ?? null;
-  const assignees = employees.filter((e) => e.status === 'active').map((e) => ({ id: e.id, name: e.name }));
   const nameOf = (id: string | null) => (id ? employees.find((e) => e.id === id)?.name : null);
 
   return (
@@ -68,8 +67,8 @@ export function SupportInbox({ employees = [], canAssign }: { employees?: Employ
               <button type="button" className="btn-ghost btn-sm w-fit lg:hidden mb-3" onClick={() => setOpenId(null)}><ArrowLeft className="w-3.5 h-3.5" /> All requests</button>
               <p className="text-[11px] font-bold text-ink-400 tnum">{open.request_number} · {SUPPORT_CATEGORY[open.category]}</p>
               <h2 className="font-display text-xl font-bold text-ink-900 mt-0.5">{open.subject}</h2>
-              <p className="text-[13px] text-ink-500 mb-4">{open.clients?.company_name}{open.projects?.name ? ` · ${open.projects.name}` : ''}{nameOf(open.assigned_to) ? ` · assigned to ${nameOf(open.assigned_to)}` : ''}</p>
-              <div className="flex-1 min-h-0"><SupportConversation key={open.id} request={open} staff assignees={canAssign ? assignees : []} onChanged={load} /></div>
+              <p className="text-[13px] text-ink-500 mb-4">{open.clients?.company_name}{open.projects?.name ? ` · ${open.projects.name}` : ''}{nameOf(open.assigned_to) ? ` · handled by ${nameOf(open.assigned_to)}` : ''}</p>
+              <div className="flex-1 min-h-0"><SupportConversation key={open.id} request={open} staff onChanged={load} /></div>
             </Card>
           ) : (
             <Card className="hidden lg:flex items-center justify-center min-h-[400px]"><EmptyState icon={<LifeBuoy className="w-6 h-6" />} title="Pick a request" text="Open a request to read and reply." /></Card>

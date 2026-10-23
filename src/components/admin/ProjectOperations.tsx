@@ -6,6 +6,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DeliverableThread } from '../common/DeliverableThread';
+import { StaffClientReview } from '../common/StaffClientReview';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -769,6 +770,8 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
               <StaffFiles files={files} onArchived={() => void reload()} />
               <div className="mt-3"><UploadBox parentType="deliverable" parentId={d.id} existing={files} allowFinal onDone={() => void reload()} /></div>
             </section>
+
+            <StaffClientReview deliverableId={d.id} deliverableStatus={d.status} nameOf={(id) => employees.find((e) => e.id === id)?.name ?? 'Team member'} onChanged={reload} />
 
             <DeliverableThread deliverableId={d.id} staff />
 

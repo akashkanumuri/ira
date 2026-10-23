@@ -10,12 +10,12 @@ const FAQ: Array<[string, string]> = [
   ['How do I approve a deliverable?', 'Open Deliverables, choose the item marked “Ready for your review” and use Review work. You can approve it or ask for changes with a note.'],
   ['Why can’t I download a file?', 'Final files unlock when the deliverable is marked ready. If a payment is overdue, downloads are paused until the payment is verified.'],
   ['I paid — why does it still show as due?', 'Payments count once our finance team verifies the bank reference you submitted. That usually takes one working day.'],
-  ['How do I change scope, quantity or a deadline?', 'Open the deliverable and choose Request modification. The project team reviews it and may suggest a counter-proposal.'],
+  ['How do I change scope, quantity or a deadline?', 'Open the deliverable and choose Request modification. The IRA team reviews it and may suggest a counter-proposal.'],
   ['How do I add a colleague?', 'Raise an “Access & logins” request with their name and email and we’ll set them up.'],
 ];
 
 /** Client portal: help topics plus their support requests. */
-export function ClientSupport({ projects, managerName }: { projects: Array<{ id: string; name: string }>; managerName?: string | null }) {
+export function ClientSupport({ projects }: { projects: Array<{ id: string; name: string }> }) {
   const [rows, setRows] = useState<SupportRequest[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -36,7 +36,7 @@ export function ClientSupport({ projects, managerName }: { projects: Array<{ id:
         <div>
           <p className="eyebrow">Help & support</p>
           <h1 className="font-display text-[28px] font-bold text-ink-900 leading-tight mt-1">How can we help?</h1>
-          <p className="text-[14px] text-ink-500 mt-1">Ask a question or report a problem — your project team replies here and you’ll get a notification.</p>
+          <p className="text-[14px] text-ink-500 mt-1">Ask a question or report a problem — the IRA team replies here and you’ll get a notification.</p>
         </div>
         <Button icon={<Plus className="w-4 h-4" />} onClick={() => setCreating(true)} disabled={state === 'error'}>New request</Button>
       </header>
@@ -77,13 +77,11 @@ export function ClientSupport({ projects, managerName }: { projects: Array<{ id:
         </div>
 
         <div className="space-y-4">
-          {managerName && (
-            <Card className="p-5">
-              <div className="flex items-center gap-3"><span className="w-10 h-10 rounded-full bg-brand-50 text-brand-600 grid place-items-center"><Mail className="w-4 h-4" /></span>
-                <div><p className="text-[12px] text-ink-500">Your account manager</p><p className="font-bold text-ink-900">{managerName}</p></div></div>
-              <p className="text-[12px] text-ink-500 mt-3">Requests about a project go to its manager first.</p>
-            </Card>
-          )}
+          <Card className="p-5">
+            <div className="flex items-center gap-3"><span className="w-10 h-10 rounded-full bg-brand-50 text-brand-600 grid place-items-center"><Mail className="w-4 h-4" /></span>
+              <div><p className="text-[12px] text-ink-500">You’re talking to</p><p className="font-bold text-ink-900">The IRA team</p></div></div>
+            <p className="text-[12px] text-ink-500 mt-3">Every request reaches the people looking after your project. Replies arrive here and as notifications.</p>
+          </Card>
           <Card className="overflow-hidden">
             <div className="px-5 py-4 border-b border-ink-100"><h2 className="font-display font-bold text-[15px] text-ink-900">Common questions</h2></div>
             <ul className="divide-y divide-ink-100">

@@ -81,6 +81,7 @@ import {
 } from '../../lib/sigma';
 import { Stat as UiStat } from '../../ui';
 import { DeliverableThread } from '../common/DeliverableThread';
+import { ClientVersions } from './ClientVersions';
 import { Gauge, Ring } from '../../ui/charts';
 import { greeting } from '../../ui/motion';
 
@@ -105,7 +106,7 @@ interface ViewProps {
 }
 
 const LOCK_MESSAGE = 'Download is temporarily unavailable because the associated payment is overdue.';
-const MANUAL_LOCK_MESSAGE = 'Download is temporarily unavailable. Please contact your account manager.';
+const MANUAL_LOCK_MESSAGE = 'Download is temporarily unavailable. Please contact the IRA team.';
 
 /** Client-facing label: the underlying status is preserved while access is locked. */
 const clientStatus = (d: DeliverableRow) => (isLocked(d.lock_state) && d.status === 'Ready for Download' ? 'Locked' : d.status);
@@ -291,7 +292,7 @@ export function ClientDashboard({ user, project, ws, go }: ViewProps) {
       <header className="rise" style={{ ['--i' as any]: 0 }}>
         <p className="eyebrow">{todayStr}</p>
         <h1 className="font-display text-[28px] sm:text-[34px] font-bold text-ink-900 leading-tight mt-1">{greeting()}, {(user.primaryContact || user.name || '').split(' ')[0]}</h1>
-        <p className="text-[14px] text-ink-500 mt-1">{project.name} · managed by {project.managerName}</p>
+        <p className="text-[14px] text-ink-500 mt-1">{project.name} · delivered by the IRA team</p>
       </header>
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -548,7 +549,7 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
               Reason given: “{contract.decline_reason}”. Your project team has been notified and may send a revised version.
             </Alert>
           ) : contract.status === 'Expired' || contract.status === 'Terminated' ? (
-            <Alert tone="warn" title={`Contract ${contract.status.toLowerCase()}`}>Please contact your account manager about renewal.</Alert>
+            <Alert tone="warn" title={`Contract ${contract.status.toLowerCase()}`}>Please contact the IRA team.about renewal.</Alert>
           ) : awaiting ? (
             <Card>
               <CardHead title="Your response" desc="Open and read the document above before accepting." />
@@ -831,11 +832,12 @@ export function ClientDeliverables({ user, ws, reload }: ViewProps) {
                 ['Start date', fmtDate(d.start_date)],
                 ['Due date', fmtDate(d.due_date)],
                 ['Timeline', d.timeline ?? '—'],
-                ['Assigned team', d.assigned_team ?? d.responsible_name ?? 'Project team'],
                 ['Client action', d.client_action ?? '—'],
                 ['Reference', d.reference_url && /^https?:\/\//.test(d.reference_url) ? <LinkRef url={d.reference_url} label="Open link" /> : '—'],
               ]}
             />
+
+            <ClientVersions deliverableId={d.id} canReview={user.clientRole !== 'client_user'} onChanged={reload} />
 
             <section>
               <h3 className="text-[13px] font-semibold mb-2 text-ink">Files</h3>
@@ -1044,7 +1046,7 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
         <Stat label="Completed" value={`${prog.done}/${prog.total}`} sub={`${prog.countPct}% by count`} />
         <Stat label="Weighted progress" value={prog.weightedPct != null ? `${prog.weightedPct}%` : '—'} sub={prog.weightedPct != null ? 'By deliverable weightage' : 'Weightage not configured'} />
         <Stat label="Waiting on you" value={ws.dependencies.filter(x => ['Requested', 'Pending', 'Rejected', 'Resubmission Required'].includes(x.status)).length} sub="Requested items" tone="warn" />
-        <Stat label="Target completion" value={<span className="text-[18px]">{fmtDate(project.targetDate)}</span>} sub={`Manager: ${project.managerName}`} />
+        <Stat label="Target completion" value={<span className="text-[18px]">{fmtDate(project.targetDate)}</span>} sub="Managed by the IRA team" />
       </div>
       <Card className="mb-5">
         <Progress value={prog.weightedPct ?? prog.countPct} label="Project completion" />
@@ -1095,7 +1097,7 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
             <KV items={[['Needed by', fmtDate(dep.required_by)], ['Status', <Status key="s" s={dep.status} />]]} />
             {dep.review_comment && <Alert tone="warn" title="Feedback from the team">{dep.review_comment}</Alert>}
             <Alert tone="info" title="Do not upload passwords">
-              If access credentials are needed, share them through your organisation’s password manager or ask your account manager for a secure method.
+              If access credentials are needed, share them through your organisation’s password manager or ask the IRA team for a secure method.
             </Alert>
             <FilePicker files={files} onChange={setFiles} />
             <Field label="Note or link" hint="Optional when you attach files.">

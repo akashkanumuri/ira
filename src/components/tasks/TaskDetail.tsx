@@ -1,14 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Ban, CheckCircle2, Clock3, CornerDownRight, ExternalLink, FileText, Hand, Link2, ListChecks, MessageSquare,
-  Paperclip, Play, Plus, RefreshCw, RotateCcw, Send, ShieldAlert, Timer, Undo2, X,
+  Ban, CheckCircle2, Clock3, CornerDownRight, ExternalLink, FileText, Hand, Layers, Link2, ListChecks, MessageSquare,
+  Pause, Play, Plus, RefreshCw, RotateCcw, Send, ShieldAlert, Timer, Undo2, UserRound, X,
 } from 'lucide-react';
 import type { Employee, Task, TaskStatus } from '../../types/attendance';
 import { dateLabel } from '../../lib/v2';
 import { notify } from '../../lib/toast';
 import { getKolkataDateString } from '../../lib/workingDays';
-import { ACCEPT_ATTR, fmtBytes, openFile, uploadAndAttach, validateFile } from '../../lib/sigma';
-import { TASK_STATUS, fmtMinutes, isTaskClosed, loadTaskExtras, taskApi, type TaskComment, type TaskEvent, type TaskFile, type TaskTimeLog, type TaskDependency } from '../../lib/tasks';
+import { fmtBytes, openFile } from '../../lib/sigma';
+import {
+  CLIENT_ROUND, DRAFT_DECISION, TASK_STATUS, fmtMinutes, isTaskClosed, loadTaskExtras, reviewApi, taskApi,
+  type ClientRound, type TaskComment, type TaskDraft, type TaskEvent, type TaskFile, type TaskTimeLog, type TaskDependency,
+} from '../../lib/tasks';
 import { Avatar, Badge, Progress, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
 
@@ -17,6 +20,19 @@ type Prompt = null | { to: TaskStatus; title: string; noteLabel?: string; noteRe
 
 const today = () => getKolkataDateString();
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/** “Due in 3 days”, “Due today”, “2 days overdue”. */
+function dueText(due: string, todayStr: string) {
+  const d = Math.round((Date.parse(due) - Date.parse(todayStr)) / 86400000);
+  if (d === 0) return 'Due today';
+  if (d === 1) return 'Due tomorrow';
+  if (d > 1) return `Due in ${d} days`;
+  return `${-d} day${d === -1 ? '' : 's'} overdue`;
+}
+const clock = (sec: number) => {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return `${h ? `${h}:` : ''}${String(m).padStart(h ? 2 : 1, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 const EVENT_TEXT: Record<string, string> = {
   assigned: 'assigned the task', accepted: 'accepted it', in_progress: 'started work', blocked: 'marked it blocked',
@@ -52,7 +68,10 @@ export function TaskDetail({
   const [subOpen, setSubOpen] = useState(false);
   const [subForm, setSubForm] = useState({ title: '', due: task.dueDate < today() ? today() : task.dueDate, to: '' });
   const [depPick, setDepPick] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendMsg, setSendMsg] = useState('');
+  const [fwd, setFwd] = useState<{ id: string; note: string } | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
 
   const byId = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
@@ -73,6 +92,16 @@ export function TaskDetail({
   }, [task.id]);
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => { setProgress(task.progressPct ?? 0); }, [task.progressPct]);
+  const timer = extras?.timer ?? null;
+  useEffect(() => {
+    if (!timer) return undefined;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [timer]);
+  const runningSec = timer ? Math.max(0, Math.floor((now - Date.parse(timer.started_at)) / 1000)) : 0;
+  const drafts = extras?.drafts ?? [];
+  const rounds = extras?.clientRounds ?? [];
+  const nextDraftNo = (drafts[0]?.draft_no ?? 0) + 1;
 
   async function run(key: string, fn: () => Promise<unknown>, done?: string) {
     if (busy) return false;
@@ -101,25 +130,34 @@ export function TaskDetail({
       if (task.status === 'revision_required') actions.push({ key: 'restart', label: 'Work on changes', icon: <RotateCcw className="w-4 h-4" />, kind: 'secondary', onClick: () => void go('in_progress', 'Back in progress.') });
       if (['accepted', 'in_progress', 'revision_required'].includes(task.status)) {
         if (isReviewer) actions.push({ key: 'done', label: 'Mark complete', icon: <CheckCircle2 className="w-4 h-4" />, kind: 'mint', onClick: () => setPrompt({ to: 'completed', title: 'Mark this task complete?', confirm: 'Mark complete' }) });
-        else actions.push({ key: 'handin', label: 'Hand in for review', icon: <Send className="w-4 h-4" />, kind: 'primary', onClick: () => setPrompt({ to: 'awaiting_review', title: 'Hand in for review', link: true, noteLabel: 'Note for the reviewer (optional)', confirm: 'Hand in' }) });
+        else actions.push({ key: 'handin', label: `Submit draft ${nextDraftNo}`, icon: <Send className="w-4 h-4" />, kind: 'primary', onClick: () => { setLink(''); setPrompt({ to: 'awaiting_review', title: `Submit draft ${nextDraftNo} for review`, link: true, noteLabel: 'What changed in this draft? (optional)', confirm: 'Submit draft' }); } });
       }
       if (['accepted', 'in_progress', 'revision_required'].includes(task.status)) actions.push({ key: 'block', label: 'I’m blocked', icon: <ShieldAlert className="w-4 h-4" />, kind: 'secondary', onClick: () => setPrompt({ to: 'blocked', title: 'What’s blocking this task?', noteLabel: 'What do you need, and from whom?', noteRequired: true, confirm: 'Mark blocked' }) });
     }
     if (isReviewer && task.status === 'awaiting_review') {
-      actions.push({ key: 'approve', label: 'Approve', icon: <CheckCircle2 className="w-4 h-4" />, kind: 'mint', onClick: () => void go('completed', 'Task approved.') });
-      actions.push({ key: 'changes', label: 'Request changes', icon: <Undo2 className="w-4 h-4" />, kind: 'secondary', onClick: () => setPrompt({ to: 'revision_required', title: 'What needs to change?', noteLabel: 'Be specific so it can be fixed in one go', noteRequired: true, confirm: 'Send back' }) });
+      actions.push({ key: 'approve', label: `Approve draft ${drafts[0]?.draft_no ?? ''}`.trim(), icon: <CheckCircle2 className="w-4 h-4" />, kind: 'mint', onClick: () => setPrompt({ to: 'completed', title: `Approve draft ${drafts[0]?.draft_no ?? ''}`.trim(), noteLabel: 'Feedback for the assignee (optional)', confirm: 'Approve' }) });
+      actions.push({ key: 'changes', label: 'Request changes', icon: <Undo2 className="w-4 h-4" />, kind: 'secondary', onClick: () => setPrompt({ to: 'revision_required', title: `What needs to change in draft ${drafts[0]?.draft_no ?? ''}?`.replace(' ?', '?'), noteLabel: 'Be specific so it can be fixed in one go', noteRequired: true, confirm: 'Send back' }) });
     }
     if (isReviewer && task.status === 'completed') actions.push({ key: 'reopen', label: 'Reopen', icon: <RotateCcw className="w-4 h-4" />, kind: 'secondary', onClick: () => setPrompt({ to: 'revision_required', title: 'Reopen with changes', noteLabel: 'What needs to change?', noteRequired: true, confirm: 'Reopen' }) });
     if (isReviewer && !closed) actions.push({ key: 'cancel', label: 'Cancel task', icon: <Ban className="w-4 h-4" />, kind: 'danger', onClick: () => setPrompt({ to: 'cancelled', title: 'Cancel this task?', noteLabel: 'Reason', noteRequired: true, confirm: 'Cancel task', danger: true }) });
   }
 
-  async function uploadFiles(list: FileList | null) {
-    const files = Array.from(list ?? []);
-    if (!files.length) return;
-    const bad = files.map(validateFile).find(Boolean);
-    if (bad) { notify(bad, 'error'); return; }
-    await run('upload', async () => { for (const f of files) await uploadAndAttach(f, 'task', task.id); }, files.length === 1 ? 'File attached.' : `${files.length} files attached.`);
-    if (fileRef.current) fileRef.current.value = '';
+  const canTime = isAssignee && !task.archivedAt && !['completed', 'cancelled', 'awaiting_review'].includes(task.status);
+  const startTimer = () => void run('timer', () => taskApi.timerStart(task.id), 'Timer started.');
+  const stopTimer = () => void run('timer', async () => {
+    const m = await taskApi.timerStop();
+    notify(`Logged ${fmtMinutes(m)}.`, 'success');
+  });
+  const canSendToClient = !task.archivedAt && task.status === 'completed' && Boolean(task.deliverableId) && isReviewer
+    && !rounds.some((r) => r.status === 'pending');
+  async function sendToClient() {
+    const ok = await run('send', () => reviewApi.sendToClient(task.deliverableId as string, null, sendMsg.trim() || null, task.id), 'Sent to the client for review.');
+    if (ok) { setSendOpen(false); setSendMsg(''); }
+  }
+  async function forward() {
+    if (!fwd) return;
+    const ok = await run('fwd', () => reviewApi.forward(fwd.id, fwd.note.trim() || null, task.id), 'Feedback sent to the assignee. The task is reopened.');
+    if (ok) setFwd(null);
   }
 
   async function sendComment() {
@@ -155,7 +193,8 @@ export function TaskDetail({
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={meta.tone} dot>{meta.label}</Badge>
           <Badge tone={task.priority === 'urgent' || task.priority === 'high' ? 'rose' : task.priority === 'medium' ? 'amber' : 'ink'}><span className="capitalize">{task.priority}</span></Badge>
-          {overdue && <Badge tone="rose">Overdue</Badge>}
+          {!closed && task.status !== 'awaiting_review' && <Badge tone={overdue ? 'rose' : task.dueDate === today() ? 'amber' : 'ink'}>{dueText(task.dueDate, today())}</Badge>}
+          {drafts.length > 0 && <Badge tone="ink">{drafts.length} draft{drafts.length === 1 ? '' : 's'}</Badge>}
           {task.archivedAt && <Badge tone="ink">Removed</Badge>}
           {parent && <span className="inline-flex items-center gap-1 text-[12px] text-ink-500"><CornerDownRight className="w-3.5 h-3.5" />Subtask of <b className="text-ink-700">{parent.title}</b></span>}
         </div>
@@ -172,7 +211,7 @@ export function TaskDetail({
             ['Assigned to', task.assignedToName],
             ['Assigned by', task.assignedByName || 'Admin'],
             ['Dates', `${dateLabel(task.startDate)} → ${dateLabel(task.dueDate)}`],
-            ['Time spent', fmtMinutes(task.timeSpentMinutes)],
+            ['Time', task.estimateMinutes ? `${fmtMinutes(task.timeSpentMinutes)} of ${fmtMinutes(task.estimateMinutes)}` : fmtMinutes(task.timeSpentMinutes)],
           ].map(([k, v]) => (
             <div key={k} className="inset-tile px-3.5 py-3 min-w-0"><dt className="text-[11px] font-semibold text-ink-500">{k}</dt><dd className="text-[13px] font-bold text-ink-900 truncate mt-0.5">{v}</dd></div>
           ))}
@@ -207,12 +246,10 @@ export function TaskDetail({
           <div className="rounded-2xl border border-ink-200 p-4 space-y-3 anim-fade">
             <p className="font-display font-bold text-[15px] text-ink-900">{prompt.title}</p>
             {prompt.link && (
-              <label className="block"><span className="label">Work link {extras?.files.length ? <span className="font-normal text-ink-400">optional — files are attached</span> : null}</span>
-                <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://drive.google.com/…" className="input" autoFocus />
+              <label className="block"><span className="label">Link to draft {nextDraftNo}</span>
+                <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://drive.google.com/…" className="input" autoFocus inputMode="url" />
+                <span className="block text-[12px] text-ink-500 mt-1.5">Share a Drive, Figma, Canva or similar link with view access for the reviewer. {subtasks.some((s) => !isTaskClosed(s)) ? <b className="text-rose-600">Finish the open subtasks first.</b> : null}</span>
               </label>
-            )}
-            {prompt.link && (
-              <p className="text-[12px] text-ink-500">Add a link or attach files below. {subtasks.some((s) => !isTaskClosed(s)) ? <b className="text-rose-600">Finish the open subtasks first.</b> : null}</p>
             )}
             {prompt.noteLabel && (
               <label className="block"><span className="label">{prompt.noteLabel}</span>
@@ -221,7 +258,7 @@ export function TaskDetail({
             )}
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => { setPrompt(null); setNote(''); }} disabled={Boolean(busy)}>Back</button>
-              <button type="button" disabled={Boolean(busy) || (prompt.noteRequired && !note.trim())}
+              <button type="button" disabled={Boolean(busy) || (prompt.noteRequired && !note.trim()) || (prompt.link && !/^https?:\/\/\S+/i.test(link.trim()))}
                 className={cx(prompt.danger ? 'btn-danger' : 'btn-primary', 'disabled:opacity-50')}
                 onClick={() => void go(prompt.to, `${TASK_STATUS[prompt.to].label}.`, note.trim() || null, prompt.link ? (link.trim() || null) : null)}>
                 {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}{prompt.confirm}
@@ -232,18 +269,50 @@ export function TaskDetail({
 
         {loadError && <p className="text-[13px] text-rose-600">{loadError} <button className="underline font-semibold" onClick={() => void reload()}>Retry</button></p>}
 
-        {/* work handed in */}
+        {/* timer */}
+        {(canTime || timer) && (
+          <section className={cx('rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3', timer ? 'bg-brand-50 border border-brand-100' : 'inset-tile')}>
+            <Timer className={cx('w-5 h-5', timer ? 'text-brand-600' : 'text-ink-400')} />
+            <div className="flex-1 min-w-[140px]">
+              <p className="text-[12px] font-semibold text-ink-500">{timer ? 'Timer running' : 'Track your time'}</p>
+              <p className="font-display text-xl font-bold text-ink-900 tnum leading-tight">{timer ? clock(runningSec) : fmtMinutes(task.timeSpentMinutes)}
+                {task.estimateMinutes ? <span className="text-[12px] font-semibold text-ink-500 ml-2">of {fmtMinutes(task.estimateMinutes)} estimated</span> : null}</p>
+            </div>
+            {isAssignee && (timer
+              ? <button type="button" className="btn-secondary" disabled={busy === 'timer'} onClick={stopTimer}><Pause className="w-4 h-4" />Pause & log</button>
+              : canTime && <button type="button" className="btn-primary" disabled={busy === 'timer'} onClick={startTimer}><Play className="w-4 h-4" />Start timer</button>)}
+            {task.estimateMinutes ? <div className="basis-full"><Progress value={Math.min(100, ((task.timeSpentMinutes ?? 0) + runningSec / 60) / task.estimateMinutes * 100)} tone={((task.timeSpentMinutes ?? 0) + runningSec / 60) > task.estimateMinutes ? 'rose' : 'brand'} /></div> : null}
+          </section>
+        )}
+
+        {/* drafts */}
         <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h4 className="flex items-center gap-2 text-[13px] font-bold text-ink-800"><Paperclip className="w-4 h-4 text-ink-400" />Work & files</h4>
-            {(isAssignee || isReviewer) && !task.archivedAt && task.status !== 'cancelled' && (
-              <>
-                <input ref={fileRef} type="file" multiple accept={ACCEPT_ATTR} className="sr-only" onChange={(e) => void uploadFiles(e.target.files)} />
-                <button type="button" className="btn-ghost btn-sm" disabled={busy === 'upload'} onClick={() => fileRef.current?.click()}>{busy === 'upload' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}Attach</button>
-              </>
-            )}
-          </div>
-          {task.submittedLink && (
+          <h4 className="flex items-center gap-2 text-[13px] font-bold text-ink-800"><Layers className="w-4 h-4 text-ink-400" />Drafts
+            {drafts.length > 0 && <span className="text-ink-500 font-semibold">{drafts.filter((d) => d.decision === 'approved' || d.decision === 'auto_approved').length ? 'approved on draft ' + (drafts.find((d) => d.decision === 'approved' || d.decision === 'auto_approved')?.draft_no ?? '') : `${drafts.length} submitted`}</span>}
+          </h4>
+          {drafts.map((d: TaskDraft) => {
+            const dm = DRAFT_DECISION[d.decision];
+            return (
+              <div key={d.id} className={cx('rounded-2xl border px-4 py-3 space-y-2', d.decision === 'pending' ? 'border-amber-200 bg-amber-50/40' : 'border-ink-200')}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-display font-bold text-[14px] text-ink-900">Draft {d.draft_no}</span>
+                  <Badge tone={dm.tone} dot>{dm.label}</Badge>
+                  {d.on_time === false && <Badge tone="rose">Late</Badge>}
+                  <span className="text-[11px] text-ink-400 tnum ml-auto">{when(d.submitted_at)}</span>
+                </div>
+                <a href={d.link} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-brand-700 font-semibold hover:underline min-w-0">
+                  <Link2 className="w-4 h-4 shrink-0" /><span className="truncate">{d.link}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                </a>
+                {d.note && <p className="text-[13px] text-ink-600 whitespace-pre-wrap"><span className="text-ink-400">Note: </span>{d.note}</p>}
+                {d.feedback && d.decision !== 'auto_approved' && (
+                  <p className={cx('text-[13px] rounded-xl px-3 py-2 whitespace-pre-wrap', d.decision === 'changes_requested' ? 'bg-rose-50 text-rose-900' : 'bg-mint-50 text-mint-900')}>
+                    <b>{d.decided_by ? (byProfile.get(d.decided_by)?.name ?? 'Reviewer') : 'Reviewer'}:</b> {d.feedback}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          {!drafts.length && task.submittedLink && (
             <a href={task.submittedLink} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl border border-ink-200 px-3 py-2.5 text-[13px] text-brand-700 font-semibold hover:bg-brand-50/50">
               <Link2 className="w-4 h-4 shrink-0" /><span className="truncate flex-1">{task.submittedLink}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" />
             </a>
@@ -255,8 +324,49 @@ export function TaskDetail({
               <span className="text-[11px] text-ink-400 tnum">{fmtBytes(f.size_bytes)} · {dateLabel(f.created_at.slice(0, 10))}</span>
             </button>
           ))}
-          {!task.submittedLink && !(extras?.files.length) && <p className="text-[13px] text-ink-400">Nothing handed in yet.</p>}
+          {!drafts.length && !task.submittedLink && !(extras?.files.length) && <p className="text-[13px] text-ink-400">{isAssignee ? 'When the work is ready, submit it as a draft with a link.' : 'No drafts submitted yet.'}</p>}
         </section>
+
+        {/* client review (managers and admins only; the client never sees who did the work) */}
+        {isReviewer && task.deliverableId && (rounds.length > 0 || canSendToClient) && (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="flex items-center gap-2 text-[13px] font-bold text-ink-800"><UserRound className="w-4 h-4 text-ink-400" />Client review</h4>
+              {canSendToClient && !sendOpen && <button type="button" className="btn-primary btn-sm" onClick={() => setSendOpen(true)}><Send className="w-3.5 h-3.5" />Send to client</button>}
+            </div>
+            {sendOpen && (
+              <div className="rounded-2xl border border-brand-200 bg-brand-50/40 p-4 space-y-3 anim-fade">
+                <p className="text-[13px] text-ink-700">The client gets the approved draft link as <b>version {(rounds[0]?.round_no ?? 0) + 1}</b> of <b>{deliverableName?.(task.deliverableId) ?? 'this deliverable'}</b>, sent from “IRA team”. They won’t see who worked on it.</p>
+                <textarea value={sendMsg} onChange={(e) => setSendMsg(e.target.value)} className="input min-h-[70px]" maxLength={2000} placeholder="Message to the client (optional) — e.g. what to look at" />
+                <div className="flex justify-end gap-2">
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => setSendOpen(false)} disabled={busy === 'send'}>Cancel</button>
+                  <button type="button" className="btn-primary btn-sm" disabled={busy === 'send'} onClick={() => void sendToClient()}>{busy === 'send' ? 'Sending…' : 'Send for review'}</button>
+                </div>
+              </div>
+            )}
+            {rounds.map((r: ClientRound) => (
+              <div key={r.id} className="rounded-2xl border border-ink-200 px-4 py-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-display font-bold text-[14px] text-ink-900">Version {r.round_no}</span>
+                  <Badge tone={CLIENT_ROUND[r.status].tone} dot>{CLIENT_ROUND[r.status].label}</Badge>
+                  <span className="text-[11px] text-ink-400 tnum ml-auto">sent {when(r.sent_at)}</span>
+                </div>
+                {r.client_comment && <p className={cx('text-[13px] rounded-xl px-3 py-2 whitespace-pre-wrap', r.status === 'changes_requested' ? 'bg-rose-50 text-rose-900' : 'bg-mint-50 text-mint-900')}><b>Client:</b> {r.client_comment}</p>}
+                {r.status === 'changes_requested' && (r.forwarded_at
+                  ? <p className="text-[12px] text-ink-500">Forwarded to {task.assignedToName} {when(r.forwarded_at)}.</p>
+                  : fwd?.id === r.id ? (
+                    <div className="space-y-2 anim-fade">
+                      <textarea value={fwd.note} onChange={(e) => setFwd({ id: r.id, note: e.target.value })} className="input min-h-[60px]" maxLength={2000} placeholder={`Add your own guidance for ${task.assignedToName} (optional)`} />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" className="btn-secondary btn-sm" onClick={() => setFwd(null)} disabled={busy === 'fwd'}>Cancel</button>
+                        <button type="button" className="btn-primary btn-sm" disabled={busy === 'fwd'} onClick={() => void forward()}>{busy === 'fwd' ? 'Sending…' : 'Reopen task with this feedback'}</button>
+                      </div>
+                    </div>
+                  ) : <button type="button" className="btn-secondary btn-sm" onClick={() => setFwd({ id: r.id, note: '' })}><Undo2 className="w-3.5 h-3.5" />Forward to {task.assignedToName}</button>)}
+              </div>
+            ))}
+          </section>
+        )}
 
         {/* subtasks */}
         {!task.parentTaskId && (
