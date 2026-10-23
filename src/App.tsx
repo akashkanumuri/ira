@@ -15,7 +15,7 @@ import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/empl
 import { useLinkableDeliverables, type LinkableDeliverable } from './lib/linkableDeliverables';
 import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { AppShell, type NavGroup } from './ui/AppShell';
-import { Avatar, Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, PillTabs, SkeletonPage, Stat, StatusBadge as UiStatusBadge } from './ui';
+import { Avatar, Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, PillTabs, SearchInput, SkeletonPage, Stat, StatusBadge as UiStatusBadge } from './ui';
 import { Modal } from './ui/Modal';
 import { ConfirmHost, confirmDialog } from './ui/confirm';
 import { ToastHost } from './components/common/ToastHost';
@@ -51,7 +51,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History
+  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -1172,17 +1172,69 @@ function TaskTable({ tasks, employeeId, onSubmit, onDelete, archivingId, admin, 
 function EmployeesAdmin({ employees, departments, designations, onRefresh }: any) {
   const [search, setSearch] = useState(''); const [status, setStatus] = useState('all'); const [modal, setModal] = useState<'create' | 'edit' | null>(null); const [editing, setEditing] = useState<Employee | null>(null); const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const filtered = (employees as Employee[]).filter(e => (status === 'all' || e.status === status) && (!search.trim() || `${e.name} ${e.empId} ${e.loginId} ${e.workEmail}`.toLowerCase().includes(search.toLowerCase())));
-  return <PageShell title="Employees / HR" subtitle="Create accounts, assign people, manage credentials and onboarding documents.">
-    <div className="flex flex-col sm:flex-row gap-2 justify-between">
-      <div className="flex gap-2 flex-1"><div className="relative flex-1 max-w-xl"><Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, employee ID or Login ID…" className="input pl-9" /></div><select value={status} onChange={e => setStatus(e.target.value)} className="input w-auto"><option value="all">All status</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-      <button onClick={() => { setEditing(null); setModal('create') }} className="btn-primary"><UserPlus className="w-4 h-4" />Add employee</button>
-    </div>
-    <div className="mt-4 card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
-      <thead><tr><Th>Employee</Th><Th>Login ID</Th><Th>Designation</Th><Th>Department</Th><Th>Work Mode</Th><Th>Salary</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
-      <tbody>{filtered.map(e => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td mono>{e.loginId}</Td><Td>{e.designation}</Td><Td>{e.department || '—'}</Td><Td>{e.workMode === 'remote' ? 'Remote' : 'Office'}</Td><Td>{money(e.currentSalary)}</Td><Td><StatusBadge label={e.status} /></Td><Td><div className="flex items-center gap-1.5"><button title="Edit" onClick={() => { setEditing(e); setModal('edit') }} className="icon-btn"><Pencil className="w-4 h-4" /></button><button disabled={statusBusyId === e.id} title={e.status === 'active' ? 'Deactivate' : 'Activate'} onClick={async () => { if (statusBusyId) return; if (!(await confirmDialog(e.status === 'active' ? { title: `Deactivate ${e.name}?`, message: 'Their sign-in will be disabled. All attendance, leave and payroll history is kept.', confirmLabel: 'Deactivate', danger: true } : { title: `Activate ${e.name}?`, message: 'They will be able to sign in again.', confirmLabel: 'Activate' }))) return; setStatusBusyId(e.id); try { await invokeEmployeeAdmin({ action: 'set_status', employeeId: e.id, status: e.status === 'active' ? 'inactive' : 'active' }); notify(e.status === 'active' ? 'Employee access disabled; history preserved.' : 'Employee account activated.', 'success'); await onRefresh(); } catch (error) { notify(error instanceof Error ? error.message : 'Unable to update employee status.', 'error') } finally { setStatusBusyId(null); } }} className="icon-btn">{statusBusyId === e.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button></div></Td></tr>)}{!filtered.length && <EmptyRow colSpan={8} text="No employees yet. Add the first employee to create their login." />}</tbody>
-    </table></div></div>
-    {modal && <EmployeeModal mode={modal} employee={editing} departments={departments} designations={designations} employees={employees} onClose={() => setModal(null)} onSaved={onRefresh} />}
-  </PageShell>;
+  const all = employees as Employee[];
+  const activeCount = all.filter((e) => e.status === 'active').length;
+  const remoteCount = all.filter((e) => e.status === 'active' && e.workMode === 'remote').length;
+  const deptCount = new Set(all.filter((e) => e.status === 'active').map((e) => e.department).filter(Boolean)).size;
+  const toggleStatus = async (e: Employee) => {
+    if (statusBusyId) return;
+    if (!(await confirmDialog(e.status === 'active' ? { title: `Deactivate ${e.name}?`, message: 'Their sign-in will be disabled. All attendance, leave and payroll history is kept.', confirmLabel: 'Deactivate', danger: true } : { title: `Activate ${e.name}?`, message: 'They will be able to sign in again.', confirmLabel: 'Activate' }))) return;
+    setStatusBusyId(e.id);
+    try {
+      await invokeEmployeeAdmin({ action: 'set_status', employeeId: e.id, status: e.status === 'active' ? 'inactive' : 'active' });
+      notify(e.status === 'active' ? 'Employee access disabled; history preserved.' : 'Employee account activated.', 'success');
+      await onRefresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Unable to update employee status.', 'error');
+    } finally {
+      setStatusBusyId(null);
+    }
+  };
+  return (
+    <PageShell
+      title="Employees"
+      subtitle="Accounts, roles, reporting lines and onboarding documents."
+      actions={<button onClick={() => { setEditing(null); setModal('create') }} className="btn-primary"><UserPlus className="w-4 h-4" />Add employee</button>}
+    >
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <Stat index={0} icon={<Users className="w-5 h-5" />} tone="brand" label="Active" value={activeCount} caption={`${all.length} accounts in total`} />
+        <Stat index={1} label="Inactive" value={all.length - activeCount} caption="Sign-in disabled, history kept" />
+        <Stat index={2} label="Remote" value={remoteCount} caption="Check in as WFH automatically" />
+        <Stat index={3} label="Departments" value={deptCount} caption="With active people" />
+      </div>
+      <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+        <PillTabs value={status} onChange={setStatus} items={[{ id: 'all', label: 'Everyone', count: all.length }, { id: 'active', label: 'Active', count: activeCount }, { id: 'inactive', label: 'Inactive', count: all.length - activeCount }]} />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search name, ID or login" className="w-full md:w-72" />
+      </div>
+      <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
+        <thead><tr><Th>Employee</Th><Th>Login ID</Th><Th>Role</Th><Th>Work mode</Th><Th>Salary</Th><Th>Status</Th><Th> </Th></tr></thead>
+        <tbody>{filtered.map(e => (
+          <tr key={e.id}>
+            <td>
+              <div className="flex items-center gap-3">
+                <Avatar name={e.name} src={e.avatar || null} size={36} />
+                <div className="min-w-0"><p className="font-bold text-ink-900 truncate">{e.name}</p><p className="text-[11px] text-ink-400 truncate">{e.empId}{e.manager ? ` · reports to ${e.manager}` : ''}</p></div>
+              </div>
+            </td>
+            <Td mono>{e.loginId}</Td>
+            <td><p className="text-ink-800 font-semibold">{e.designation || '—'}</p><p className="text-[11px] text-ink-400">{e.department || '—'}</p></td>
+            <Td>{e.workMode === 'remote' ? 'Remote' : 'Office'}</Td>
+            <Td mono>{money(e.currentSalary)}</Td>
+            <Td><StatusBadge label={e.status} /></Td>
+            <td>
+              <div className="flex items-center justify-end gap-1">
+                <button title="Edit" aria-label={`Edit ${e.name}`} onClick={() => { setEditing(e); setModal('edit') }} className="icon-btn"><Pencil className="w-4 h-4" /></button>
+                <button disabled={statusBusyId === e.id} title={e.status === 'active' ? 'Deactivate' : 'Activate'} aria-label={e.status === 'active' ? `Deactivate ${e.name}` : `Activate ${e.name}`} onClick={() => void toggleStatus(e)} className={`icon-btn ${e.status === 'active' ? 'hover:!text-rose-600 hover:!bg-rose-50' : 'hover:!text-mint-700 hover:!bg-mint-50'}`}>
+                  {statusBusyId === e.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : e.status === 'active' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}{!filtered.length && <EmptyRow colSpan={7} text={all.length ? 'Nobody matches this search.' : 'No employees yet. Add the first employee to create their login.'} />}</tbody>
+      </table></div></div>
+      {modal && <EmployeeModal mode={modal} employee={editing} departments={departments} designations={designations} employees={employees} onClose={() => setModal(null)} onSaved={onRefresh} />}
+    </PageShell>
+  );
 }
 
 function EmployeeModal({ mode, employee, departments, designations, employees, onClose, onSaved }: { mode: 'create' | 'edit'; employee: Employee | null; departments: Department[]; designations: Designation[]; employees: Employee[]; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -1271,13 +1323,74 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
   </Modal>;
 }
 
-function AttendanceAdmin({ attendance, employees, leaveRequests, wfhRequests, holidays }: any) {
-  const [date, setDate] = useState(today()); const [search, setSearch] = useState(''); const cl = classifyDay(date, holidays);
-  const rows = (employees as Employee[]).filter(e => e.status === 'active' && (!search || `${e.name}${e.empId}`.toLowerCase().includes(search.toLowerCase()))).map(e => {
-    const record = attendance.find((a: AttendanceRecord) => a.employeeId === e.id && a.date === date); const leave = leaveRequests.find((l: LeaveRequest) => l.employeeId === e.id && l.status === 'approved' && l.startDate <= date && l.endDate >= date);
-    return { e, record, leave };
+function AttendanceAdmin({ attendance, employees, leaveRequests, holidays }: any) {
+  const [date, setDate] = useState(today());
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'working' | 'break' | 'done' | 'out' | 'leave'>('all');
+  const cl = classifyDay(date, holidays);
+  const base = (employees as Employee[]).filter((e) => e.status === 'active').map((e) => {
+    const record = (attendance as AttendanceRecord[]).find((a) => a.employeeId === e.id && a.date === date);
+    const leave = (leaveRequests as LeaveRequest[]).find((l) => l.employeeId === e.id && l.status === 'approved' && l.startDate <= date && l.endDate >= date);
+    const state: 'working' | 'break' | 'done' | 'out' | 'leave' = leave && !record ? 'leave' : !record ? 'out' : record.attendanceState === 'on_break' ? 'break' : record.attendanceState === 'completed' ? 'done' : 'working';
+    return { e, record, leave, state };
   });
-  return <PageShell title="Attendance" subtitle="Daily attendance with explicit login/check-in/break/check-out separation."><div className="card p-4 flex flex-col sm:flex-row gap-3"><label className="flex-1"><span className="label">Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" /></label><label className="flex-1"><span className="label">Search</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…" className="input" /></label></div><div className="mt-4 card p-4 text-xs flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600" /><b>{dateLabel(date, { weekday: 'long' })}</b><span className="text-slate-500">· {cl.label}</span></div><div className="mt-4 card overflow-hidden"><div className="overflow-x-auto"><table className="data-table"><thead><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead><tbody>{cl.isWorkingDay ? rows.map(({ e, record, leave }: any) => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td>{leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : '—'}</Td><Td mono>{record?.checkIn ?? '—'}</Td><Td mono>{record ? duration(record.breakSeconds) : '—'}</Td><Td mono>{record?.checkOut ?? '—'}</Td><Td mono>{record ? duration(record.workingSeconds) : '—'}</Td><Td><StatusBadge label={leave ? 'Leave' : record?.status ?? (e.joinDate && date < e.joinDate ? 'Not joined' : date > today() ? 'Upcoming' : date === today() ? 'Not checked-in' : 'Not recorded')} /></Td></tr>) : <tr><td colSpan={7} className="p-10 text-center text-sm text-slate-500">{cl.label}. No check-in required.</td></tr>}{cl.isWorkingDay && !rows.length && <EmptyRow colSpan={7} text="No active employees." />}</tbody></table></div></div></PageShell>;
+  const count = (k: string) => base.filter((r) => r.state === k).length;
+  const rows = base.filter((r) => (filter === 'all' || r.state === filter) && (!search || `${r.e.name} ${r.e.empId} ${r.e.designation}`.toLowerCase().includes(search.toLowerCase())));
+  const isToday = date === today();
+  const strip = [
+    { k: 'working', label: isToday ? 'Working now' : 'Still open', tone: 'bg-mint-500' },
+    { k: 'break', label: 'On break', tone: 'bg-amber-400' },
+    { k: 'done', label: 'Checked out', tone: 'bg-brand-600' },
+    { k: 'out', label: cl.isWorkingDay ? 'Not in' : cl.label, tone: 'bg-ink-300' },
+    { k: 'leave', label: 'On leave', tone: 'bg-sky-400' },
+  ] as const;
+  const statusOf = (r: any) => r.leave && !r.record ? 'leave' : r.record?.status ?? (r.e.joinDate && date < r.e.joinDate ? 'Not joined' : date > today() ? 'Upcoming' : !cl.isWorkingDay ? cl.label : date === today() ? 'Not checked in' : 'absent');
+  return (
+    <PageShell
+      title="Attendance"
+      subtitle="Who is in, on a break or out — for any day."
+      actions={<input type="date" value={date} onChange={(e) => setDate(e.target.value || today())} className="input !w-auto !rounded-full !min-h-[42px]" aria-label="Date" />}
+    >
+      <section className="card rise p-5 sm:p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-display text-lg font-bold text-ink-950">{dateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+          <Badge tone={cl.isWorkingDay ? 'mint' : 'sky'}>{cl.label}</Badge>
+        </div>
+        <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-ink-100" aria-hidden>
+          {strip.map((x) => { const n = count(x.k); return n ? <span key={x.k} className={`${x.tone} h-full transition-[width] duration-700`} style={{ width: `${(n / Math.max(base.length, 1)) * 100}%` }} /> : null; })}
+        </div>
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {strip.map((x) => (
+            <button key={x.k} type="button" onClick={() => setFilter(filter === x.k ? 'all' : x.k)} className={`rounded-2xl px-3.5 py-3 text-left transition-colors ${filter === x.k ? 'bg-ink-950 text-white' : 'inset-tile hover:bg-ink-100'}`}>
+              <span className="flex items-center gap-2 text-[12px] font-semibold opacity-80"><span className={`w-2 h-2 rounded-full ${x.tone}`} />{x.label}</span>
+              <span className="stat-value block text-2xl mt-1.5">{count(x.k)}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <p className="text-[13px] font-semibold text-ink-600">{filter === 'all' ? `${rows.length} people` : `${rows.length} ${strip.find((x) => x.k === filter)?.label.toLowerCase()}`}{filter !== 'all' && <button type="button" className="ml-2 text-brand-700" onClick={() => setFilter('all')}>Show everyone</button>}</p>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search people" className="w-full sm:w-64" />
+      </div>
+      <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
+        <thead><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.e.id}>
+              <td><div className="flex items-center gap-3"><Avatar name={r.e.name} src={r.e.avatar || null} size={34} /><div className="min-w-0"><p className="font-bold text-ink-900 truncate">{r.e.name}</p><p className="text-[11px] text-ink-400 truncate">{r.e.designation || r.e.empId}</p></div></div></td>
+              <Td>{r.leave && !r.record ? 'Leave' : r.record?.mode === 'wfh' ? 'WFH' : r.record ? 'Office' : r.e.workMode === 'remote' ? 'WFH' : '—'}</Td>
+              <Td mono>{r.record?.checkIn ?? '—'}</Td>
+              <Td mono>{r.record ? duration(r.record.breakSeconds) : '—'}</Td>
+              <Td mono>{r.record?.checkOut ?? (r.record ? (r.state === 'break' ? 'On break' : 'Open') : '—')}</Td>
+              <Td mono>{r.record ? r.record.workingHours || duration(r.record.workingSeconds) : '—'}</Td>
+              <Td><StatusBadge label={statusOf(r)} /></Td>
+            </tr>
+          ))}
+          {!rows.length && <EmptyRow colSpan={7} text={base.length ? 'Nobody in this group.' : 'No active employees.'} />}
+        </tbody>
+      </table></div></div>
+    </PageShell>
+  );
 }
 
 function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers = [], employees = [], user, onRefresh }: any) {
