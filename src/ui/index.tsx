@@ -154,11 +154,11 @@ export function Stat({
 }) {
   const body = (
     <>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-h-11">
         {icon && <IconChip icon={icon} tone={tone} solid />}
         <span className="text-[15px] font-semibold text-ink-800 leading-tight">{label}</span>
       </div>
-      <p className="stat-value mt-5 text-[40px] sm:text-[46px] text-ink-950">
+      <p className="stat-value mt-5 text-[34px] sm:text-[40px] text-ink-950">
         {typeof value === 'number' ? <AnimatedNumber value={value} format={format} /> : value ?? '—'}
       </p>
       {caption && <p className="mt-2 text-[13px] text-ink-500 leading-snug">{caption}</p>}
@@ -350,7 +350,7 @@ export function SkeletonPage() {
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-9 w-72 max-w-full" />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="card p-6 space-y-5">
             <Skeleton className="h-11 w-11 rounded-full" />

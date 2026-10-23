@@ -209,7 +209,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
       />
 
       {/* Headline numbers */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           index={0}
           icon={<Users className="w-5 h-5" />}

@@ -73,7 +73,7 @@ export function EmployeeHome(props: Common & {
 
       <AttendanceToday {...props} />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           index={1}
           icon={<CalendarDays className="w-5 h-5" />}

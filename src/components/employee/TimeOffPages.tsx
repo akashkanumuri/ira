@@ -126,7 +126,7 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
         actions={<Button icon={<CalendarPlus className="w-4 h-4" />} onClick={() => { reset(); setOpen(true); }}>Apply for leave</Button>}
       />
 
-      <div className="grid gap-4 grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Stat index={0} icon={<CalendarDays className="w-5 h-5" />} tone="brand" label="Available" value={current ? Number(current.closingBalance) : '—'} format={(n) => (Number.isInteger(n) ? String(n) : n.toFixed(1))} caption="Paid days you can take" />
         <Stat index={1} label="Carried forward" value={current ? Number(current.openingBalance) : '—'} format={(n) => n.toFixed(1)} caption="From previous months" />
         <Stat index={2} label="Added this month" value={current ? Number(current.accrual) : 1.5} format={(n) => n.toFixed(1)} caption="Monthly accrual" />
