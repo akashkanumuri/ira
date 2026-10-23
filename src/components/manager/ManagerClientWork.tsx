@@ -68,8 +68,13 @@ export const ManagerClientWork: React.FC<Props> = props => (
 
 function ClientWorkInternal({ user, employees }: Props) {
   const [managed, setManaged] = useState<{ id: string; name: string; client_id: string | null; clientName: string }[]>([]);
-  const [tab, setTab] = useState('mine');
-  const [projectId, setProjectId] = useState('');
+  // Deep link: /emp-client-work?project=<id>&view=<workspace tab> opens a managed project.
+  const deepLink = useMemo(() => {
+    const q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    return { project: q.get('project') ?? '', view: q.get('view') ?? '' };
+  }, []);
+  const [tab, setTab] = useState(deepLink.project ? 'managed' : 'mine');
+  const [projectId, setProjectId] = useState(deepLink.project);
   const [error, setError] = useState<string | null>(null);
 
   const loadManaged = useCallback(async () => {
@@ -77,11 +82,12 @@ function ClientWorkInternal({ user, employees }: Props) {
     try {
       const pm = await must<any[]>(db.from('project_managers').select('project_id').eq('manager_id', user.employeeDbId));
       const ids = pm.map(x => x.project_id);
-      if (!ids.length) { setManaged([]); return; }
+      if (!ids.length) { setManaged([]); setTab('mine'); return; }
       const rows = await must<any[]>(db.from('projects').select('id, name, client_id, clients:client_id (company_name)').in('id', ids).is('deleted_at', null).order('created_at', { ascending: false }));
       const mapped = rows.map(r => ({ id: r.id, name: r.name, client_id: r.client_id, clientName: r.clients?.company_name ?? 'Client' }));
       setManaged(mapped);
-      setProjectId(prev => prev || mapped[0]?.id || '');
+      setProjectId(prev => (prev && mapped.some(m => m.id === prev) ? prev : mapped[0]?.id || ''));
+      if (!mapped.length) setTab('mine');
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -121,6 +127,7 @@ function ClientWorkInternal({ user, employees }: Props) {
                 clientId={project.client_id}
                 employees={employees.map(e => ({ id: e.id, name: e.name, designation: e.designation, status: e.status }))}
                 mode="manager"
+                initialTab={project.id === deepLink.project ? deepLink.view || undefined : undefined}
               />
             )}
           </>

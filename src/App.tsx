@@ -11,6 +11,7 @@ import { AdminHome } from './components/admin/AdminHome';
 import { FinancePage } from './components/admin/FinancePage';
 import { ActivityLogPage } from './components/admin/ActivityLogPage';
 import { NotificationsPage } from './components/common/NotificationsPage';
+import { GlobalSearch } from './components/common/GlobalSearch';
 import { TaskDetail } from './components/tasks/TaskDetail';
 import { TASK_STATUS, TASK_STATUS_ORDER, fmtMinutes, isTaskClosed, isTaskOpen, isTaskWithAssignee } from './lib/tasks';
 import { RolesMatrix } from './components/admin/RolesMatrix';
@@ -198,6 +199,8 @@ function resolveTab(role: AuthUser['role'], raw: string): string {
 function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }) {
   const getInitialTab = () => resolveTab(user.role, typeof window !== 'undefined' ? window.location.pathname : '');
   const [activeTab, setActiveTab] = useState(getInitialTab);
+  // Bumped on every navigation so a page re-reads its deep link (?project=, ?task=…) even when the tab doesn't change.
+  const [navKey, setNavKey] = useState(0);
 
   // Keep the address bar in step with the page actually shown (e.g. an employee
   // opening an /admin-… link lands on their dashboard).
@@ -645,6 +648,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       window.history.pushState(null, '', url);
     }
     setActiveTab(tab);
+    setNavKey((k) => k + 1);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
 
@@ -684,6 +688,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         onSignOut={() => void onLogout()}
         topRight={
           <>
+            <GlobalSearch role={user.role} onNavigate={navigate} />
             <LiveClockDisplay />
             <NotificationBell activeTab={activeTab} user={user} onSelectTab={navigate} />
           </>
@@ -692,7 +697,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       >
         {loadingData ? <SkeletonPage /> : (
           <div key={activeTab} className="ira-section-transition">
-            {selectedComponent}
+            <React.Fragment key={`${activeTab}:${navKey}`}>{selectedComponent}</React.Fragment>
           </div>
         )}
       </AppShell>
@@ -1192,6 +1197,16 @@ function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssigne
 
 function EmployeesAdmin({ employees, departments, designations, onRefresh }: any) {
   const [search, setSearch] = useState(''); const [status, setStatus] = useState('all'); const [modal, setModal] = useState<'create' | 'edit' | null>(null); const [editing, setEditing] = useState<Employee | null>(null); const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  // Deep link from search: /admin-employees?employee=<id> opens that profile once.
+  const deepEmployee = useRef<string | null>(typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('employee') : null);
+  useEffect(() => {
+    if (!deepEmployee.current) return;
+    const target = (employees as Employee[]).find((x) => x.id === deepEmployee.current);
+    if (!target) return;
+    deepEmployee.current = null;
+    setEditing(target);
+    setModal('edit');
+  }, [employees]);
   const filtered = (employees as Employee[]).filter(e => (status === 'all' || e.status === status) && (!search.trim() || `${e.name} ${e.empId} ${e.loginId} ${e.workEmail}`.toLowerCase().includes(search.toLowerCase())));
   const all = employees as Employee[];
   const activeCount = all.filter((e) => e.status === 'active').length;

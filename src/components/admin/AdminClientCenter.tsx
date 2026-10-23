@@ -75,9 +75,9 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
   const toast = useToast();
   // Deep link: /admin-clients?project=<id>&view=<workspace tab>
   const deepLink = useMemo(() => {
-    if (typeof window === 'undefined') return { project: '', view: '' };
+    if (typeof window === 'undefined') return { project: '', view: '', client: '' };
     const q = new URLSearchParams(window.location.search);
-    return { project: q.get('project') ?? '', view: q.get('view') ?? '' };
+    return { project: q.get('project') ?? '', view: q.get('view') ?? '', client: q.get('client') ?? '' };
   }, []);
   const [activeTab, setActiveTab] = useState<'directory' | 'projects' | 'workspace'>(deepLink.project ? 'workspace' : 'directory');
 
@@ -158,7 +158,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
   ========================================================================= */
   const [clientSearch, setClientSearch] = useState('');
   const [clientStatusFilter, setClientStatusFilter] = useState('All');
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(deepLink.client || null);
   const [clientDetailTab, setClientDetailTab] = useState('overview');
   const [assignMgrDialogOpen, setAssignMgrDialogOpen] = useState(false);
   const [selectedMgrId, setSelectedMgrId] = useState('');
