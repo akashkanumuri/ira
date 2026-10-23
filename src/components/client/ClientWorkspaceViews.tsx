@@ -79,6 +79,9 @@ import {
   type ModificationRow,
   type ProjectWorkspace,
 } from '../../lib/sigma';
+import { Stat as UiStat } from '../../ui';
+import { Gauge, Ring } from '../../ui/charts';
+import { greeting } from '../../ui/motion';
 
 export type ClientPage = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications';
 
@@ -276,140 +279,128 @@ export function ClientDashboard({ user, project, ws, go }: ViewProps) {
     }),
   );
 
-  const todayStr = new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' }).format(new Date());
+  const todayStr = new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date());
+  const awaitingYou = count(['Awaiting Client Dependency', 'Awaiting Client Review']);
+  const inProgress = count(['In Progress', 'Under Internal Review', 'Revision In Progress']);
+  const paidPct = totalBilled > 0 ? Math.round((paid / totalBilled) * 100) : 0;
+  const overdueAmt = overdue.reduce((s, i) => s + installmentTotal(i) - Number(i.amount_paid), 0);
 
   return (
-    <>
-      <PageHeader title={`Welcome, ${user.primaryContact || user.name}`} desc={`${todayStr} · ${project.name}`} />
+    <div className="space-y-5">
+      <header className="rise" style={{ ['--i' as any]: 0 }}>
+        <p className="eyebrow">{todayStr}</p>
+        <h1 className="font-display text-[28px] sm:text-[34px] font-bold text-ink-900 leading-tight mt-1">{greeting()}, {(user.primaryContact || user.name || '').split(' ')[0]}</h1>
+        <p className="text-[14px] text-ink-500 mt-1">{project.name} · managed by {project.managerName}</p>
+      </header>
 
-      <Card className="mb-5 !p-0 overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-line flex items-center justify-between">
-          <h2 className="text-[13px] font-semibold text-ink">Client action required</h2>
-          <Badge tone={actions.length ? 'primary' : 'ok'} icon={false}>
-            {actions.length ? `${actions.length} item${actions.length > 1 ? 's' : ''}` : 'All clear'}
-          </Badge>
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <UiStat index={0} icon={<Package className="w-5 h-5" />} tone="brand" label="Deliverables" value={prog.total} caption={`${prog.done} completed`} onClick={() => go('deliverables')} />
+        <UiStat index={1} icon={<TrendingUp className="w-5 h-5" />} tone="sky" label="In progress" value={inProgress} caption={`${count(['Pending'])} not started yet`} onClick={() => go('progress')} />
+        <UiStat index={2} icon={<CheckCircle2 className="w-5 h-5" />} tone={awaitingYou ? 'amber' : 'mint'} label="Waiting on you" value={awaitingYou} caption={awaitingYou ? 'Reviews or files needed' : 'Nothing pending'} onClick={() => go('deliverables')} />
+        <UiStat index={3} icon={<History className="w-5 h-5" />} tone={overdueDeliv ? 'rose' : 'ink'} label="Running late" value={overdueDeliv} caption="Past planned due date" />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr] items-stretch">
+        <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 4 }}>
+          <div className="flex items-start justify-between gap-3">
+            <div><h2 className="font-display font-bold text-[17px] text-ink-900">Project progress</h2><p className="text-[13px] text-ink-500">How far along your deliverables are.</p></div>
+            <button type="button" onClick={() => go('progress')} className="btn-ghost btn-sm">Tracker <ArrowRight className="w-3.5 h-3.5" /></button>
+          </div>
+          <div className="mt-5 flex flex-col sm:flex-row items-center gap-6">
+            <Ring value={prog.countPct} size={168} stroke={14}>
+              <div className="text-center"><p className="stat-value text-[34px] text-ink-900">{Math.round(prog.countPct)}%</p><p className="text-[11px] text-ink-500 font-semibold">{prog.done} of {prog.total} done</p></div>
+            </Ring>
+            <ul className="flex-1 w-full space-y-3">
+              {[
+                { label: 'Completed', n: prog.done, tone: 'bg-brand-600' },
+                { label: 'In progress', n: inProgress, tone: 'bg-sky-400' },
+                { label: 'Waiting on you', n: awaitingYou, tone: 'bg-amber-300' },
+                { label: 'Not started', n: count(['Pending']), tone: 'bg-ink-200' },
+              ].map(r => (
+                <li key={r.label}>
+                  <div className="flex items-center justify-between text-[13px]"><span className="inline-flex items-center gap-2 text-ink-600"><span className={cx('w-2.5 h-2.5 rounded-full', r.tone)} />{r.label}</span><span className="tnum font-bold text-ink-900">{r.n}</span></div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-ink-100 overflow-hidden"><div className={cx('h-full rounded-full grow-x', r.tone)} style={{ width: `${prog.total ? (r.n / prog.total) * 100 : 0}%` }} /></div>
+                </li>
+              ))}
+              {prog.weightedPct != null && <li className="text-[12px] text-ink-500 pt-1">Weighted by effort: <b className="text-ink-800 tnum">{Math.round(prog.weightedPct)}%</b></li>}
+            </ul>
+          </div>
+        </section>
+
+        <section className="card p-5 sm:p-6 rise flex flex-col" style={{ ['--i' as any]: 5 }}>
+          <div className="flex items-start justify-between gap-3">
+            <div><h2 className="font-display font-bold text-[17px] text-ink-900">Payments</h2><p className="text-[13px] text-ink-500">Verified payments only.</p></div>
+            <button type="button" onClick={() => go('payments')} className="btn-ghost btn-sm">Billing <ArrowRight className="w-3.5 h-3.5" /></button>
+          </div>
+          <div className="mt-2 flex justify-center"><Gauge value={paidPct} size={200} tone={overdue.length ? 'amber' : 'mint'} label={<><span className="block stat-value text-[26px] text-ink-900">{paidPct}%</span><span className="text-[11px] text-ink-500 font-semibold">of billed is paid</span></>} /></div>
+          <dl className="mt-auto grid grid-cols-2 gap-3 text-[13px]">
+            <div className="inset-tile p-3"><dt className="text-[11px] text-ink-500 font-semibold">Paid</dt><dd className="font-bold text-ink-900 tnum mt-0.5">{inr(paid)}</dd></div>
+            <div className="inset-tile p-3"><dt className="text-[11px] text-ink-500 font-semibold">Still due</dt><dd className="font-bold text-ink-900 tnum mt-0.5">{inr(Math.max(0, totalBilled - paid))}</dd></div>
+            <div className="inset-tile p-3 col-span-2 flex items-center justify-between gap-3">
+              <div><dt className="text-[11px] text-ink-500 font-semibold">{overdue.length ? 'Overdue' : 'Next payment'}</dt><dd className={cx('font-bold tnum mt-0.5', overdue.length ? 'text-rose-700' : 'text-ink-900')}>{overdue.length ? inr(overdueAmt) : next ? `${inr(installmentTotal(next) - Number(next.amount_paid))} · ${fmtDate(next.due_date)}` : 'Nothing scheduled'}</dd></div>
+              {(overdue.length > 0 || due.length > 0) && <button type="button" className="btn-primary btn-sm" onClick={() => go('payments')}>Pay</button>}
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      <section className="card overflow-hidden rise" style={{ ['--i' as any]: 6 }}>
+        <div className="px-5 sm:px-6 py-4 flex items-center justify-between gap-3 border-b border-ink-100">
+          <div><h2 className="font-display font-bold text-[17px] text-ink-900">Needs your attention</h2><p className="text-[13px] text-ink-500">Things your project team is waiting on.</p></div>
+          <Badge tone={actions.length ? 'primary' : 'ok'} icon={false}>{actions.length ? `${actions.length} item${actions.length > 1 ? 's' : ''}` : 'All clear'}</Badge>
         </div>
         {actions.length === 0 ? (
-          <div className="p-5 flex items-center gap-2 text-[13px] text-ink-2">
-            <CheckCircle2 size={16} className="text-ok shrink-0" />
-            Nothing needs your action right now.
-          </div>
+          <div className="px-5 sm:px-6 py-8 flex items-center gap-3 text-[14px] text-ink-600"><span className="w-10 h-10 rounded-full bg-mint-50 text-mint-600 grid place-items-center"><CheckCircle2 size={18} /></span>You’re all caught up. We’ll let you know when something needs you.</div>
         ) : (
-          <ul className="divide-y divide-line">
+          <ul className="divide-y divide-ink-100">
             {actions.slice(0, 8).map(a => (
-              <li key={a.key} className="flex items-center gap-3 px-5 py-3.5">
-                <div className={cx('w-8 h-8 rounded-md grid place-items-center shrink-0', a.tone === 'err' ? 'bg-err-soft text-err' : 'bg-primary-soft text-primary')}>
-                  <a.icon size={15} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium text-ink truncate">{a.title}</div>
-                  <div className="text-xs text-ink-2 truncate">{a.desc}</div>
-                </div>
-                <Button size="sm" onClick={() => go(a.to)}>
-                  {a.cta}
-                  <ArrowRight size={13} />
-                </Button>
+              <li key={a.key}>
+                <button type="button" onClick={() => go(a.to)} className="w-full text-left flex items-center gap-3 px-5 sm:px-6 py-3.5 hover:bg-ink-50/70 transition-colors group">
+                  <span className={cx('w-10 h-10 rounded-full grid place-items-center shrink-0', a.tone === 'err' ? 'bg-rose-50 text-rose-600' : 'bg-brand-50 text-brand-600')}><a.icon size={16} /></span>
+                  <span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold text-ink-900 truncate">{a.title}</span><span className="block text-[12px] text-ink-500 truncate">{a.desc}</span></span>
+                  <span className={cx('hidden sm:inline-flex items-center gap-1 text-[13px] font-bold', a.tone === 'err' ? 'text-rose-600' : 'text-brand-600')}>{a.cta}<ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" /></span>
+                </button>
               </li>
             ))}
           </ul>
         )}
-      </Card>
+      </section>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <Stat label="Total deliverables" value={prog.total} sub={`${prog.done} completed`} onClick={() => go('deliverables')} />
-        <Stat label="In progress" value={count(['In Progress', 'Under Internal Review', 'Revision In Progress'])} sub={`${count(['Pending'])} pending start`} />
-        <Stat
-          label="Awaiting you"
-          value={count(['Awaiting Client Dependency', 'Awaiting Client Review'])}
-          sub={`${count(['Modification Requested'])} modification${count(['Modification Requested']) === 1 ? '' : 's'} requested`}
-          tone={count(['Awaiting Client Dependency', 'Awaiting Client Review']) ? 'warn' : undefined}
-        />
-        <Stat label="Overdue" value={overdueDeliv} sub="Past planned due date" tone={overdueDeliv ? 'err' : undefined} />
+      <div className="grid gap-4 lg:grid-cols-2 items-start">
+        <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 7 }}>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3"><span className="w-10 h-10 rounded-full bg-brand-50 text-brand-600 grid place-items-center"><FileSignature size={17} /></span><div><h2 className="font-display font-bold text-[17px] text-ink-900">Contract</h2><p className="text-[12px] text-ink-500">{contract ? `${contract.ref} · v${contract.current_version_no}` : 'Not issued yet'}</p></div></div>
+            {contract && <Status s={contract.status} />}
+          </div>
+          {contract ? (
+            <KV cols={2} items={[
+              ['Title', contract.title],
+              ['Value', contract.contract_value != null ? `${inr(contract.contract_value)}${contract.tax_note ? ' ' + contract.tax_note : ''}` : '—'],
+              ['Accepted', contract.accepted_at ? fmtDate(contract.accepted_at) : 'Not yet'],
+              ['Runs', `${fmtDate(contract.start_date)} – ${fmtDate(contract.end_date)}`],
+            ]} />
+          ) : <p className="text-[13px] text-ink-500">Your project team will send the contract here for you to review and accept.</p>}
+          {contract && <button type="button" onClick={() => go('contracts')} className="btn-secondary btn-sm mt-4">Open contract <ArrowRight className="w-3.5 h-3.5" /></button>}
+        </section>
+
+        <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 8 }}>
+          <div className="flex items-center gap-3 mb-4"><span className="w-10 h-10 rounded-full bg-mint-50 text-mint-600 grid place-items-center"><Download size={17} /></span><div><h2 className="font-display font-bold text-[17px] text-ink-900">Ready for download</h2><p className="text-[12px] text-ink-500">Finished work you can collect.</p></div></div>
+          {ready.length ? (
+            <ul className="divide-y divide-ink-100 -mx-1">
+              {ready.map(d => (
+                <li key={d.id} className="flex items-center justify-between gap-3 py-3 px-1">
+                  <div className="min-w-0"><div className="text-[14px] font-semibold text-ink-900 truncate">{d.name}</div><div className="text-[12px] text-ink-500">Completed {fmtDate(d.ready_at ?? d.completed_at)}</div></div>
+                  {isLocked(d.lock_state) ? <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-500" title={lockText(d)}><Lock size={13} /> Locked</span> : <Button size="sm" icon={Download} onClick={() => go('deliverables')}>Get files</Button>}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-[13px] text-ink-500">Nothing yet — completed deliverables will appear here.</p>}
+        </section>
       </div>
-
-      <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
-        <div className="space-y-5">
-          <Card>
-            <CardHead title="Contract" action={contract ? <Status s={contract.status} /> : undefined} />
-            {contract ? (
-              <KV
-                cols={3}
-                items={[
-                  ['Contract', `${contract.title} · v${contract.current_version_no}`],
-                  ['Value', contract.contract_value != null ? `${inr(contract.contract_value)}${contract.tax_note ? ' ' + contract.tax_note : ''}` : '—'],
-                  ['Accepted on', contract.accepted_at ? fmtDate(contract.accepted_at) : 'Not accepted'],
-                  ['Start date', fmtDate(contract.start_date)],
-                  ['End date', fmtDate(contract.end_date)],
-                  ['Renewal date', fmtDate(contract.renewal_date)],
-                ]}
-              />
-            ) : (
-              <p className="text-[13px] text-ink-3">No contract has been issued for this project yet.</p>
-            )}
-          </Card>
-
-          <Card>
-            <CardHead title="Progress" desc={`Managed by ${project.managerName}`} />
-            <div className="flex justify-between text-xs mb-2">
-              <span className="text-ink-2">Deliverables completed</span>
-              <span className="tnum font-medium text-ink">{prog.done} of {prog.total}</span>
-            </div>
-            <Progress value={prog.countPct} label="Deliverables completed" />
-            {prog.weightedPct != null && (
-              <div className="mt-4">
-                <div className="flex justify-between text-xs mb-2">
-                  <span className="text-ink-2">Weighted progress</span>
-                </div>
-                <Progress value={prog.weightedPct} label="Weighted progress" />
-              </div>
-            )}
-            <button onClick={() => go('progress')} className="mt-4 text-[13px] text-info hover:underline inline-flex items-center gap-1 font-medium">
-              Open progress tracker <ArrowRight size={13} />
-            </button>
-          </Card>
-
-          {ready.length > 0 && (
-            <Card>
-              <CardHead title="Ready for download" />
-              <ul className="divide-y divide-line">
-                {ready.map(d => (
-                  <li key={d.id} className="flex items-center justify-between gap-3 py-2.5">
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium text-ink truncate">{d.name}</div>
-                      <div className="text-xs text-ink-3">Completed {fmtDate(d.ready_at ?? d.completed_at)}</div>
-                    </div>
-                    {isLocked(d.lock_state) ? (
-                      <Badge tone="err">Locked</Badge>
-                    ) : (
-                      <Button size="sm" icon={Download} onClick={() => go('deliverables')}>Download</Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </div>
-
-        <div className="space-y-5">
-          <Card>
-            <CardHead title="Payment summary" action={<button onClick={() => go('payments')} className="text-xs text-info hover:underline font-medium">Billing</button>} />
-            <KV
-              cols={1}
-              items={[
-                ['Total contract value', contract?.contract_value != null ? inr(contract.contract_value) : '—'],
-                ['Amount billed', inr(totalBilled)],
-                ['Amount paid (verified)', inr(paid)],
-                ['Amount due', inr(Math.max(0, totalBilled - paid))],
-                ['Overdue', overdue.length ? <span className="text-err">{inr(overdue.reduce((s, i) => s + installmentTotal(i) - Number(i.amount_paid), 0))}</span> : inr(0)],
-                ['Next payment', next ? `${inr(installmentTotal(next) - Number(next.amount_paid))} · ${fmtDate(next.due_date)}` : '—'],
-              ]}
-            />
-          </Card>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
+
 
 /* =========================================================================
    2. Sign Contract

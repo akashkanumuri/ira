@@ -10,6 +10,7 @@ import { AdminClientCenter } from './components/admin/AdminClientCenter';
 import { AdminHome } from './components/admin/AdminHome';
 import { FinancePage } from './components/admin/FinancePage';
 import { ActivityLogPage } from './components/admin/ActivityLogPage';
+import { NotificationsPage } from './components/common/NotificationsPage';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
 import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
 import { useLinkableDeliverables, type LinkableDeliverable } from './lib/linkableDeliverables';
@@ -168,20 +169,25 @@ function LiveClockDisplay() {
   );
 }
 
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications'];
+const CROSS_ROLE: Record<string, string> = {
+  'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
+  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications',
+};
+/** The page a path resolves to for this role; links meant for the other role land on the closest equivalent. */
+function resolveTab(role: AuthUser['role'], raw: string): string {
+  const tab = raw.replace(/^\//, '').split('?')[0];
+  const allowed = role === 'admin' ? ADMIN_TABS : EMP_TABS;
+  if (allowed.includes(tab)) return tab;
+  if (role === 'admin' && tab === 'admin-reports') return 'admin-export';
+  const mapped = CROSS_ROLE[tab];
+  if (mapped && allowed.includes(mapped)) return mapped;
+  return role === 'admin' ? 'admin-dashboard' : 'emp-dashboard';
+}
+
 function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }) {
-  const getInitialTab = () => {
-    const p = typeof window !== 'undefined' ? window.location.pathname.replace(/^\//, '') : '';
-    if (user.role === 'admin') {
-      const validAdminTabs = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity'];
-      if (validAdminTabs.includes(p)) return p;
-      if (p === 'admin-reports') return 'admin-export';
-      return 'admin-dashboard';
-    } else {
-      const validEmpTabs = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile'];
-      if (validEmpTabs.includes(p)) return p;
-      return 'emp-dashboard';
-    }
-  };
+  const getInitialTab = () => resolveTab(user.role, typeof window !== 'undefined' ? window.location.pathname : '');
   const [activeTab, setActiveTab] = useState(getInitialTab);
 
   // Keep the address bar in step with the page actually shown (e.g. an employee
@@ -582,6 +588,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         label: 'Insights & setup', items: [
           { id: 'admin-export', label: 'Reports', icon: Download },
           { id: 'admin-activity', label: 'Activity log', icon: History },
+          { id: 'admin-notifications', label: 'Notifications', icon: Bell },
           { id: 'admin-settings', label: 'Settings', icon: Settings2 },
         ]
       },
@@ -605,6 +612,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       {
         label: 'Me', items: [
           { id: 'emp-payroll', label: 'Payroll', icon: WalletCards },
+          { id: 'emp-notifications', label: 'Notifications', icon: Bell },
           { id: 'emp-profile', label: 'Profile', icon: UserRound },
         ]
       },
@@ -615,7 +623,9 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
 
 
   const navigate = (target: string) => {
-    const [tab, query] = target.split('?');
+    const [rawTab, rawQuery] = target.split('?');
+    const tab = resolveTab(user.role, rawTab);
+    const query = tab === rawTab.replace(/^\//, '') ? rawQuery : undefined;
     const url = `/${tab}${query ? `?${query}` : ''}`;
     if (typeof window !== 'undefined' && `${window.location.pathname}${window.location.search}` !== url) {
       window.history.pushState(null, '', url);
@@ -626,8 +636,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
 
   useEffect(() => {
     const onPopState = () => {
-      const p = window.location.pathname.replace(/^\//, '');
-      if (p) setActiveTab(p);
+      setActiveTab(resolveTab(user.role, window.location.pathname));
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -700,6 +709,10 @@ function getPageTitle(tab: string) {
     'emp-payroll': 'Payroll',
     'emp-holidays': 'Holidays',
     'emp-profile': 'Profile',
+    'admin-notifications': 'Notifications',
+    'emp-notifications': 'Notifications',
+    'admin-finance': 'Finance',
+    'admin-activity': 'Activity log',
   } as Record<string, string>)[tab] ?? 'Dashboard';
 }
 
@@ -716,6 +729,7 @@ function AdminContent(props: any) {
   if (activeTab === 'admin-settings') return <SettingsAdmin {...props} />;
   if (activeTab === 'admin-finance') return <FinancePage onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-activity') return <ActivityLogPage />;
+  if (activeTab === 'admin-notifications') return <NotificationsPage user={user} onOpen={onSelectTab} />;
   return <AdminHome {...props} onSelectTab={onSelectTab} />;
 }
 
@@ -729,6 +743,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysPage {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
+  if (activeTab === 'emp-notifications') return <NotificationsPage user={props.user} onOpen={props.onSelectTab} />;
   return <EmployeeHome {...props} onSelectTab={props.onSelectTab} />;
 }
 
@@ -2270,19 +2285,7 @@ function NotificationBell({
     setOpen(false);
     if (!item.action_url || !onSelectTab) return;
 
-    const url = item.action_url.replace(/^\//, '');
-    let targetTab = url;
-    if (url.startsWith('admin-requests')) targetTab = 'admin-requests';
-    else if (url.startsWith('emp-leave')) targetTab = 'emp-leave';
-    else if (url.startsWith('emp-wfh')) targetTab = 'emp-wfh';
-    else if (url.startsWith('emp-tasks')) targetTab = 'emp-tasks';
-    else if (url.startsWith('admin-tasks')) targetTab = 'admin-tasks';
-    else if (url.startsWith('emp-holidays')) targetTab = 'emp-holidays';
-    else if (url.startsWith('admin-holidays')) targetTab = 'admin-holidays';
-    else if (url.startsWith('emp-attendance')) targetTab = 'emp-attendance';
-    else if (url.startsWith('admin-attendance')) targetTab = 'admin-attendance';
-
-    onSelectTab(targetTab);
+    onSelectTab(item.action_url.replace(/^\//, ''));
   }
 
   async function handleEnablePush() {
@@ -2520,6 +2523,15 @@ function NotificationBell({
               </div>
             )}
           </div>
+          {onSelectTab && (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onSelectTab(user?.role === 'admin' ? 'admin-notifications' : 'emp-notifications'); }}
+              className="w-full border-t border-ink-100 px-4 py-3 text-[13px] font-bold text-brand-600 hover:bg-brand-50/60 transition-colors"
+            >
+              See all notifications
+            </button>
+          )}
         </div>,
         document.body
       )}
