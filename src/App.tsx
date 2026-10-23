@@ -8,7 +8,8 @@ import { ClientPasswordSetupScreen } from './components/client/ClientPasswordSet
 import { ClientPortalView } from './components/client/ClientPortalView';
 import { AdminClientCenter } from './components/admin/AdminClientCenter';
 import { ManagerClientWork } from './components/manager/ManagerClientWork';
-import { Sidebar } from './components/common/Sidebar';
+import { AppShell, type NavGroup } from './ui/AppShell';
+import { Notice as UiNotice, SkeletonPage } from './ui';
 import { ToastHost } from './components/common/ToastHost';
 import { notify, type NotificationCategory } from './lib/toast';
 import {
@@ -150,9 +151,11 @@ function LiveClockDisplay() {
     return () => window.clearInterval(timer);
   }, []);
   return (
-    <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[10px] sm:text-[11px] font-semibold text-slate-700 shadow-xs">
-      <span className="ira-live-dot" />
-      <span>{time.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
+    <div className="hidden sm:inline-flex items-center gap-2 h-10 px-4 rounded-full bg-white border border-ink-100 shadow-[var(--shadow-soft)] text-xs font-semibold text-ink-700 tnum">
+      <span className="live-dot" />
+      <span>{time.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+      <span className="text-ink-300">·</span>
+      <span className="text-ink-500">{time.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short' })}</span>
     </div>
   );
 }
@@ -161,17 +164,17 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const getInitialTab = () => {
     const p = typeof window !== 'undefined' ? window.location.pathname.replace(/^\//, '') : '';
     if (user.role === 'admin') {
-      const validAdminTabs = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-reports', 'admin-settings'];
+      const validAdminTabs = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings'];
       if (validAdminTabs.includes(p)) return p;
+      if (p === 'admin-reports') return 'admin-export';
       return 'admin-dashboard';
     } else {
-      const validEmpTabs = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-corrections', 'emp-holidays', 'emp-payroll', 'emp-profile'];
+      const validEmpTabs = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile'];
       if (validEmpTabs.includes(p)) return p;
       return 'emp-dashboard';
     }
   };
   const [activeTab, setActiveTab] = useState(getInitialTab);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -195,15 +198,6 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   });
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [mobileOpen]);
 
   const reload = useCallback(async () => {
     if (!user) return;
@@ -545,45 +539,71 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     };
   }, [user, reload]);
 
-  const employeeNav = [
-    ['emp-dashboard', 'Dashboard', LayoutDashboard],
-    ['emp-attendance', 'My Attendance', Clock3],
-    ['emp-client-work', 'Client Projects', FolderKanban],
-    ['emp-tasks', 'Work & Assignments', BriefcaseBusiness],
-    ['emp-leave', 'Leave', CalendarDays],
-    ['emp-wfh', 'WFH', Home],
-    ['emp-payroll', 'Payroll', WalletCards],
-    ['emp-holidays', 'Holidays', CalendarDays],
-    ['emp-profile', 'Profile', UserRound],
-  ] as const;
+  const pendingLeaveCount = leaveRequests.filter(x => x.status === 'pending').length;
+  const pendingWfhCount = wfhRequests.filter(x => x.status === 'pending').length;
+  const employeeOpenTasksCount = tasks.filter(t => t.assignedTo === user.employeeDbId && t.status === 'assigned').length;
 
-  const adminNav = [
-    ['admin-dashboard', 'Dashboard', LayoutDashboard],
-    ['admin-clients', 'Clients', Building2],
-    ['admin-employees', 'Employees / HR', Users],
-    ['admin-attendance', 'Attendance', Clock3],
-    ['admin-tasks', 'Work & Assignments', BriefcaseBusiness],
-    ['admin-requests', 'Requests', FileClock],
-    ['admin-payroll', 'Payroll', WalletCards],
-    ['admin-holidays', 'Holidays', CalendarDays],
-    ['admin-export', 'Reports / Excel', Download],
-    ['admin-settings', 'Settings', Settings2],
-  ] as const;
+  const navGroups: NavGroup[] = user.role === 'admin'
+    ? [
+      { items: [{ id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
+      {
+        label: 'Clients & delivery', items: [
+          { id: 'admin-clients', label: 'Clients', icon: Building2 },
+          { id: 'admin-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness },
+        ]
+      },
+      {
+        label: 'People', items: [
+          { id: 'admin-employees', label: 'Employees', icon: Users },
+          { id: 'admin-attendance', label: 'Attendance', icon: Clock3 },
+          { id: 'admin-requests', label: 'Requests', icon: FileClock, badge: pendingLeaveCount + pendingWfhCount },
+          { id: 'admin-payroll', label: 'Payroll', icon: WalletCards },
+          { id: 'admin-holidays', label: 'Holidays', icon: CalendarDays },
+        ]
+      },
+      {
+        label: 'Insights & setup', items: [
+          { id: 'admin-export', label: 'Reports', icon: Download },
+          { id: 'admin-settings', label: 'Settings', icon: Settings2 },
+        ]
+      },
+    ]
+    : [
+      { items: [{ id: 'emp-dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
+      {
+        label: 'My work', items: [
+          { id: 'emp-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness, badge: employeeOpenTasksCount },
+          { id: 'emp-client-work', label: 'Client Projects', icon: FolderKanban },
+        ]
+      },
+      {
+        label: 'Time', items: [
+          { id: 'emp-attendance', label: 'My Attendance', icon: Clock3 },
+          { id: 'emp-leave', label: 'Leave', icon: CalendarDays },
+          { id: 'emp-wfh', label: 'Work from home', icon: Home },
+          { id: 'emp-holidays', label: 'Holidays', icon: Sparkles },
+        ]
+      },
+      {
+        label: 'Me', items: [
+          { id: 'emp-payroll', label: 'Payroll', icon: WalletCards },
+          { id: 'emp-profile', label: 'Profile', icon: UserRound },
+        ]
+      },
+    ];
+  const mobilePrimary = user.role === 'admin'
+    ? ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-requests']
+    : ['emp-dashboard', 'emp-attendance', 'emp-tasks', 'emp-leave'];
 
-  const pendingCount = leaveRequests.filter(x => x.status === 'pending').length + wfhRequests.filter(x => x.status === 'pending').length;
-  const employeeOpenTasks = tasks.filter(t => t.assignedTo === user.employeeDbId && t.status === 'assigned').length;
-  const adminSubmittedTasks = tasks.filter(t => t.status === 'completed').length;
 
-  const navigate = (tab: string) => {
-    if (tab === activeTab) {
-      setMobileOpen(false);
-      return;
+  const navigate = (target: string) => {
+    const [tab, query] = target.split('?');
+    const url = `/${tab}${query ? `?${query}` : ''}`;
+    if (typeof window !== 'undefined' && `${window.location.pathname}${window.location.search}` !== url) {
+      window.history.pushState(null, '', url);
     }
     setActiveTab(tab);
-    setMobileOpen(false);
-    if (typeof window !== 'undefined' && window.location.pathname !== `/${tab}`) {
-      window.history.pushState(null, '', `/${tab}`);
-    }
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
 
   useEffect(() => {
@@ -609,137 +629,34 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     />;
 
   return (
-    <div className="ira-portal-root">
-      <div className="ira-fluid-background" aria-hidden="true">
-        <div className="ira-fluid-blob ira-fluid-blob-one" />
-        <div className="ira-fluid-blob ira-fluid-blob-two" />
-      </div>
-      <div className="min-h-screen text-slate-900 flex ira-app-bg">
-        <Sidebar
-          activeRole={user.role === 'admin' ? 'admin' : 'employee'} activeTab={activeTab} onSelectTab={navigate} currentUser={user}
-          pendingTaskCount={user.role === 'admin' ? adminSubmittedTasks : employeeOpenTasks}
-          pendingWfhCount={user.role === 'admin' ? wfhRequests.filter(x => x.status === 'pending').length : undefined}
-          pendingLeaveCount={user.role === 'admin' ? leaveRequests.filter(x => x.status === 'pending').length : undefined}
-        />
-        <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-          <header className="ira-topbar h-16 shrink-0 sticky top-0 z-[80] flex items-center px-4 sm:px-6 gap-3 bg-white border-b border-slate-200">
-            <button
-              type="button"
-              className="lg:hidden p-2 rounded-xl hover:bg-slate-100 shrink-0 text-slate-700"
-              onClick={() => setMobileOpen(v => !v)}
-              aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
-              aria-expanded={mobileOpen}
-              aria-controls="mobile-navigation"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="flex-1 min-w-0" aria-hidden="true" />
+    <>
+      <AppShell
+        groups={navGroups}
+        active={activeTab}
+        onNavigate={navigate}
+        mobilePrimary={mobilePrimary}
+        user={{
+          name: user.name || 'User',
+          subtitle: user.role === 'admin' ? 'Administrator' : (user.designation || 'Employee'),
+          avatar: user.avatar || null,
+        }}
+        onSignOut={() => void onLogout()}
+        topRight={
+          <>
             <LiveClockDisplay />
-            <NotificationBell activeTab={activeTab} user={user} onSelectTab={setActiveTab} />
-            <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-[#00033D] text-white flex items-center justify-center text-[11px] font-bold">
-                {(user.name || 'U').charAt(0).toUpperCase()}
-              </div>
-              <div className="hidden md:block">
-                <p className="text-xs font-semibold text-slate-900 leading-none">{user.name || 'User'}</p>
-                <p className="text-[10px] text-slate-500 mt-1">{user.role === 'admin' ? 'Administrator' : (user.designation || 'Employee')}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void onLogout()}
-                className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Sign out</span>
-              </button>
-            </div>
-          </header>
-
-          <div
-            className={`ira-mobile-nav-layer lg:hidden fixed top-16 inset-x-0 bottom-0 z-[70] transition-opacity duration-200 ease-out ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-            aria-hidden={!mobileOpen}
-          >
-            <button
-              type="button"
-              aria-label="Close navigation menu"
-              className="absolute inset-0 w-full h-full bg-slate-950/45 backdrop-blur-[2px]"
-              onClick={() => setMobileOpen(false)}
-            />
-            <aside
-              id="mobile-navigation"
-              className={`ira-mobile-drawer absolute inset-y-0 left-0 w-[270px] max-w-[280px] bg-[#00033D] text-slate-200 shadow-[24px_0_70px_rgba(2,6,23,.40)] flex flex-col z-[71] transition-transform duration-300 ease-[cubic-bezier(.2,.75,.2,1)] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
-              aria-label="Mobile navigation"
-            >
-              <div className="p-4 border-b border-white/10 flex items-center justify-between text-white shrink-0">
-                <img src="/ira-hospitality-logo.png" alt="IRA Hospitality" className="h-16 w-auto max-w-[200px] object-contain object-left" />
-                <button
-                  type="button"
-                  onClick={() => setMobileOpen(false)}
-                  aria-label="Close navigation menu"
-                  className="p-2 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <nav className="p-3 space-y-1 overflow-y-auto flex-1">
-                {(user.role === 'admin' ? adminNav : employeeNav).map(([id, label, Icon]) => (
-                  <button
-                    key={id}
-                    onClick={() => navigate(id)}
-                    className={`w-full text-left px-3.5 py-3 min-h-[44px] rounded-xl flex items-center gap-3 text-sm transition-all duration-200 ${activeTab === id ? 'ira-mobile-nav-active text-white bg-[#0033FF] font-semibold' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{label}</span>
-                  </button>
-                ))}
-              </nav>
-            </aside>
+            <NotificationBell activeTab={activeTab} user={user} onSelectTab={navigate} />
+          </>
+        }
+        banner={dataError ? <UiNotice tone="rose" action={<button type="button" onClick={() => void reload()} className="btn-secondary btn-sm">Retry</button>}>{dataError}</UiNotice> : null}
+      >
+        {loadingData ? <SkeletonPage /> : (
+          <div key={activeTab} className="ira-section-transition">
+            {selectedComponent}
           </div>
-
-          {dataError && (
-            <div className="mx-4 sm:mx-6 mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 flex items-center justify-between gap-3">
-              <span>{dataError}</span><button onClick={() => void reload()} className="font-bold">Retry</button>
-            </div>
-          )}
-
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 overflow-y-auto ira-main">
-            {loadingData ? <LoadingScreen label="Loading workspace…" /> : (
-              <div key={activeTab} className="ira-section-transition">
-                {selectedComponent}
-              </div>
-            )}
-          </main>
-
-          <nav className={`ira-mobile-bottom-nav lg:hidden fixed bottom-0 inset-x-0 z-30 px-2 py-1.5 grid grid-cols-5 bg-white border-t border-slate-200 shadow-lg ${mobileOpen ? 'pointer-events-none opacity-0 translate-y-full' : 'opacity-100 translate-y-0'}`}>
-            {(user.role === 'admin' ? adminNav.slice(0, 4) : employeeNav.slice(0, 4)).map(([id, label, Icon]) => (
-              <button
-                key={id}
-                onClick={() => navigate(id)}
-                className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 min-h-[48px] text-[10px] rounded-xl transition-all ${activeTab === id ? 'ira-bottom-active text-blue-600 font-bold bg-blue-50/80' : 'ira-bottom-idle text-slate-500 hover:text-slate-900'}`}
-                aria-label={label}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="truncate max-w-full">{label.split(' ')[0]}</span>
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              className={`flex flex-col items-center justify-center gap-1 py-1.5 px-1 min-h-[48px] text-[10px] rounded-xl transition-all ${mobileOpen || ['admin-requests', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'emp-wfh', 'emp-payroll', 'emp-holidays', 'emp-profile'].includes(activeTab) ? 'ira-bottom-active text-blue-600 font-bold bg-blue-50/80' : 'ira-bottom-idle text-slate-500 hover:text-slate-900'}`}
-              aria-label="Open more navigation"
-              aria-expanded={mobileOpen}
-            >
-              <Menu className="w-4 h-4 shrink-0" />
-              <span>More</span>
-            </button>
-          </nav>
-          <div className="hidden">{pendingCount}</div>
-        </div>
-        <ToastHost />
-      </div>
-    </div>
+        )}
+      </AppShell>
+      <ToastHost />
+    </>
   );
 }
 
@@ -3308,14 +3225,14 @@ function NotificationBell({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-white/70 transition-all"
+        className="icon-btn icon-btn-surface relative"
         aria-label={unreadCount ? `${unreadCount} notifications` : 'Notifications'}
         aria-expanded={open}
         aria-controls="notification-panel"
       >
         <Bell className="w-4.5 h-4.5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 min-w-4.5 h-4.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+          <span className="absolute -right-1 -top-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-[var(--app-bg)] tnum">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -3329,7 +3246,7 @@ function NotificationBell({
           aria-label="Notifications"
           aria-hidden={!open}
           className={
-            'fixed left-3 right-3 top-16 max-h-[min(80dvh,32rem)] rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,.18)] overflow-hidden z-[85] sm:left-auto sm:right-4 sm:w-[min(90vw,380px)] origin-top transition-all duration-200 ease-out flex flex-col ' +
+            'fixed left-3 right-3 top-16 lg:top-[72px] max-h-[min(80dvh,34rem)] rounded-3xl border border-ink-100 bg-white shadow-[0_30px_80px_-24px_rgb(20_17_43/0.35)] overflow-hidden z-[85] sm:left-auto sm:right-6 lg:right-8 sm:w-[min(90vw,400px)] origin-top transition-all duration-200 ease-out flex flex-col ' +
             (open ? 'visible opacity-100 translate-y-0 scale-100' : 'invisible pointer-events-none opacity-0 -translate-y-1 scale-95')
           }
         >
