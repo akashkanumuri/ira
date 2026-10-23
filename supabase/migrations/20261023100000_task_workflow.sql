@@ -12,6 +12,8 @@
 --   any open status → cancelled                                    (reviewer)
 -- Reviewer = admin, the employee who assigned the task, or a manager of the linked project.
 
+set local lock_timeout = '5s';
+
 -- ---------------------------------------------------------------- columns
 alter table public.tasks drop constraint if exists tasks_status_check;
 alter table public.tasks add constraint tasks_status_check check (status in
