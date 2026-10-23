@@ -1280,10 +1280,11 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, wfhRequests, ho
   return <PageShell title="Attendance" subtitle="Daily attendance with explicit login/check-in/break/check-out separation."><div className="card p-4 flex flex-col sm:flex-row gap-3"><label className="flex-1"><span className="label">Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" /></label><label className="flex-1"><span className="label">Search</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…" className="input" /></label></div><div className="mt-4 card p-4 text-xs flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600" /><b>{dateLabel(date, { weekday: 'long' })}</b><span className="text-slate-500">· {cl.label}</span></div><div className="mt-4 card overflow-hidden"><div className="overflow-x-auto"><table className="data-table"><thead><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead><tbody>{cl.isWorkingDay ? rows.map(({ e, record, leave }: any) => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td>{leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : '—'}</Td><Td mono>{record?.checkIn ?? '—'}</Td><Td mono>{record ? duration(record.breakSeconds) : '—'}</Td><Td mono>{record?.checkOut ?? '—'}</Td><Td mono>{record ? duration(record.workingSeconds) : '—'}</Td><Td><StatusBadge label={leave ? 'Leave' : record?.status ?? (e.joinDate && date < e.joinDate ? 'Not joined' : date > today() ? 'Upcoming' : date === today() ? 'Not checked-in' : 'Not recorded')} /></Td></tr>) : <tr><td colSpan={7} className="p-10 text-center text-sm text-slate-500">{cl.label}. No check-in required.</td></tr>}{cl.isWorkingDay && !rows.length && <EmptyRow colSpan={7} text="No active employees." />}</tbody></table></div></div></PageShell>;
 }
 
-function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [], user, onRefresh }: any) {
-  const [tab, setTab] = useState<'leave' | 'wfh'>(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'wfh' ? 'wfh' : 'leave'
-  );
+function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers = [], employees = [], user, onRefresh }: any) {
+  const [tab, setTab] = useState<'leave' | 'wfh' | 'corrections'>(() => {
+    const t = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
+    return t === 'wfh' || t === 'corrections' ? t : 'leave';
+  });
   const [busyKey, setBusyKey] = useState<string | null>(null);
   async function review(table: string, id: string, status: 'approved' | 'rejected') {
     const key = table + ':' + id;
@@ -1291,6 +1292,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [
     setBusyKey(key);
     try {
       const selectFields = table === 'leave_requests' ? 'id, employee_id, start_date, end_date' : 'id, employee_id, date';
+      // regularization_requests: approval is applied by the database (apply_regularization_approval).
       const { data, error } = await (supabase as any)
         .from(table)
         .update({ status, reviewed_at: new Date().toISOString() })
@@ -1300,7 +1302,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error('This request was already reviewed. Refresh the list.');
-      notify(status === 'approved' ? 'Request approved.' : 'Request rejected.', status === 'approved' ? 'success' : 'info', 4200, table === 'leave_requests' ? 'leave' : 'wfh');
+      notify(status === 'approved' ? 'Request approved.' : 'Request rejected.', status === 'approved' ? 'success' : 'info', 4200, table === 'leave_requests' ? 'leave' : table === 'wfh_requests' ? 'wfh' : 'correction');
 
       // Generate recipient notification for requesting employee
       if (table === 'leave_requests') {
@@ -1334,16 +1336,17 @@ function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [
   const balanceOf = (employeeId: string, date: string) =>
     (ledgers as LeaveLedger[]).find((l) => l.employeeId === employeeId && l.periodStart === `${date.slice(0, 7)}-01`);
   const avatarOf = (employeeId: string) => (employees as Employee[]).find((e) => e.id === employeeId)?.avatar || null;
-  const rows = tab === 'leave' ? (leaveRequests as LeaveRequest[]) : (wfhRequests as WfhRequest[]);
-  const pending = tab === 'leave' ? leavePending : wfhPending;
+  const corrPending = (corrections as CorrectionRequest[]).filter((r) => r.status === 'pending');
+  const rows: any[] = tab === 'leave' ? leaveRequests : tab === 'wfh' ? wfhRequests : corrections;
+  const pending = tab === 'leave' ? leavePending : tab === 'wfh' ? wfhPending : corrPending;
   const reviewed = rows.filter((r: any) => r.status !== 'pending');
-  const table = tab === 'leave' ? 'leave_requests' : 'wfh_requests';
+  const table = tab === 'leave' ? 'leave_requests' : tab === 'wfh' ? 'wfh_requests' : 'regularization_requests';
 
   return (
     <PageShell
       title="Requests"
       subtitle="Approve or reject time off and work-from-home. Employees are notified straight away."
-      actions={<PillTabs value={tab} onChange={(v) => { setTab(v); window.history.replaceState(null, '', `/admin-requests?tab=${v}`); }} items={[{ id: 'leave', label: 'Leave', count: leavePending.length }, { id: 'wfh', label: 'Work from home', count: wfhPending.length }]} />}
+      actions={<PillTabs value={tab} onChange={(v) => { setTab(v); window.history.replaceState(null, '', `/admin-requests?tab=${v}`); }} items={[{ id: 'leave', label: 'Leave', count: leavePending.length }, { id: 'wfh', label: 'Work from home', count: wfhPending.length }, { id: 'corrections', label: 'Corrections', count: corrPending.length }]} />}
     >
       <section className="space-y-3">
         <p className="eyebrow">Waiting for you · {pending.length}</p>
@@ -1364,7 +1367,15 @@ function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [
                     <Badge tone="amber" dot>Pending</Badge>
                   </div>
                   <div className="mt-4 inset-tile p-4">
-                    {tab === 'leave' ? (
+                    {tab === 'corrections' ? (
+                      <>
+                        <p className="font-display text-lg font-bold text-ink-950">{dateLabel(r.date, { weekday: 'short' })}</p>
+                        <p className="text-[13px] text-ink-600 mt-0.5 tnum">
+                          {r.originalCheckIn || r.originalCheckOut ? <>Recorded {r.originalCheckIn || '—'} → {r.originalCheckOut || '—'}</> : 'No attendance recorded'}
+                        </p>
+                        <p className="text-[13px] text-ink-900 mt-0.5 tnum">Asks for <b>{r.requestedCheckIn} → {r.requestedCheckOut}</b></p>
+                      </>
+                    ) : tab === 'leave' ? (
                       <>
                         <p className="font-display text-lg font-bold text-ink-950">
                           {r.startDate === r.endDate ? dateLabel(r.startDate, { weekday: 'short', day: 'numeric', month: 'short' }) : `${dateLabel(r.startDate)} → ${dateLabel(r.endDate)}`}
@@ -1394,7 +1405,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [
             })}
           </div>
         ) : (
-          <div className="card"><EmptyState icon={<CheckCircle2 className="w-6 h-6" />} title="You’re all caught up" text={`No ${tab === 'leave' ? 'leave' : 'work-from-home'} requests are waiting.`} className="!py-10" /></div>
+          <div className="card"><EmptyState icon={<CheckCircle2 className="w-6 h-6" />} title="You’re all caught up" text={`No ${tab === 'leave' ? 'leave' : tab === 'wfh' ? 'work-from-home' : 'attendance correction'} requests are waiting.`} className="!py-10" /></div>
         )}
       </section>
 
@@ -1408,7 +1419,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [
                 <tr key={r.id}>
                   <Td strong>{r.employeeName}</Td>
                   <Td>{tab === 'leave' ? (r.startDate === r.endDate ? dateLabel(r.startDate) : `${dateLabel(r.startDate)} → ${dateLabel(r.endDate)}`) : dateLabel(r.date)}</Td>
-                  <Td>{tab === 'leave' ? <><span className="capitalize">{r.leaveType}</span> · {r.days}d{r.status === 'approved' ? ` · ${r.paidDays ?? 0} paid / ${r.unpaidDays ?? 0} unpaid` : ''}</> : String(r.duration).startsWith('half') ? 'Half day' : 'Full day'}</Td>
+                  <Td>{tab === 'leave' ? <><span className="capitalize">{r.leaveType}</span> · {r.days}d{r.status === 'approved' ? ` · ${r.paidDays ?? 0} paid / ${r.unpaidDays ?? 0} unpaid` : ''}</> : tab === 'wfh' ? (String(r.duration).startsWith('half') ? 'Half day' : 'Full day') : `${r.requestedCheckIn} → ${r.requestedCheckOut}`}</Td>
                   <Td><StatusBadge label={r.status} /></Td>
                 </tr>
               ))}

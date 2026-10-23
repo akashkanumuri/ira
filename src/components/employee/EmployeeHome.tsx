@@ -7,6 +7,8 @@ import { dateLabel, money } from '../../lib/v2';
 import { Badge, Card, CardHeader, EmptyState, Page, PageHeader, Stat, cx } from '../../ui';
 import { greeting } from '../../ui/motion';
 import { AttendanceMonth, AttendanceRecent, AttendanceToday, LoginSessions } from './EmployeeAttendance';
+import { CorrectionRequestDialog, MyCorrections } from './CorrectionRequests';
+import type { CorrectionRequest } from '../../types/attendance';
 
 type Common = {
   user: AuthUser;
@@ -29,6 +31,7 @@ export function EmployeeHome(props: Common & {
 }) {
   const { user, attendance, ledgers, payrollPeriods, payrollRecords, tasks, employees, onSelectTab } = props;
   const [focus, setFocus] = useState<{ date: string; at: number } | null>(null);
+  const [correctionFor, setCorrectionFor] = useState<string | null | undefined>(undefined);
 
   const ledger = ledgers.find((l) => l.periodStart === `${today().slice(0, 7)}-01`);
   const me = employees.find((e) => e.id === user.employeeDbId);
@@ -116,7 +119,7 @@ export function EmployeeHome(props: Common & {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <AttendanceMonth {...props} focusDate={focus} />
+        <AttendanceMonth {...props} focusDate={focus} onRequestCorrection={(d) => setCorrectionFor(d)} />
         <Card index={5} className="p-5 sm:p-6 flex flex-col">
           <CardHeader
             title="Up next"
@@ -155,21 +158,29 @@ export function EmployeeHome(props: Common & {
       </div>
 
       <AttendanceRecent attendance={attendance} onOpen={(date) => setFocus({ date, at: Date.now() })} />
+      {correctionFor !== undefined && <CorrectionRequestDialog user={user} date={correctionFor} onClose={() => setCorrectionFor(undefined)} onSaved={props.onRefresh} />}
     </Page>
   );
 }
 
-export function MyAttendancePage(props: Common & { loginSessions: any[] }) {
+export function MyAttendancePage(props: Common & { loginSessions: any[]; corrections?: CorrectionRequest[] }) {
   const [focus, setFocus] = useState<{ date: string; at: number } | null>(null);
+  const [correctionFor, setCorrectionFor] = useState<string | null | undefined>(undefined);
   return (
     <Page>
-      <PageHeader title="My attendance" subtitle="Check in, take breaks, check out — and see every day of your month." />
+      <PageHeader
+        title="My attendance"
+        subtitle="Check in, take breaks, check out — and see every day of your month."
+        actions={<button type="button" className="btn-secondary" onClick={() => setCorrectionFor(null)}>Request a correction</button>}
+      />
       <AttendanceToday {...props} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <AttendanceMonth {...props} focusDate={focus} />
+        <AttendanceMonth {...props} focusDate={focus} onRequestCorrection={(d) => setCorrectionFor(d)} />
         <AttendanceRecent attendance={props.attendance} onOpen={(date) => setFocus({ date, at: Date.now() })} />
       </div>
+      <MyCorrections corrections={props.corrections ?? []} onNew={() => setCorrectionFor(null)} />
       <LoginSessions sessions={props.loginSessions} />
+      {correctionFor !== undefined && <CorrectionRequestDialog user={props.user} date={correctionFor} onClose={() => setCorrectionFor(undefined)} onSaved={props.onRefresh} />}
     </Page>
   );
 }

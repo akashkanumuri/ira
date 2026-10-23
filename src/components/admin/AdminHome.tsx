@@ -2,10 +2,10 @@ import React, { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import {
   AlertTriangle, ArrowRight, BadgeIndianRupee, Building2, CalendarClock, ChevronRight, ClipboardCheck,
-  Download, FileSignature, FileClock, Home, Package, RefreshCw, Users, Wallet, Upload, Hourglass,
+  Clock3, Download, FileSignature, FileClock, Home, Package, RefreshCw, Users, Wallet, Upload, Hourglass,
 } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
-import type { AttendanceRecord, BreakEvent, Employee, Holiday, LeaveRequest, PayrollPeriod, PayrollRecord, WfhRequest } from '../../types/attendance';
+import type { AttendanceRecord, BreakEvent, CorrectionRequest, Employee, Holiday, LeaveRequest, PayrollPeriod, PayrollRecord, WfhRequest } from '../../types/attendance';
 import { supabase } from '../../lib/supabase';
 import { notify } from '../../lib/toast';
 import { dateLabel, duration, money } from '../../lib/v2';
@@ -31,6 +31,7 @@ interface Props {
   attendance: AttendanceRecord[];
   leaveRequests: LeaveRequest[];
   wfhRequests: WfhRequest[];
+  corrections?: CorrectionRequest[];
   holidays: Holiday[];
   payrollPeriods: PayrollPeriod[];
   payrollRecords: PayrollRecord[];
@@ -59,7 +60,7 @@ function checkOutLabel(record?: AttendanceRecord) {
   return record.mode === 'wfh' ? 'Open (manual)' : 'Open';
 }
 
-export function AdminHome({ user, employees, attendance, leaveRequests, wfhRequests, holidays, payrollPeriods, payrollRecords, onSelectTab }: Props) {
+export function AdminHome({ user, employees, attendance, leaveRequests, wfhRequests, corrections = [], holidays, payrollPeriods, payrollRecords, onSelectTab }: Props) {
   const today = getKolkataDateString();
   const org = useOrgOverview(true);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -125,6 +126,8 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
   const attention: Array<{ key: string; tone: Tone; icon: React.ReactNode; title: string; caption: string; to: string }> = [];
   if (pendingLeaves.length) attention.push({ key: 'leave', tone: 'amber', icon: <CalendarClock className="w-5 h-5" />, title: `${pendingLeaves.length} leave request${pendingLeaves.length === 1 ? '' : 's'} to review`, caption: pendingLeaves.slice(0, 2).map((r) => r.employeeName).join(', '), to: 'admin-requests?tab=leave' });
   if (pendingWfh.length) attention.push({ key: 'wfh', tone: 'amber', icon: <Home className="w-5 h-5" />, title: `${pendingWfh.length} WFH request${pendingWfh.length === 1 ? '' : 's'} to review`, caption: pendingWfh.slice(0, 2).map((r) => r.employeeName).join(', '), to: 'admin-requests?tab=wfh' });
+  const pendingCorrections = corrections.filter((c) => c.status === 'pending');
+  if (pendingCorrections.length) attention.push({ key: 'corr', tone: 'amber', icon: <Clock3 className="w-5 h-5" />, title: `${pendingCorrections.length} attendance correction${pendingCorrections.length === 1 ? '' : 's'} to review`, caption: pendingCorrections.slice(0, 2).map((r) => r.employeeName).join(', '), to: 'admin-requests?tab=corrections' });
   if (o?.finance.paymentsToVerify) attention.push({ key: 'pay', tone: 'brand', icon: <BadgeIndianRupee className="w-5 h-5" />, title: `${o.finance.paymentsToVerify} client payment${o.finance.paymentsToVerify === 1 ? '' : 's'} to verify`, caption: 'Submitted by clients — not counted until verified', to: 'admin-finance' });
   if (o?.finance.overdueCount) attention.push({ key: 'overdue', tone: 'rose', icon: <AlertTriangle className="w-5 h-5" />, title: `${o.finance.overdueCount} payment milestone${o.finance.overdueCount === 1 ? '' : 's'} overdue`, caption: `${inr(o.finance.overdueAmount)} outstanding`, to: 'admin-finance' });
   if (o?.delivery.overdue) attention.push({ key: 'dover', tone: 'rose', icon: <Package className="w-5 h-5" />, title: `${o.delivery.overdue} deliverable${o.delivery.overdue === 1 ? '' : 's'} past due date`, caption: 'Open deliverables with a due date before today', to: 'admin-clients' });

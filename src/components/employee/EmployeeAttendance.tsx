@@ -274,7 +274,7 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
    Month calendar + day details
    ====================================================================== */
 
-export function AttendanceMonth({ user, attendance, holidays, leaveRequests = [], focusDate }: Props & { focusDate?: { date: string; at: number } | null }) {
+export function AttendanceMonth({ user, attendance, holidays, leaveRequests = [], focusDate, onRequestCorrection }: Props & { focusDate?: { date: string; at: number } | null; onRequestCorrection?: (date: string) => void }) {
   const employeeId = user.employeeDbId!;
   const [monthOffset, setMonthOffset] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -432,6 +432,13 @@ export function AttendanceMonth({ user, attendance, holidays, leaveRequests = []
               )}
               {selLeave && <Notice tone="sky" title={`Approved ${selLeave.leaveType} leave`}>{selLeave.reason}</Notice>}
               {selClass?.type === 'holiday' && <Notice tone="dark" title="Company holiday">{selClass.label}</Notice>}
+            </div>
+          )}
+          {onRequestCorrection && !loading && selected <= today() && selClass?.isWorkingDay && !selLeave && (
+            <div className="mt-5 flex justify-end">
+              <button type="button" className="btn-secondary btn-sm" onClick={() => { const d = selected; setSelected(null); onRequestCorrection(d); }}>
+                Times wrong? Request a correction
+              </button>
             </div>
           )}
         </Modal>
