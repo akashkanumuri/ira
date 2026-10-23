@@ -2,7 +2,7 @@ export type UserRole = 'employee' | 'admin' | 'client' | 'manager';
 export type AttendanceMode = 'office' | 'wfh';
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'wfh' | 'leave' | 'holiday';
 export type AttendanceState = 'not_checked_in' | 'working' | 'on_break' | 'completed';
-export type RequestStatus = 'pending' | 'approved' | 'rejected';
+export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 export type WorkMode = 'office' | 'remote';
 export type TaskStatus = 'assigned' | 'accepted' | 'in_progress' | 'blocked' | 'awaiting_review' | 'revision_required' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -113,6 +113,11 @@ export interface LeaveRequest {
   reviewedBy?: string;
   reviewedAt?: string;
   reviewNote?: string;
+  /** Approval chain (set once the leave approvals migration is applied). */
+  managerId?: string | null;
+  managerStatus?: 'pending' | 'approved' | 'rejected' | 'skipped' | null;
+  managerNote?: string | null;
+  managerReviewedAt?: string | null;
 }
 
 export interface CorrectionRequest {

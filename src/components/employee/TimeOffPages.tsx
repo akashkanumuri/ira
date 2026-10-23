@@ -1,7 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { CalendarDays, CalendarPlus, Home, PartyPopper, Plus, Sparkles } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { CalendarDays, CalendarPlus, Clock3, Home, Paperclip, PartyPopper, Plus, Sparkles, Undo2 } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
-import type { Holiday, LeaveLedger, LeaveRequest, WfhRequest } from '../../types/attendance';
+import type { Employee, Holiday, LeaveLedger, LeaveRequest, WfhRequest } from '../../types/attendance';
+import { leaveApi, leaveRuleText, useLeavePolicy } from '../../lib/leave';
+import { ACCEPT_ATTR, validateFile } from '../../lib/sigma';
+import { confirmDialog } from '../../ui/confirm';
 import { supabase } from '../../lib/supabase';
 import { notify } from '../../lib/toast';
 import { notifyLeaveSubmitted, notifyWfhSubmitted } from '../../lib/notifications';
@@ -44,7 +47,8 @@ function ChoiceGroup<T extends string>({ name, value, onChange, options }: { nam
    Leave
    ====================================================================== */
 
-export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: AuthUser; leaveRequests: LeaveRequest[]; ledgers: LeaveLedger[]; onRefresh: () => Promise<void> }) {
+export function LeavePage({ user, leaveRequests, ledgers, employees = [], onRefresh }: { user: AuthUser; leaveRequests: LeaveRequest[]; ledgers: LeaveLedger[]; employees?: Employee[]; onRefresh: () => Promise<void> }) {
+  const policy = useLeavePolicy();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -53,25 +57,37 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
   const [leaveDuration, setLeaveDuration] = useState<'full' | 'half'>('full');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [doc, setDoc] = useState<File | null>(null);
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const docInput = useRef<HTMLInputElement>(null);
+  const addDocFor = useRef<string | null>(null);
 
+  const types = policy.types.filter((t) => t.active);
+  const chosen = types.find((t) => t.code === leaveType) ?? types[0];
   const current = ledgers.find((l) => l.periodStart === `${today().slice(0, 7)}-01`);
   const mine = useMemo(() => [...leaveRequests].sort((a, b) => b.startDate.localeCompare(a.startDate)), [leaveRequests]);
   const counts = {
     all: mine.length,
     pending: mine.filter((r) => r.status === 'pending').length,
     approved: mine.filter((r) => r.status === 'approved').length,
-    rejected: mine.filter((r) => r.status === 'rejected').length,
+    rejected: mine.filter((r) => r.status === 'rejected' || r.status === 'cancelled').length,
   };
-  const rows = filter === 'all' ? mine : mine.filter((r) => r.status === filter);
+  const rows = filter === 'all' ? mine : filter === 'rejected' ? mine.filter((r) => r.status === 'rejected' || r.status === 'cancelled') : mine.filter((r) => r.status === filter);
   const upcoming = mine.find((r) => r.status === 'approved' && r.endDate >= today());
+  const managerName = (id?: string | null) => (id ? employees.find((e) => e.id === id)?.name : undefined);
 
   const span = start && end && end >= start ? daysBetween(start, end) + 1 : 0;
+  const usedThisYear = chosen?.annualLimit != null
+    ? mine.filter((r) => r.leaveType === chosen.code && (r.status === 'pending' || r.status === 'approved') && r.startDate.slice(0, 4) === (start || today()).slice(0, 4)).reduce((s, r) => s + r.days, 0)
+    : 0;
+  const needsDoc = chosen?.documentRequiredAfterDays != null && (leaveDuration === 'half' ? 0.5 : Math.max(span, 1)) > chosen.documentRequiredAfterDays;
 
   const reset = () => {
-    setLeaveType('casual');
+    setLeaveType(types[0]?.code ?? 'casual');
     setLeaveDuration('full');
     setStart('');
     setEnd('');
+    setDoc(null);
     setError('');
   };
 
@@ -83,29 +99,32 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
     try {
       const startDate = start;
       const endDate = leaveDuration === 'half' ? start : end;
+      if (!chosen) throw new Error('Choose a leave type.');
       if (!startDate || !endDate) throw new Error('Choose the dates for your leave.');
       if (endDate < startDate) throw new Error('End date cannot be before start date.');
       if (startDate.slice(0, 7) !== endDate.slice(0, 7)) throw new Error('A leave request must stay within one calendar month.');
-      if (leaveDuration === 'half' && startDate !== endDate) throw new Error('Half-day leave must use one date.');
+      if (leaveDuration === 'half' && !chosen.allowHalfDay) throw new Error(`${chosen.name} leave can’t be taken as a half day.`);
+      if (chosen.minNoticeDays > 0 && daysBetween(today(), startDate) < chosen.minNoticeDays) throw new Error(`${chosen.name} leave needs ${chosen.minNoticeDays} day(s) notice.`);
       const reason = String(fd.get('reason') || '').trim();
       if (!reason) throw new Error('Add a short reason for your manager.');
+      if (doc) { const bad = validateFile(doc); if (bad) throw new Error(bad); }
       const { data: newLeave, error: err } = await (supabase as any)
         .from('leave_requests')
-        .insert({ employee_id: user.employeeDbId, leave_type: leaveType, start_date: startDate, end_date: endDate, duration: leaveDuration, reason })
+        .insert({ employee_id: user.employeeDbId, leave_type: chosen.code, start_date: startDate, end_date: endDate, duration: leaveDuration, reason })
         .select('id')
         .maybeSingle();
       if (err) throw err;
+      if (doc && newLeave?.id) {
+        try { await leaveApi.attachDocument(newLeave.id, doc); }
+        catch (docErr) { notify(`Request sent, but the document didn’t upload: ${docErr instanceof Error ? docErr.message : 'try again from the list'}.`, 'error'); }
+      }
       notify('Leave request submitted.', 'success', 4200, 'leave');
-      void notifyLeaveSubmitted({
-        employeeName: user.name,
-        days: leaveDuration === 'half' ? 0.5 : 1,
-        leaveType,
-        startDate,
-        endDate,
-        leaveId: newLeave?.id ?? crypto.randomUUID(),
-        employeeDbId: user.employeeDbId ?? "",
-        actorUserId: user.id,
-      });
+      if (!policy.ready || policy.chain === 'admin') {
+        void notifyLeaveSubmitted({
+          employeeName: user.name, days: leaveDuration === 'half' ? 0.5 : 1, leaveType: chosen.code, startDate, endDate,
+          leaveId: newLeave?.id ?? crypto.randomUUID(), employeeDbId: user.employeeDbId ?? '', actorUserId: user.id,
+        });
+      }
       setOpen(false);
       reset();
       await onRefresh();
@@ -117,6 +136,32 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
       setBusy(false);
     }
   }
+
+  async function withdraw(r: LeaveRequest) {
+    if (!(await confirmDialog({ title: 'Withdraw this leave request?', message: 'It will be marked as withdrawn and your manager won’t need to review it.', confirmLabel: 'Withdraw' }))) return;
+    setRowBusy(r.id);
+    try { await leaveApi.cancel(r.id); notify('Leave request withdrawn.', 'success'); await onRefresh(); }
+    catch (e) { notify(e instanceof Error ? e.message : 'Unable to withdraw.', 'error'); }
+    finally { setRowBusy(null); }
+  }
+
+  async function onPickDocForRow(file: File | undefined) {
+    const id = addDocFor.current;
+    addDocFor.current = null;
+    if (!file || !id) return;
+    setRowBusy(id);
+    try { await leaveApi.attachDocument(id, file); notify('Document added to your request.', 'success'); await onRefresh(); }
+    catch (e) { notify(e instanceof Error ? e.message : 'Unable to upload the document.', 'error'); }
+    finally { setRowBusy(null); }
+  }
+
+  const approvalLine = (r: LeaveRequest) => {
+    if (r.status !== 'pending' || !r.managerStatus || r.managerStatus === 'skipped') return null;
+    const who = managerName(r.managerId) ?? 'your manager';
+    if (r.managerStatus === 'pending') return `Waiting for ${who}`;
+    if (r.managerStatus === 'approved') return `Approved by ${who} · waiting for final approval`;
+    return null;
+  };
 
   return (
     <Page>
@@ -139,6 +184,8 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
         </Notice>
       )}
 
+      <input ref={docInput} type="file" accept={ACCEPT_ATTR} className="sr-only" onChange={(e) => { void onPickDocForRow(e.target.files?.[0]); e.target.value = ''; }} />
+
       <Card className="overflow-hidden">
         <div className="p-5 sm:p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <CardHeader title="Your requests" subtitle="Newest first" />
@@ -150,36 +197,48 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
               { id: 'all', label: 'All', count: counts.all },
               { id: 'pending', label: 'Pending', count: counts.pending },
               { id: 'approved', label: 'Approved', count: counts.approved },
-              { id: 'rejected', label: 'Rejected', count: counts.rejected },
+              { id: 'rejected', label: 'Closed', count: counts.rejected },
             ]}
           />
         </div>
         {rows.length ? (
           <ul className="divide-y divide-ink-100">
-            {rows.map((r) => (
-              <li key={r.id} className="px-5 sm:px-6 py-4 flex items-start gap-4">
-                <span className="w-12 h-12 shrink-0 rounded-2xl bg-ink-50 flex flex-col items-center justify-center leading-none">
-                  <span className="text-[10px] font-bold uppercase text-ink-500">{new Date(`${r.startDate}T12:00:00Z`).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })}</span>
-                  <span className="font-display text-lg font-bold text-ink-950">{Number(r.startDate.slice(8))}</span>
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-ink-900">
-                    <span className="capitalize">{r.leaveType}</span> leave · {r.days} day{r.days === 1 ? '' : 's'}
-                    {r.duration === 'half' && <span className="font-medium text-ink-500"> (half day)</span>}
-                  </p>
-                  <p className="text-xs text-ink-500 mt-0.5 tnum">
-                    {r.startDate === r.endDate ? dateLabel(r.startDate, { weekday: 'short', day: 'numeric', month: 'short' }) : `${dateLabel(r.startDate)} → ${dateLabel(r.endDate)}`}
-                    {r.status === 'approved' && (r.unpaidDays ?? 0) > 0 ? ` · ${r.paidDays ?? 0} paid, ${r.unpaidDays} unpaid` : ''}
-                  </p>
-                  <p className="text-[13px] text-ink-600 mt-1.5 line-clamp-2">{r.reason}</p>
-                  {r.reviewNote && <p className="text-xs text-ink-500 mt-1"><b className="text-ink-700">Reviewer:</b> {r.reviewNote}</p>}
-                </div>
-                <StatusBadge status={r.status} />
-              </li>
-            ))}
+            {rows.map((r) => {
+              const line = approvalLine(r);
+              const t = policy.types.find((x) => x.code === r.leaveType);
+              return (
+                <li key={r.id} className="px-5 sm:px-6 py-4 flex items-start gap-4">
+                  <span className="w-12 h-12 shrink-0 rounded-2xl bg-ink-50 flex flex-col items-center justify-center leading-none">
+                    <span className="text-[10px] font-bold uppercase text-ink-500">{new Date(`${r.startDate}T12:00:00Z`).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })}</span>
+                    <span className="font-display text-lg font-bold text-ink-950">{Number(r.startDate.slice(8))}</span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-ink-900">
+                      {t?.name ?? <span className="capitalize">{r.leaveType}</span>} leave · {r.days} day{r.days === 1 ? '' : 's'}
+                      {r.duration === 'half' && <span className="font-medium text-ink-500"> (half day)</span>}
+                    </p>
+                    <p className="text-xs text-ink-500 mt-0.5 tnum">
+                      {r.startDate === r.endDate ? dateLabel(r.startDate, { weekday: 'short', day: 'numeric', month: 'short' }) : `${dateLabel(r.startDate)} → ${dateLabel(r.endDate)}`}
+                      {r.status === 'approved' && (r.unpaidDays ?? 0) > 0 ? ` · ${r.paidDays ?? 0} paid, ${r.unpaidDays} unpaid` : ''}
+                    </p>
+                    <p className="text-[13px] text-ink-600 mt-1.5 line-clamp-2">{r.reason}</p>
+                    {line && <p className="text-xs font-semibold text-amber-700 mt-1.5 inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5" />{line}</p>}
+                    {r.managerNote && r.managerStatus !== 'pending' && <p className="text-xs text-ink-500 mt-1"><b className="text-ink-700">Manager:</b> {r.managerNote}</p>}
+                    {r.reviewNote && r.reviewNote !== r.managerNote && <p className="text-xs text-ink-500 mt-1"><b className="text-ink-700">Reviewer:</b> {r.reviewNote}</p>}
+                    {r.status === 'pending' && policy.ready && (
+                      <div className="flex flex-wrap gap-2 mt-2.5">
+                        <button type="button" className="btn-ghost btn-sm" disabled={rowBusy === r.id} onClick={() => { addDocFor.current = r.id; docInput.current?.click(); }}><Paperclip className="w-3.5 h-3.5" /> Add document</button>
+                        <button type="button" className="btn-ghost btn-sm text-rose-600" disabled={rowBusy === r.id} onClick={() => void withdraw(r)}><Undo2 className="w-3.5 h-3.5" /> Withdraw</button>
+                      </div>
+                    )}
+                  </div>
+                  <StatusBadge status={r.status} label={r.status === 'cancelled' ? 'Withdrawn' : undefined} />
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <EmptyState icon={<CalendarDays className="w-6 h-6" />} title={filter === 'all' ? 'No leave requests yet' : `No ${filter} requests`} text={filter === 'all' ? 'Requests you send appear here with their status.' : undefined} />
+          <EmptyState icon={<CalendarDays className="w-6 h-6" />} title={filter === 'all' ? 'No leave requests yet' : `No ${filter === 'rejected' ? 'closed' : filter} requests`} text={filter === 'all' ? 'Requests you send appear here with their status.' : undefined} />
         )}
       </Card>
 
@@ -190,16 +249,17 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
             <div>
               <span className="label">Leave type</span>
               <div className="flex flex-wrap gap-2">
-                {[['casual', 'Casual'], ['sick', 'Sick'], ['earned', 'Earned'], ['unpaid', 'Unpaid']].map(([v, l]) => (
-                  <button key={v} type="button" onClick={() => setLeaveType(v)} className={cx('rounded-full px-4 py-2 text-[13px] font-semibold border transition-colors', leaveType === v ? 'bg-ink-950 text-white border-ink-950' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300')}>
-                    {l}
+                {types.map((t) => (
+                  <button key={t.code} type="button" onClick={() => { setLeaveType(t.code); if (!t.allowHalfDay) setLeaveDuration('full'); }} className={cx('rounded-full px-4 py-2 text-[13px] font-semibold border transition-colors', chosen?.code === t.code ? 'bg-ink-950 text-white border-ink-950' : 'bg-white text-ink-600 border-ink-200 hover:border-ink-300')}>
+                    {t.name}
                   </button>
                 ))}
               </div>
+              {chosen && <p className="text-xs text-ink-500 mt-2">{leaveRuleText(chosen)}{chosen.annualLimit != null ? ` · ${Math.max(0, chosen.annualLimit - usedThisYear)} left this year` : ''}</p>}
             </div>
             <div>
               <span className="label">Duration</span>
-              <ChoiceGroup name="duration" value={leaveDuration} onChange={setLeaveDuration} options={[{ value: 'full', label: 'Full day(s)' }, { value: 'half', label: 'Half day', hint: 'One date only' }]} />
+              <ChoiceGroup name="duration" value={leaveDuration} onChange={setLeaveDuration} options={chosen?.allowHalfDay === false ? [{ value: 'full', label: 'Full day(s)' }] : [{ value: 'full', label: 'Full day(s)' }, { value: 'half', label: 'Half day', hint: 'One date only' }]} />
             </div>
             <div className={cx('grid gap-3', leaveDuration === 'full' ? 'sm:grid-cols-2' : '')}>
               <label className="block">
@@ -222,6 +282,17 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
               <span className="label">Reason</span>
               <textarea name="reason" className="input" placeholder="A short note for your manager" required />
             </label>
+            {policy.ready && (
+              <div>
+                <span className="label">Supporting document {needsDoc ? <span className="text-rose-600">· needed for approval</span> : <span className="text-ink-400 font-medium">· optional</span>}</span>
+                <label className="flex items-center gap-3 rounded-2xl border border-dashed border-ink-200 px-4 py-3 cursor-pointer hover:border-brand-400">
+                  <Paperclip className="w-4 h-4 text-ink-400" />
+                  <span className="text-[13px] text-ink-600 truncate flex-1">{doc ? doc.name : 'Attach a medical certificate or other proof (PDF or image)'}</span>
+                  {doc && <button type="button" className="text-xs font-semibold text-ink-500" onClick={(e) => { e.preventDefault(); setDoc(null); }}>Remove</button>}
+                  <input type="file" accept={ACCEPT_ATTR} className="sr-only" onChange={(e) => setDoc(e.target.files?.[0] ?? null)} />
+                </label>
+              </div>
+            )}
             <p className="text-xs text-ink-400">A request must stay within one calendar month. If your paid balance runs out, extra days are counted as unpaid.</p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="secondary" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>

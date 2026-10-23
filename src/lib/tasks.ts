@@ -37,6 +37,13 @@ export interface TaskFile { id: string; name: string; size_bytes: number | null;
 
 const db = supabase as any;
 
+/** True when an error means a table or function from a not-yet-applied migration is missing. */
+export function isMissingSchema(err: { code?: string; message?: string } | null | undefined) {
+  if (!err) return false;
+  return ['42P01', '42883', 'PGRST202', 'PGRST205', '42703'].includes(String(err.code ?? '')) ||
+    /does not exist|could not find the (table|function)/i.test(String(err.message ?? ''));
+}
+
 export async function loadTaskExtras(taskId: string) {
   const [c, l, d, b, e, f] = await Promise.all([
     db.from('task_comments').select('*').eq('task_id', taskId).order('created_at'),
@@ -47,7 +54,10 @@ export async function loadTaskExtras(taskId: string) {
     db.from('files').select('id, name, size_bytes, created_at, uploaded_by, storage_bucket, storage_path').eq('parent_type', 'task').eq('parent_id', taskId).is('deleted_at', null).order('created_at', { ascending: false }),
   ]);
   const err = c.error || l.error || d.error || e.error || f.error;
-  if (err) throw new Error(err.message);
+  if (err) {
+    if (isMissingSchema(err)) throw new Error('Comments, time logs and subtasks switch on once the task workflow database update is applied.');
+    throw new Error(err.message);
+  }
   return {
     comments: (c.data ?? []) as TaskComment[],
     timeLogs: (l.data ?? []) as TaskTimeLog[],
@@ -60,7 +70,7 @@ export async function loadTaskExtras(taskId: string) {
 
 async function call<T = unknown>(fn: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await db.rpc(fn, args);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(isMissingSchema(error) ? 'This action switches on once the task workflow database update is applied.' : error.message);
   return data as T;
 }
 

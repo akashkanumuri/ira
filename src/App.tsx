@@ -14,6 +14,10 @@ import { NotificationsPage } from './components/common/NotificationsPage';
 import { TaskDetail } from './components/tasks/TaskDetail';
 import { TASK_STATUS, TASK_STATUS_ORDER, fmtMinutes, isTaskClosed, isTaskOpen, isTaskWithAssignee } from './lib/tasks';
 import { RolesMatrix } from './components/admin/RolesMatrix';
+import { TeamApprovals } from './components/employee/TeamApprovals';
+import { LeavePolicySettings } from './components/admin/LeavePolicySettings';
+import { leaveApi } from './lib/leave';
+import { openFile } from './lib/sigma';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
 import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
 import { useLinkableDeliverables, type LinkableDeliverable } from './lib/linkableDeliverables';
@@ -55,7 +59,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks
+  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks, ClipboardCheck
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -173,10 +177,10 @@ function LiveClockDisplay() {
 }
 
 const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications'];
-const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
-  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications',
+  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests',
 };
 /** The page a path resolves to for this role; links meant for the other role land on the closest equivalent. */
 function resolveTab(role: AuthUser['role'], raw: string): string {
@@ -568,6 +572,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const pendingWfhCount = wfhRequests.filter(x => x.status === 'pending').length;
   const employeeOpenTasksCount = tasks.filter(t => !t.archivedAt && ((t.assignedTo === user.employeeDbId && (t.status === 'assigned' || t.status === 'revision_required')) || (t.assignedBy === user.employeeDbId && t.status === 'awaiting_review'))).length;
 
+  const managesPeople = user.role !== 'admin' && employees.some(e => e.managerId === user.employeeDbId && e.status === 'active');
+
   const navGroups: NavGroup[] = user.role === 'admin'
     ? [
       { items: [{ id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -612,6 +618,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'emp-holidays', label: 'Holidays', icon: Sparkles },
         ]
       },
+      ...(managesPeople ? [{ label: 'My team', items: [{ id: 'emp-approvals', label: 'Team approvals', icon: ClipboardCheck }] }] : []),
       {
         label: 'Me', items: [
           { id: 'emp-payroll', label: 'Payroll', icon: WalletCards },
@@ -714,6 +721,7 @@ function getPageTitle(tab: string) {
     'emp-profile': 'Profile',
     'admin-notifications': 'Notifications',
     'emp-notifications': 'Notifications',
+    'emp-approvals': 'Team approvals',
     'admin-finance': 'Finance',
     'admin-activity': 'Activity log',
   } as Record<string, string>)[tab] ?? 'Dashboard';
@@ -746,6 +754,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysPage {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
+  if (activeTab === 'emp-approvals') return <TeamApprovals onRefresh={props.onRefresh} />;
   if (activeTab === 'emp-notifications') return <NotificationsPage user={props.user} onOpen={props.onSelectTab} />;
   return <EmployeeHome {...props} onSelectTab={props.onSelectTab} />;
 }
@@ -1453,6 +1462,14 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
   const balanceOf = (employeeId: string, date: string) =>
     (ledgers as LeaveLedger[]).find((l) => l.employeeId === employeeId && l.periodStart === `${date.slice(0, 7)}-01`);
   const avatarOf = (employeeId: string) => (employees as Employee[]).find((e) => e.id === employeeId)?.avatar || null;
+  const nameOf = (employeeId?: string | null) => (employeeId ? (employees as Employee[]).find((e) => e.id === employeeId)?.name : undefined);
+  async function openLeaveDocument(leaveId: string) {
+    try {
+      const docs = await leaveApi.documents(leaveId);
+      if (!docs.length) { notify('No supporting document attached.', 'info'); return; }
+      await openFile(docs[0], false);
+    } catch (e) { notify(e instanceof Error ? e.message : 'Unable to open the document.', 'error'); }
+  }
   const corrPending = (corrections as CorrectionRequest[]).filter((r) => r.status === 'pending');
   const rows: any[] = tab === 'leave' ? leaveRequests : tab === 'wfh' ? wfhRequests : corrections;
   const pending = tab === 'leave' ? leavePending : tab === 'wfh' ? wfhPending : corrPending;
@@ -1503,6 +1520,8 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
                             {available} paid day{available === 1 ? '' : 's'} available{available < Number(r.days) ? ` — ${Number(r.days) - available} would be unpaid` : ''}
                           </p>
                         )}
+                        {r.managerStatus === 'pending' && <p className="text-xs mt-1.5 text-amber-700 font-semibold">Waiting for {nameOf(r.managerId) ?? 'their manager'} · you can still decide</p>}
+                        {r.managerStatus === 'approved' && <p className="text-xs mt-1.5 text-mint-700 font-semibold">Approved by {nameOf(r.managerId) ?? 'their manager'}{r.managerNote ? ` — “${r.managerNote}”` : ''}</p>}
                       </>
                     ) : (
                       <>
@@ -1514,6 +1533,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
                     {r.note && <p className="text-xs text-ink-500 mt-1">{r.note}</p>}
                   </div>
                   <div className="mt-4 flex gap-2">
+                    {tab === 'leave' && <button type="button" onClick={() => void openLeaveDocument(r.id)} className="icon-btn icon-btn-surface" title="View supporting document" aria-label="View supporting document"><FileText className="w-4 h-4" /></button>}
                     <button type="button" disabled={!!busyKey} onClick={() => void review(table, r.id, 'rejected')} className="btn-secondary flex-1">Reject</button>
                     <button type="button" disabled={!!busyKey} onClick={() => void review(table, r.id, 'approved')} className="btn-primary flex-1">{busy ? 'Saving…' : 'Approve'}</button>
                   </div>
@@ -1993,7 +2013,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
 }
 
 function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
-  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'roles'>('rules');
+  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles'>('rules');
   const [name, setName] = useState(''); const [canAssign, setCanAssign] = useState(false);
   const [deptName, setDeptName] = useState('');
   const [payrollDivisor, setPayrollDivisor] = useState<'calendar_days' | 'working_days'>('calendar_days');
@@ -2012,7 +2032,9 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
 
   return (
     <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments and the payroll policy.">
-      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
+      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
+
+      {tab === 'leave' && <section className="anim-fade" key="leave"><LeavePolicySettings /></section>}
 
       {tab === 'roles' && <section className="anim-fade" key="roles"><RolesMatrix /></section>}
 

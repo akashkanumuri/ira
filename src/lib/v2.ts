@@ -299,6 +299,10 @@ export function mapLeave(row: any, employees: Map<string, Employee>): LeaveReque
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
     reviewNote: row.review_note,
+    managerId: row.manager_id ?? null,
+    managerStatus: row.manager_status ?? null,
+    managerNote: row.manager_note ?? null,
+    managerReviewedAt: row.manager_reviewed_at ?? null,
   };
 }
 
