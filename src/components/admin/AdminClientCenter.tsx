@@ -73,7 +73,13 @@ export const AdminClientCenter: React.FC<Props> = ({ employees }) => {
 
 const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<'directory' | 'projects' | 'workspace'>('directory');
+  // Deep link: /admin-clients?project=<id>&view=<workspace tab>
+  const deepLink = useMemo(() => {
+    if (typeof window === 'undefined') return { project: '', view: '' };
+    const q = new URLSearchParams(window.location.search);
+    return { project: q.get('project') ?? '', view: q.get('view') ?? '' };
+  }, []);
+  const [activeTab, setActiveTab] = useState<'directory' | 'projects' | 'workspace'>(deepLink.project ? 'workspace' : 'directory');
 
   /* =========================================================================
      SHARED STATE
@@ -81,7 +87,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(deepLink.project);
 
   // Modals & Panels
   const [showCreateClientModal, setShowCreateClientModal] = useState(false);
@@ -714,6 +720,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
                 </FilterBar>
                 {workspaceProject && (
                   <ProjectOperations
+                    initialTab={workspaceProject.id === deepLink.project ? deepLink.view || undefined : undefined}
                     key={workspaceProject.id}
                     projectId={workspaceProject.id}
                     projectName={workspaceProject.name}

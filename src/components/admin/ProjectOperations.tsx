@@ -264,10 +264,10 @@ function UploadBox({
    Main component
 ========================================================================= */
 
-export function ProjectOperations({ projectId, projectName, clientId, employees, mode }: Props) {
+export function ProjectOperations({ projectId, projectName, clientId, employees, mode, initialTab }: Props & { initialTab?: string }) {
   const [ws, setWs] = useState<ProjectWorkspace | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(initialTab || 'overview');
 
   const reload = useCallback(async () => {
     try {

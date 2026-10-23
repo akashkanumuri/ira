@@ -8,6 +8,8 @@ import { ClientPasswordSetupScreen } from './components/client/ClientPasswordSet
 import { ClientPortalView } from './components/client/ClientPortalView';
 import { AdminClientCenter } from './components/admin/AdminClientCenter';
 import { AdminHome } from './components/admin/AdminHome';
+import { FinancePage } from './components/admin/FinancePage';
+import { ActivityLogPage } from './components/admin/ActivityLogPage';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
 import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
 import { useLinkableDeliverables, type LinkableDeliverable } from './lib/linkableDeliverables';
@@ -49,7 +51,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban
+  FolderKanban, BadgeIndianRupee, History
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -170,7 +172,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const getInitialTab = () => {
     const p = typeof window !== 'undefined' ? window.location.pathname.replace(/^\//, '') : '';
     if (user.role === 'admin') {
-      const validAdminTabs = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings'];
+      const validAdminTabs = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity'];
       if (validAdminTabs.includes(p)) return p;
       if (p === 'admin-reports') return 'admin-export';
       return 'admin-dashboard';
@@ -563,6 +565,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       {
         label: 'Clients & delivery', items: [
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
+          { id: 'admin-finance', label: 'Finance', icon: BadgeIndianRupee },
           { id: 'admin-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness },
         ]
       },
@@ -578,6 +581,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       {
         label: 'Insights & setup', items: [
           { id: 'admin-export', label: 'Reports', icon: Download },
+          { id: 'admin-activity', label: 'Activity log', icon: History },
           { id: 'admin-settings', label: 'Settings', icon: Settings2 },
         ]
       },
@@ -710,6 +714,8 @@ function AdminContent(props: any) {
   if (activeTab === 'admin-holidays') return <HolidaysAdmin {...props} />;
   if (activeTab === 'admin-export') return <ExportsAdmin {...props} />;
   if (activeTab === 'admin-settings') return <SettingsAdmin {...props} />;
+  if (activeTab === 'admin-finance') return <FinancePage onSelectTab={onSelectTab} />;
+  if (activeTab === 'admin-activity') return <ActivityLogPage />;
   return <AdminHome {...props} onSelectTab={onSelectTab} />;
 }
 

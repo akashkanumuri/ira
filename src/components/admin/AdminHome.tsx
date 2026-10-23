@@ -125,8 +125,8 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
   const attention: Array<{ key: string; tone: Tone; icon: React.ReactNode; title: string; caption: string; to: string }> = [];
   if (pendingLeaves.length) attention.push({ key: 'leave', tone: 'amber', icon: <CalendarClock className="w-5 h-5" />, title: `${pendingLeaves.length} leave request${pendingLeaves.length === 1 ? '' : 's'} to review`, caption: pendingLeaves.slice(0, 2).map((r) => r.employeeName).join(', '), to: 'admin-requests?tab=leave' });
   if (pendingWfh.length) attention.push({ key: 'wfh', tone: 'amber', icon: <Home className="w-5 h-5" />, title: `${pendingWfh.length} WFH request${pendingWfh.length === 1 ? '' : 's'} to review`, caption: pendingWfh.slice(0, 2).map((r) => r.employeeName).join(', '), to: 'admin-requests?tab=wfh' });
-  if (o?.finance.paymentsToVerify) attention.push({ key: 'pay', tone: 'brand', icon: <BadgeIndianRupee className="w-5 h-5" />, title: `${o.finance.paymentsToVerify} client payment${o.finance.paymentsToVerify === 1 ? '' : 's'} to verify`, caption: 'Submitted by clients — not counted until verified', to: 'admin-clients' });
-  if (o?.finance.overdueCount) attention.push({ key: 'overdue', tone: 'rose', icon: <AlertTriangle className="w-5 h-5" />, title: `${o.finance.overdueCount} payment milestone${o.finance.overdueCount === 1 ? '' : 's'} overdue`, caption: `${inr(o.finance.overdueAmount)} outstanding`, to: 'admin-clients' });
+  if (o?.finance.paymentsToVerify) attention.push({ key: 'pay', tone: 'brand', icon: <BadgeIndianRupee className="w-5 h-5" />, title: `${o.finance.paymentsToVerify} client payment${o.finance.paymentsToVerify === 1 ? '' : 's'} to verify`, caption: 'Submitted by clients — not counted until verified', to: 'admin-finance' });
+  if (o?.finance.overdueCount) attention.push({ key: 'overdue', tone: 'rose', icon: <AlertTriangle className="w-5 h-5" />, title: `${o.finance.overdueCount} payment milestone${o.finance.overdueCount === 1 ? '' : 's'} overdue`, caption: `${inr(o.finance.overdueAmount)} outstanding`, to: 'admin-finance' });
   if (o?.delivery.overdue) attention.push({ key: 'dover', tone: 'rose', icon: <Package className="w-5 h-5" />, title: `${o.delivery.overdue} deliverable${o.delivery.overdue === 1 ? '' : 's'} past due date`, caption: 'Open deliverables with a due date before today', to: 'admin-clients' });
   if (o?.modifications.open) attention.push({ key: 'mods', tone: 'amber', icon: <FileClock className="w-5 h-5" />, title: `${o.modifications.open} modification request${o.modifications.open === 1 ? '' : 's'} open`, caption: 'Client asked to change scope, quantity or timeline', to: 'admin-clients' });
   if (o?.dependencies.toReview) attention.push({ key: 'deps', tone: 'brand', icon: <Upload className="w-5 h-5" />, title: `${o.dependencies.toReview} client upload${o.dependencies.toReview === 1 ? '' : 's'} to review`, caption: 'Dependencies submitted by clients', to: 'admin-clients' });
@@ -249,7 +249,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
           caption={o ? (o.finance.overdueAmount > 0
             ? <><span className="text-rose-700 font-semibold">{inr(o.finance.overdueAmount)} overdue</span>{o.finance.nextDue ? <> · next due {dateLabel(o.finance.nextDue.date)}</> : null}</>
             : o.finance.nextDue ? <>Next due {dateLabel(o.finance.nextDue.date)} · {inr(o.finance.nextDue.amount)}</> : 'Nothing due') : org.error ?? 'Loading…'}
-          onClick={() => onSelectTab('admin-clients')}
+          onClick={() => onSelectTab('admin-finance')}
         />
       </div>
 
@@ -361,7 +361,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
 
         <div className="space-y-4">
           <Card index={7} className="p-5 sm:p-6">
-            <CardHeader title="Collections" subtitle="Verified payments against billed milestones" />
+            <CardHeader title="Collections" subtitle="Verified payments against billed milestones" action={<button type="button" className="btn-ghost btn-sm" onClick={() => onSelectTab('admin-finance')}>Finance <ArrowRight className="w-3.5 h-3.5" /></button>} />
             {o ? (
               o.finance.billed > 0 ? (
                 <>
