@@ -42,6 +42,8 @@ function liveSeconds(record: AttendanceRecord | undefined, now: Date) {
   return { working: Math.max(0, elapsed - breaks - onBreak), onBreak };
 }
 
+const weekday = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' });
+
 function checkOutText(r: AttendanceRecord) {
   return r.checkOut ?? (r.attendanceState === 'completed' ? '—' : r.mode === 'wfh' ? 'Open (manual)' : 'Open');
 }
@@ -463,7 +465,7 @@ export function AttendanceRecent({ attendance, onOpen }: { attendance: Attendanc
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} onClick={() => onOpen?.(r.date)} className={onOpen ? 'cursor-pointer' : ''}>
-                    <td><span className="font-bold text-ink-900">{dateLabel(r.date)}</span> <span className="text-ink-400">{dateLabel(r.date, { weekday: 'short' })}</span></td>
+                    <td><span className="font-bold text-ink-900">{dateLabel(r.date)}</span> <span className="text-ink-400">{weekday(r.date)}</span></td>
                     <td>{r.mode === 'wfh' ? 'WFH' : 'Office'}</td>
                     <td className="tnum font-semibold text-ink-800">{r.checkIn ?? '—'}</td>
                     <td className="tnum">{checkOutText(r)}</td>
@@ -478,7 +480,7 @@ export function AttendanceRecent({ attendance, onOpen }: { attendance: Attendanc
             {rows.map((r) => (
               <li key={r.id} className="px-5 py-3.5 flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-ink-900">{dateLabel(r.date)} <span className="font-medium text-ink-400">{dateLabel(r.date, { weekday: 'short' })}</span></p>
+                  <p className="text-sm font-bold text-ink-900">{dateLabel(r.date)} <span className="font-medium text-ink-400">{weekday(r.date)}</span></p>
                   <p className="text-xs text-ink-500 tnum">{r.mode === 'wfh' ? 'WFH' : 'Office'} · {r.checkIn ?? '—'} → {checkOutText(r)} · {r.workingHours || duration(r.workingSeconds)}</p>
                 </div>
                 <StatusBadge status={r.status} />

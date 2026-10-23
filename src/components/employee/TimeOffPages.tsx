@@ -420,7 +420,7 @@ export function HolidayList({ holidays, renderActions }: { holidays: Holiday[]; 
               return (
                 <Card key={h.id} index={gi + i} className={cx('p-4 flex items-center gap-4', past && 'opacity-60')}>
                   <span className={cx('w-14 h-14 shrink-0 rounded-2xl flex flex-col items-center justify-center leading-none', h.id === next?.id ? 'bg-brand-600 text-white' : 'bg-brand-50 text-brand-700')}>
-                    <span className="text-[10px] font-bold uppercase opacity-80">{dateLabel(h.date, { weekday: 'short' })}</span>
+                    <span className="text-[10px] font-bold uppercase opacity-80">{new Date(`${h.date}T12:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' })}</span>
                     <span className="font-display text-xl font-bold">{Number(h.date.slice(8))}</span>
                   </span>
                   <div className="min-w-0 flex-1">

@@ -168,10 +168,10 @@ export interface DayMark {
 const dayTone: Record<Tone | 'none', string> = {
   brand: 'bg-brand-600 text-white',
   mint: 'bg-mint-400 text-white',
-  amber: 'bg-amber-400 text-white',
-  rose: 'bg-rose-500 text-white',
+  amber: 'bg-amber-300 text-amber-950',
+  rose: 'bg-white text-rose-600 ring-1 ring-inset ring-rose-200',
   sky: 'bg-sky-400 text-white',
-  ink: 'bg-ink-100 text-ink-500',
+  ink: 'bg-ink-100 text-ink-400',
   dark: 'bg-ink-950 text-white',
   none: 'bg-ink-50 text-ink-700',
 };
@@ -242,7 +242,7 @@ export function DotCalendar({
 
 export function Legend({ items }: { items: Array<{ tone: Tone; label: string }> }) {
   const dot: Record<Tone, string> = {
-    brand: 'bg-brand-600', mint: 'bg-mint-400', amber: 'bg-amber-400', rose: 'bg-rose-500', sky: 'bg-sky-400', ink: 'bg-ink-200', dark: 'bg-ink-950',
+    brand: 'bg-brand-600', mint: 'bg-mint-400', amber: 'bg-amber-300', rose: 'bg-white ring-1 ring-inset ring-rose-300', sky: 'bg-sky-400', ink: 'bg-ink-200', dark: 'bg-ink-950',
   };
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-2">
