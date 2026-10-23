@@ -102,7 +102,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
       const present = active.filter((e) => ['present', 'late', 'wfh'].includes(String(byKey.get(`${e.id}|${ds}`)?.status))).length;
       return {
         key: ds,
-        label: new Date(`${ds}T12:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' }).slice(0, 3),
+        label: `${new Date(`${ds}T12:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' }).slice(0, 3)} ${Number(ds.slice(8))}`,
         value: present,
         display: `${present} of ${active.length} · ${dateLabel(ds)}`,
       };
