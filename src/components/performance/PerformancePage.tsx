@@ -10,13 +10,14 @@ import { Gauge } from '../../ui/charts';
 import { Modal } from '../../ui/Modal';
 import { GrowthTimeline } from './GrowthTimeline';
 import { ReviewScorecard, TeamReviewMetrics } from './ReviewMetrics';
+import { PunctualityCard, TeamPunctuality } from './Punctuality';
 
 type Data = { cycles: Cycle[]; reviews: Review[]; kras: Kra[] };
 
 export function PerformancePage({ user, employees = [] }: { user: AuthUser; employees?: Employee[] }) {
   const me = user.employeeDbId ?? '';
   const reports = useMemo(() => employees.filter((e) => e.managerId === me && e.status === 'active'), [employees, me]);
-  const [tab, setTab] = useState<'mine' | 'team' | 'growth'>('mine');
+  const [tab, setTab] = useState<'mine' | 'punctuality' | 'team' | 'growth'>('mine');
   const [data, setData] = useState<Data>({ cycles: [], reviews: [], kras: [] });
   const [state, setState] = useState<'loading' | 'ready' | 'unavailable' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -46,7 +47,7 @@ export function PerformancePage({ user, employees = [] }: { user: AuthUser; empl
   const teamWaiting = team.filter((r) => r.status === 'manager_review');
   const latest = past[0];
 
-  const tabs = [{ id: 'mine' as const, label: 'My reviews', count: active.length || undefined }, ...(reports.length ? [{ id: 'team' as const, label: 'My team', count: teamWaiting.length || undefined }] : []), { id: 'growth' as const, label: 'Growth' }];
+  const tabs = [{ id: 'mine' as const, label: 'My reviews', count: active.length || undefined }, { id: 'punctuality' as const, label: 'Punctuality' }, ...(reports.length ? [{ id: 'team' as const, label: 'My team', count: teamWaiting.length || undefined }] : []), { id: 'growth' as const, label: 'Growth' }];
 
   return (
     <Page>
@@ -56,7 +57,9 @@ export function PerformancePage({ user, employees = [] }: { user: AuthUser; empl
       <PillTabs value={tab} onChange={setTab} items={tabs} />
 
       {tab === 'mine' && <ReviewScorecard title="My work quality" />}
+      {tab === 'punctuality' && <PunctualityCard title="My punctuality" />}
       {tab === 'team' && reports.length > 0 && <TeamReviewMetrics />}
+      {tab === 'team' && reports.length > 0 && <TeamPunctuality />}
 
       {state === 'loading' && <Card className="p-5 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}</Card>}
 
