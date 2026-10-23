@@ -67,3 +67,17 @@ Done on `redesign/foundation` (type check and build pass):
 Deferred to the backend phase (needs data that doesn't exist yet):
 - Invoice PDF: there is no company billing profile (legal name, GSTIN, address, bank details). Generating a tax invoice without it would be incomplete.
 - Editable roles: `has_permission` already reads `user_roles`, but staff screens are chosen by account type. Granting a staff role needs permission-driven navigation first.
+
+## Backend phase — 23 Oct 2026 (built, waiting for approval to apply)
+
+| # | Migration | Dry-run on production (rolled back) |
+|---|-----------|-------------------------------------|
+| 1 | 20261023100000_task_workflow | 25/25 |
+| 2 | 20261023110000_leave_approvals | 24/24 |
+| 3 | 20261023120000_performance | 27/27 |
+| 4 | 20261023130000_client_collaboration | 23/23 |
+| 5 | 20261023140000_client_team | 7/7 |
+
+Edge functions to deploy: `client-admin` (invite/resend colleague), `client-setup` (activate colleagues).
+Global search needs no migration (runs through existing RLS).
+Every new screen shows a "switches on after the database update" notice until its migration is applied.
