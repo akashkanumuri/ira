@@ -848,7 +848,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
               <button
                 type="button"
                 onClick={() => onSelectTab?.(pendingLeaves.length ? 'admin-leave' : 'admin-wfh')}
-                className="text-[11px] font-bold text-[#0033FF] hover:underline ml-auto"
+                className="text-[11px] font-bold text-[#5b35e8] hover:underline ml-auto"
               >
                 Review
               </button>
@@ -858,7 +858,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
         <Kpi
           label="Latest Final Payroll"
           value={latestPayrollPeriod ? money(latestPayrollTotal) : '—'}
-          icon={<WalletCards className="w-4 h-4 text-[#0033FF]" />}
+          icon={<WalletCards className="w-4 h-4 text-[#5b35e8]" />}
           textValue
         />
       </div>
@@ -883,7 +883,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0033FF]/20"
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#5b35e8]/20"
             />
             {/* Search Filter */}
             <div className="relative">
@@ -893,7 +893,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
                 placeholder="Search employee…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 w-36 sm:w-44 focus:outline-none focus:ring-2 focus:ring-[#0033FF]/20"
+                className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 w-36 sm:w-44 focus:outline-none focus:ring-2 focus:ring-[#5b35e8]/20"
               />
             </div>
             {/* Export Button */}
@@ -904,14 +904,14 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
               className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
               title="Download Excel report"
             >
-              <Download className="w-3.5 h-3.5 text-[#0033FF]" />
+              <Download className="w-3.5 h-3.5 text-[#5b35e8]" />
               <span className="hidden sm:inline">Export</span>
             </button>
             {/* Link to Full Module */}
             <button
               type="button"
               onClick={() => onSelectTab('admin-attendance')}
-              className="px-3 py-1.5 rounded-xl bg-[#0033FF] hover:bg-[#0600AB] text-xs font-bold text-white flex items-center gap-1.5 transition-colors shadow-sm"
+              className="px-3 py-1.5 rounded-xl bg-[#5b35e8] hover:bg-[#4a27c7] text-xs font-bold text-white flex items-center gap-1.5 transition-colors shadow-sm"
             >
               <span>Full View</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -1059,7 +1059,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
               <button
                 type="button"
                 onClick={() => onSelectTab('admin-leave')}
-                className="text-xs font-bold text-[#0033FF] hover:underline"
+                className="text-xs font-bold text-[#5b35e8] hover:underline"
               >
                 Review all ({pendingLeaves.length})
               </button>
@@ -1088,7 +1088,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
               <button
                 type="button"
                 onClick={() => onSelectTab('admin-wfh')}
-                className="text-xs font-bold text-[#0033FF] hover:underline"
+                className="text-xs font-bold text-[#5b35e8] hover:underline"
               >
                 Review all ({pendingWfh.length})
               </button>
@@ -1176,7 +1176,7 @@ function AdminDashboard({ employees, attendance, leaveRequests, wfhRequests, cor
               <p className="text-xs font-bold text-slate-700 mb-2">Break intervals ({inspectBreaks.length})</p>
               {inspectLoading ? (
                 <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0033FF]" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#5b35e8]" />
                   <span>Loading break intervals…</span>
                 </div>
               ) : inspectBreaks.length > 0 ? (
@@ -1320,7 +1320,7 @@ function EmployeeDashboard(props: any) {
             <button
               type="button"
               onClick={() => onSelectTab?.('emp-leave')}
-              className="p-2 rounded-xl text-[#0033FF] hover:bg-blue-50 transition-colors"
+              className="p-2 rounded-xl text-[#5b35e8] hover:bg-blue-50 transition-colors"
               title="Apply for leave"
             >
               <CalendarDays className="w-5 h-5" />
@@ -1348,7 +1348,7 @@ function EmployeeDashboard(props: any) {
             <button
               type="button"
               onClick={() => onSelectTab?.('emp-tasks')}
-              className="p-2 rounded-xl text-[#0033FF] hover:bg-blue-50 transition-colors"
+              className="p-2 rounded-xl text-[#5b35e8] hover:bg-blue-50 transition-colors"
               title="View all tasks"
             >
               <BriefcaseBusiness className="w-5 h-5" />
@@ -1383,7 +1383,7 @@ function EmployeeDashboard(props: any) {
             <button
               type="button"
               onClick={() => onSelectTab?.('emp-payroll')}
-              className="p-2 rounded-xl text-[#0033FF] hover:bg-blue-50 transition-colors"
+              className="p-2 rounded-xl text-[#5b35e8] hover:bg-blue-50 transition-colors"
               title="View payroll history"
             >
               <WalletCards className="w-5 h-5" />
@@ -1611,7 +1611,7 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
               disabled={busy || isCheckedIn}
               onClick={() => setCheckInMode('office')}
               className={`min-h-[52px] p-3 rounded-xl border flex items-center justify-center gap-2.5 text-xs font-bold transition-all ${effectiveMode === 'office'
-                  ? 'bg-[#0033FF] text-white border-[#0033FF] shadow-sm'
+                  ? 'bg-[#5b35e8] text-white border-[#5b35e8] shadow-sm'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 } ${isCheckedIn ? 'cursor-default opacity-95' : 'cursor-pointer active:scale-[0.99]'}`}
             >
@@ -1625,7 +1625,7 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
               disabled={busy || isCheckedIn}
               onClick={() => setCheckInMode('wfh')}
               className={`min-h-[52px] p-3 rounded-xl border flex items-center justify-center gap-2.5 text-xs font-bold transition-all ${effectiveMode === 'wfh'
-                  ? 'bg-[#0033FF] text-white border-[#0033FF] shadow-sm'
+                  ? 'bg-[#5b35e8] text-white border-[#5b35e8] shadow-sm'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 } ${isCheckedIn ? 'cursor-default opacity-95' : 'cursor-pointer active:scale-[0.99]'}`}
             >
@@ -1677,7 +1677,7 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
                       `Checked in · ${effectiveMode === 'wfh' ? 'WFH' : 'Office'}`
                     )
                   }
-                  className="w-full sm:w-auto px-6 py-3.5 min-h-[48px] rounded-xl bg-[#0033FF] hover:bg-[#0600AB] text-white text-xs sm:text-sm font-bold shadow-sm transition-all active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto px-6 py-3.5 min-h-[48px] rounded-xl bg-[#5b35e8] hover:bg-[#4a27c7] text-white text-xs sm:text-sm font-bold shadow-sm transition-all active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   <Play className="w-4 h-4 fill-current" />
                   <span>{busy ? 'Saving…' : `CHECK IN · ${effectiveMode === 'wfh' ? 'WORK FROM HOME' : 'OFFICE'}`}</span>
@@ -1699,7 +1699,7 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
                     type="button"
                     disabled={busy}
                     onClick={() => setCheckoutOpen(true)}
-                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#00033D] hover:bg-slate-900 text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
+                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#14112b] hover:bg-slate-900 text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>{busy ? 'Saving…' : 'CHECK OUT'}</span>
@@ -1856,8 +1856,8 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
                 type="button"
                 onClick={() => void openDateDetails(ds)}
                 title={cl.type === 'holiday' ? cl.label : approvedLeave ? 'Approved leave' : label}
-                className={`h-16 sm:h-20 rounded-xl border p-1.5 sm:p-2 flex flex-col justify-between text-left transition-all hover:border-[#0033FF] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0033FF]/30 active:scale-[0.98] ${ds === today() ? 'ring-2 ring-[#0033FF]/30 font-semibold' : ''
-                  } ${selectedDate === ds ? 'border-[#0033FF] bg-blue-50/20' : ''}`}
+                className={`h-16 sm:h-20 rounded-xl border p-1.5 sm:p-2 flex flex-col justify-between text-left transition-all hover:border-[#5b35e8] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[#5b35e8]/30 active:scale-[0.98] ${ds === today() ? 'ring-2 ring-[#5b35e8]/30 font-semibold' : ''
+                  } ${selectedDate === ds ? 'border-[#5b35e8] bg-blue-50/20' : ''}`}
               >
                 <span className="text-[11px] sm:text-xs font-bold text-slate-800">{d}</span>
                 <span className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold truncate max-w-full ${textColor}`}>
@@ -1881,7 +1881,7 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
             <button
               type="button"
               onClick={() => setShowAllRecent((v) => !v)}
-              className="text-xs font-bold text-[#0033FF] hover:underline"
+              className="text-xs font-bold text-[#5b35e8] hover:underline"
             >
               {showAllRecent ? 'Show less' : `View all (${sortedAttendance.length})`}
             </button>
@@ -2008,7 +2008,7 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
         >
           {dateLoading ? (
             <div className="p-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-[#0033FF]" />
+              <RefreshCw className="w-4 h-4 animate-spin text-[#5b35e8]" />
               <span>Loading attendance records…</span>
             </div>
           ) : dateError ? (

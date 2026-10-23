@@ -374,7 +374,7 @@ export function Notice({ tone = 'rose', title, children, action }: { tone?: Tone
     <div className={cx('rise rounded-2xl px-4 py-3 text-sm flex items-start justify-between gap-3', toneSoft[tone])} role={tone === 'rose' ? 'alert' : 'status'}>
       <div className="min-w-0">
         {title && <p className="font-bold">{title}</p>}
-        {children && <div className={cx(title && 'mt-0.5', 'opacity-90')}>{children}</div>}
+        {children && <div className={cx(title ? 'mt-0.5' : false, 'opacity-90')}>{children}</div>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>

@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, Mail } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, Mail, ArrowLeft, ArrowRight } from 'lucide-react';
+import { AuthLayout, AuthField } from '../../ui/AuthLayout';
+import { PillTabs } from '../../ui';
 
 type Portal = 'employee' | 'admin' | 'client';
 
 interface PortalMeta {
   roleName: string;
+  headline: string;
   subtitle: string;
   identifierLabel: string;
   identifierPlaceholder: string;
@@ -16,21 +19,24 @@ interface PortalMeta {
 const PORTAL_META: Record<Portal, PortalMeta> = {
   employee: {
     roleName: 'Employee',
-    subtitle: 'Employee Attendance & Work Portal',
+    headline: 'Your day, your work and your time off — in one place.',
+    subtitle: 'Sign in to your employee workspace.',
     identifierLabel: 'Login ID',
     identifierPlaceholder: 'Username / Login ID',
     emptyError: 'Please enter your Login ID and password.',
   },
   admin: {
     roleName: 'Admin',
-    subtitle: 'Administration & HR Management',
+    headline: 'People, clients and delivery under one roof.',
+    subtitle: 'Sign in to administration.',
     identifierLabel: 'Admin ID',
     identifierPlaceholder: 'Admin ID',
     emptyError: 'Please enter your Admin ID and password.',
   },
   client: {
     roleName: 'Client',
-    subtitle: 'Client Project & Contract Portal',
+    headline: 'Contracts, deliverables and billing for your account.',
+    subtitle: 'Sign in to your client portal.',
     identifierLabel: 'Client Login ID',
     identifierPlaceholder: 'Login ID or email',
     emptyError: 'Please enter your Client Login ID and password.',
@@ -46,7 +52,6 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -127,310 +132,137 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     }
   };
 
+  const portalTabs: Array<{ id: Portal; label: string }> = [
+    { id: 'employee', label: 'Employee' },
+    { id: 'admin', label: 'Admin' },
+    { id: 'client', label: 'Client' },
+  ];
+
+  const errorBox = (text: string) => (
+    <div className="rise flex items-start gap-2.5 rounded-2xl bg-rose-50 px-4 py-3 text-[13px] text-rose-700" role="alert">
+      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+      <span>{text}</span>
+    </div>
+  );
+
   return (
-    <main className="ira-login-page">
-      {/* Ambient background glow (from fluid login reference, adapted to IRA palette) */}
-      <div className="ira-fluid-background" aria-hidden="true">
-        <div className="ira-fluid-blob ira-fluid-blob-one" />
-        <div className="ira-fluid-blob ira-fluid-blob-two" />
-      </div>
-
-      {/* Two-column container on desktop; single form on mobile */}
-      <div className="ira-login-container">
-        {/* LEFT COLUMN: Clean, middle-aligned animated Welcome Back (Desktop only) */}
-        <section className="ira-login-brand-panel" aria-label="Welcome Back">
-          <div className="ira-welcome-container">
-            <div className="ira-welcome-glow" aria-hidden="true" />
-            <h2 className="ira-welcome-title">
-              Welcome Back
-            </h2>
+    <AuthLayout eyebrow="IRA Hospitality · SIGMA 1" headline={meta.headline}>
+      {screen === 'forgot' ? (
+        <div className="space-y-6">
+          <div>
+            <h2 className="font-display text-[32px] font-bold leading-tight text-ink-950">Reset password</h2>
+            <p className="mt-2 text-sm text-ink-500">
+              {activePortal === 'client'
+                ? resetSent ? 'Check your email for the recovery link.' : 'Enter the email address your account was created with.'
+                : 'For security, staff passwords are reset by your administrator.'}
+            </p>
           </div>
-        </section>
 
-        {/* RIGHT COLUMN: The Auth Form (Desktop and Mobile) */}
-        <section className="ira-login-form-panel" aria-label="Sign In">
-          {screen === 'forgot' ? (
-            <div className="ira-login-form-box">
-              <div className="ira-form-header">
-                <img
-                  src="/ira-hospitality-logo.png"
-                  alt="IRA Hospitality"
-                  className="ira-form-logo"
-                />
-                <h1 className="ira-form-title">PASSWORD RESET</h1>
-                <p className="ira-form-subtitle">
-                  {resetSent
-                    ? 'Check your email for the recovery link.'
-                    : 'Enter your registered email to reset your password.'}
-                </p>
+          {activePortal !== 'client' ? (
+            <div className="space-y-5">
+              <div className="inset-tile p-4 text-[13px] text-ink-600 leading-relaxed">
+                {activePortal === 'employee'
+                  ? 'Ask your HR or system administrator to reset your password. They will give you a temporary password, which you can change from your Profile after signing in.'
+                  : 'Ask the system owner to reset the administrator password.'}
               </div>
-
-              {resetError && (
-                <div className="ira-login-error" role="alert">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                  <span>{resetError}</span>
-                </div>
-              )}
-
-              {resetSent ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    If an account matches <span className="text-white font-medium">{resetEmail}</span>, we have sent a secure link to reset your password.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResetSent(false);
-                      setResetEmail('');
-                      setScreen('login');
-                    }}
-                    className="ira-submit-btn"
-                  >
-                    BACK TO SIGN IN
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleResetPassword} className="ira-login-form" noValidate>
-                  <label className="ira-form-field">
-                    <span className="sr-only">Registered Email</span>
-                    <div className="ira-input-wrapper">
-                      <Mail className="ira-input-icon" aria-hidden="true" />
-                      <input
-                        id="ira-reset-email"
-                        type="email"
-                        value={resetEmail}
-                        onChange={e => {
-                          setResetEmail(e.target.value);
-                          if (resetError) setResetError('');
-                        }}
-                        autoComplete="email"
-                        autoCapitalize="none"
-                        spellCheck={false}
-                        placeholder="Registered email address"
-                        aria-label="Registered email address"
-                        className="ira-input"
-                        required
-                      />
-                    </div>
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={resetLoading}
-                    className="ira-submit-btn"
-                  >
-                    {resetLoading ? 'SENDING LINK…' : 'SEND RESET LINK'}
-                  </button>
-
-                  <div className="ira-portal-switch">
-                    <button
-                      type="button"
-                      className="ira-switch-btn"
-                      onClick={() => {
-                        setResetError('');
-                        setScreen('login');
-                      }}
-                    >
-                      BACK TO SIGN IN
-                    </button>
-                  </div>
-                </form>
-              )}
+              <button type="button" onClick={() => setScreen('login')} className="btn-secondary w-full !min-h-[52px]">
+                <ArrowLeft className="w-4 h-4" /> Back to sign in
+              </button>
+            </div>
+          ) : resetSent ? (
+            <div className="space-y-5">
+              <p className="text-sm text-ink-600 leading-relaxed">
+                If an account matches <span className="font-semibold text-ink-900">{resetEmail}</span>, we have sent a secure link to reset your password.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setResetSent(false); setResetEmail(''); setScreen('login'); }}
+                className="btn-primary w-full !min-h-[52px]"
+              >
+                Back to sign in
+              </button>
             </div>
           ) : (
-            <div className="ira-login-form-box">
-              {/* Header: Logo & Title */}
-              <div className="ira-form-header">
-                <img
-                  src="/ira-hospitality-logo.png"
-                  alt="IRA Hospitality"
-                  className="ira-form-logo"
-                />
-                <h1 className="ira-form-title">SIGN IN</h1>
-                <p className="ira-form-subtitle">
-                  {meta.subtitle}
-                </p>
-              </div>
-
-              {/* Error Message */}
-              {error && (
-                <div className="ira-login-error" role="alert">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Form */}
-              <form onSubmit={submit} className="ira-login-form" noValidate>
-                <label className="ira-form-field">
-                  <span className="sr-only">{meta.identifierLabel}</span>
-                  <div className="ira-input-wrapper">
-                    <UserRound className="ira-input-icon" aria-hidden="true" />
-                    <input
-                      id="ira-login-identifier"
-                      value={identifier}
-                      onChange={e => {
-                        setIdentifier(e.target.value);
-                        if (error) setError('');
-                      }}
-                      autoComplete="username"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      inputMode="text"
-                      enterKeyHint="next"
-                      placeholder={meta.identifierPlaceholder}
-                      aria-label={meta.identifierLabel}
-                      className="ira-input"
-                    />
-                  </div>
-                </label>
-
-                <label className="ira-form-field">
-                  <span className="sr-only">Password</span>
-                  <div className="ira-input-wrapper">
-                    <LockKeyhole className="ira-input-icon" aria-hidden="true" />
-                    <input
-                      id="ira-login-password"
-                      value={password}
-                      onChange={e => {
-                        setPassword(e.target.value);
-                        if (error) setError('');
-                      }}
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      enterKeyHint="done"
-                      placeholder="Password"
-                      aria-label="Password"
-                      className="ira-input pr-12"
-                    />
-                    <button
-                      type="button"
-                      className="ira-password-toggle"
-                      onClick={() => setShowPassword(v => !v)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </label>
-
-                <div className="flex items-center justify-between text-xs text-slate-400 px-1 -mt-1">
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-300 select-none">
-                    <input
-                      type="checkbox"
-                      checked={keepSignedIn}
-                      onChange={e => setKeepSignedIn(e.target.checked)}
-                      className="rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
-                    />
-                    <span>Keep me signed in</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScreen('forgot');
-                      setError('');
-                    }}
-                    className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="ira-submit-btn"
-                >
-                  {loading ? 'SIGNING IN…' : 'SIGN IN'}
-                </button>
-              </form>
-
-              {/* Portal Switchers */}
-              <div className="ira-portal-switch">
-                {activePortal === 'employee' && (
-                  <>
-                    <div className="flex items-center gap-1.5 w-full justify-center">
-                      <span className="ira-switch-prompt">Have an admin account?</span>
-                      <button
-                        type="button"
-                        className="ira-switch-btn"
-                        onClick={() => switchPortal('admin')}
-                      >
-                        ADMIN LOGIN
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-1.5 w-full justify-center mt-1">
-                      <span className="ira-switch-prompt">Have a client account?</span>
-                      <button
-                        type="button"
-                        className="ira-switch-btn"
-                        onClick={() => switchPortal('client')}
-                      >
-                        CLIENT LOGIN
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {activePortal === 'admin' && (
-                  <>
-                    <div className="flex items-center gap-1.5 w-full justify-center">
-                      <span className="ira-switch-prompt">Have an employee account?</span>
-                      <button
-                        type="button"
-                        className="ira-switch-btn"
-                        onClick={() => switchPortal('employee')}
-                      >
-                        EMPLOYEE LOGIN
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-1.5 w-full justify-center mt-1">
-                      <span className="ira-switch-prompt">Have a client account?</span>
-                      <button
-                        type="button"
-                        className="ira-switch-btn"
-                        onClick={() => switchPortal('client')}
-                      >
-                        CLIENT LOGIN
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {activePortal === 'client' && (
-                  <>
-                    <div className="flex items-center gap-1.5 w-full justify-center">
-                      <span className="ira-switch-prompt">Have an employee account?</span>
-                      <button
-                        type="button"
-                        className="ira-switch-btn"
-                        onClick={() => switchPortal('employee')}
-                      >
-                        EMPLOYEE LOGIN
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-1.5 w-full justify-center mt-1">
-                      <span className="ira-switch-prompt">Have an admin account?</span>
-                      <button
-                        type="button"
-                        className="ira-switch-btn"
-                        onClick={() => switchPortal('admin')}
-                      >
-                        ADMIN LOGIN
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
+              {resetError && errorBox(resetError)}
+              <AuthField
+                icon={<Mail className="w-[18px] h-[18px]" />}
+                id="ira-reset-email"
+                type="email"
+                value={resetEmail}
+                onChange={e => { setResetEmail(e.target.value); if (resetError) setResetError(''); }}
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="Email address"
+                aria-label="Email address"
+                required
+              />
+              <button type="submit" disabled={resetLoading} className="btn-primary w-full !min-h-[52px]">
+                {resetLoading ? 'Sending link…' : 'Send reset link'}
+              </button>
+              <button type="button" onClick={() => { setResetError(''); setScreen('login'); }} className="btn-ghost w-full">
+                <ArrowLeft className="w-4 h-4" /> Back to sign in
+              </button>
+            </form>
           )}
-        </section>
-      </div>
-    </main>
+        </div>
+      ) : (
+        <div className="space-y-7">
+          <div>
+            <h2 className="font-display text-[32px] font-bold leading-tight text-ink-950">Sign in</h2>
+            <p className="mt-2 text-sm text-ink-500">{meta.subtitle}</p>
+          </div>
+
+          <PillTabs items={portalTabs} value={activePortal} onChange={switchPortal} className="w-full [&>button]:flex-1 [&>button]:justify-center" />
+
+          <form onSubmit={submit} className="space-y-4" noValidate>
+            {error && errorBox(error)}
+            <AuthField
+              icon={<UserRound className="w-[18px] h-[18px]" />}
+              id="ira-login-identifier"
+              value={identifier}
+              onChange={e => { setIdentifier(e.target.value); if (error) setError(''); }}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode="text"
+              enterKeyHint="next"
+              placeholder={meta.identifierPlaceholder}
+              aria-label={meta.identifierLabel}
+            />
+            <AuthField
+              icon={<LockKeyhole className="w-[18px] h-[18px]" />}
+              id="ira-login-password"
+              value={password}
+              onChange={e => { setPassword(e.target.value); if (error) setError(''); }}
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="done"
+              placeholder="Password"
+              aria-label="Password"
+              trailing={
+                <button type="button" className="icon-btn" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                  {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+                </button>
+              }
+            />
+            <div className="flex justify-end">
+              <button type="button" onClick={() => { setScreen('forgot'); setError(''); }} className="text-[13px] font-semibold text-brand-700 hover:text-brand-800">
+                Forgot password?
+              </button>
+            </div>
+            <button type="submit" disabled={loading} className="btn-primary w-full !min-h-[52px] !text-sm">
+              {loading ? 'Signing in…' : <>Sign in <ArrowRight className="w-4 h-4" /></>}
+            </button>
+          </form>
+        </div>
+      )}
+    </AuthLayout>
   );
 };
 

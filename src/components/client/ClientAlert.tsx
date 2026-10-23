@@ -19,17 +19,17 @@ export const ClientAlert: React.FC<ClientAlertProps> = ({
   className = '',
 }) => {
   const toneClasses = {
-    err: 'bg-[#fceeee] border-[#f0c4c4]',
-    warn: 'bg-[#fbf3e2] border-[#efdcb3]',
-    ok: 'bg-[#e7f4ee] border-[#bfe0d0]',
-    info: 'bg-[#e9f1fb] border-[#c5daf4]',
+    err: 'bg-[#fdecec] border-[#f0c4c4]',
+    warn: 'bg-[#fdf4e3] border-[#efdcb3]',
+    ok: 'bg-[#eaf8f1] border-[#bfe0d0]',
+    info: 'bg-[#f3f0fe] border-[#c5daf4]',
   }[tone];
 
   const iconClasses = {
-    err: 'text-[#d64545]',
+    err: 'text-[#d13f45]',
     warn: 'text-[#b7791f]',
-    ok: 'text-[#16845b]',
-    info: 'text-[#3478d4]',
+    ok: 'text-[#22895f]',
+    info: 'text-[#5b35e8]',
   }[tone];
 
   const IconComponent =
@@ -42,9 +42,9 @@ export const ClientAlert: React.FC<ClientAlertProps> = ({
     >
       <IconComponent size={16} className={`mt-0.5 shrink-0 ${iconColors(tone)}`} />
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-[#172033]">{title}</div>
+        <div className="text-[13px] font-medium text-[#14112b]">{title}</div>
         {children && (
-          <div className="text-xs text-[#697386] mt-0.5 leading-relaxed">{children}</div>
+          <div className="text-xs text-[#5e5a80] mt-0.5 leading-relaxed">{children}</div>
         )}
       </div>
       {action}
@@ -55,13 +55,13 @@ export const ClientAlert: React.FC<ClientAlertProps> = ({
 function iconColors(tone: AlertTone) {
   switch (tone) {
     case 'ok':
-      return 'text-[#16845b]';
+      return 'text-[#22895f]';
     case 'warn':
       return 'text-[#b7791f]';
     case 'info':
-      return 'text-[#3478d4]';
+      return 'text-[#5b35e8]';
     case 'err':
     default:
-      return 'text-[#d64545]';
+      return 'text-[#d13f45]';
   }
 }

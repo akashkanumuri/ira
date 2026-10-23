@@ -280,7 +280,7 @@ export function Stat({
       onClick={onClick}
       className={cx(
         'bg-surface border border-line rounded-lg p-4 text-left',
-        onClick && 'hover:border-[#c9cfdb] transition-colors cursor-pointer'
+        onClick && 'hover:border-[#c8c6d6] transition-colors cursor-pointer'
       )}
     >
       <div className="text-xs text-ink-2">{label}</div>
@@ -465,7 +465,7 @@ export function Field({
 }
 
 const ctl =
-  'w-full h-9 px-3 rounded-md border bg-surface text-[13px] text-ink placeholder:text-ink-3 transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:bg-bg disabled:text-ink-3';
+  'w-full h-9 px-3 rounded-md border bg-surface text-[13px] text-ink placeholder:text-ink-3 transition-colors hover:border-[#c8c6d6] focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:bg-bg disabled:text-ink-3';
 
 export const Input = ({
   error,
@@ -850,7 +850,7 @@ export function Dialog({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-[#172033]/40 anim-fade"
+      className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-[#14112b]/40 anim-fade"
       onClick={onClose}
     >
       <div
@@ -904,7 +904,7 @@ export function SidePanel({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-[#172033]/30 anim-fade" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-[#14112b]/30 anim-fade" onClick={onClose}>
       <aside
         role="dialog"
         aria-label={title}

@@ -95,8 +95,8 @@ export const ClientPasswordSetupScreen: React.FC = () => {
         tag="Account setup"
         line="Choose a password you’ll use to sign in from now on."
       >
-        <div className="py-12 text-center text-[#697386] text-[13px] flex flex-col items-center gap-3">
-          <Loader2 size={24} className="animate-spin text-[#243b64]" />
+        <div className="py-12 text-center text-[#5e5a80] text-[13px] flex flex-col items-center gap-3">
+          <Loader2 size={24} className="animate-spin text-[#5b35e8]" />
           <span>Verifying your invitation link…</span>
         </div>
       </ClientAuthLayout>
@@ -110,18 +110,18 @@ export const ClientPasswordSetupScreen: React.FC = () => {
         tag="Invitation"
         line="Secure links expire to keep your account safe."
       >
-        <div className="w-10 h-10 rounded-md bg-[#fbf3e2] text-[#b7791f] grid place-items-center mb-4">
+        <div className="w-10 h-10 rounded-md bg-[#fdf4e3] text-[#b7791f] grid place-items-center mb-4">
           <TimerOff size={18} />
         </div>
-        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#172033]">
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#14112b]">
           This invitation link has expired
         </h1>
-        <p className="text-[13px] text-[#697386] mt-1.5 mb-6 leading-relaxed">
+        <p className="text-[13px] text-[#5e5a80] mt-1.5 mb-6 leading-relaxed">
           {verifyError}
         </p>
         <a
           href="/client/login"
-          className="inline-flex items-center gap-1.5 text-[13px] text-[#697386] hover:text-[#172033] transition-colors"
+          className="inline-flex items-center gap-1.5 text-[13px] text-[#5e5a80] hover:text-[#14112b] transition-colors"
         >
           <ArrowLeft size={14} /> Back to sign in
         </a>
@@ -136,19 +136,19 @@ export const ClientPasswordSetupScreen: React.FC = () => {
         tag="Account setup"
         line="Choose a password you’ll use to sign in from now on."
       >
-        <div className="w-10 h-10 rounded-md bg-[#e7f4ee] text-[#16845b] grid place-items-center mb-4">
+        <div className="w-10 h-10 rounded-md bg-[#eaf8f1] text-[#22895f] grid place-items-center mb-4">
           <CheckCircle2 size={18} />
         </div>
-        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#172033]">
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#14112b]">
           Password set
         </h1>
-        <p className="text-[13px] text-[#697386] mt-1.5 mb-6 leading-relaxed">
+        <p className="text-[13px] text-[#5e5a80] mt-1.5 mb-6 leading-relaxed">
           Your account is ready. Sign in with{' '}
-          <span className="font-medium text-[#172033]">{clientInfo?.email}</span> and your new password.
+          <span className="font-medium text-[#14112b]">{clientInfo?.email}</span> and your new password.
         </p>
         <a
           href="/client/login"
-          className="w-full h-10 inline-flex items-center justify-center rounded-md font-medium text-[13px] bg-[#243b64] text-white hover:bg-[#1c2f50] border border-[#243b64] transition-colors no-underline"
+          className="w-full h-10 inline-flex items-center justify-center rounded-md font-medium text-[13px] bg-[#5b35e8] text-white hover:bg-[#4a27c7] border border-[#5b35e8] transition-colors no-underline"
         >
           Continue to sign in
         </a>
@@ -162,10 +162,10 @@ export const ClientPasswordSetupScreen: React.FC = () => {
       tag="Account setup"
       line="Choose a password you’ll use to sign in from now on."
     >
-      <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[#172033]">
+      <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[#14112b]">
         Set your password
       </h1>
-      <p className="text-[13px] text-[#697386] mt-1.5 mb-6">
+      <p className="text-[13px] text-[#5e5a80] mt-1.5 mb-6">
         For {clientInfo?.email || 'your account'}
         {clientInfo?.companyName ? ` · ${clientInfo.companyName}` : ''}
       </p>
@@ -178,8 +178,8 @@ export const ClientPasswordSetupScreen: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div>
-          <label htmlFor="setup-new-password" className="block text-xs font-medium text-[#172033] mb-1.5">
-            New password <span className="text-[#d64545]">*</span>
+          <label htmlFor="setup-new-password" className="block text-xs font-medium text-[#14112b] mb-1.5">
+            New password <span className="text-[#d13f45]">*</span>
           </label>
           <div className="relative">
             <input
@@ -195,13 +195,13 @@ export const ClientPasswordSetupScreen: React.FC = () => {
               autoCorrect="off"
               spellCheck={false}
               required
-              className="w-full h-9 pl-3 pr-9 rounded-md border border-[#e5e8ef] bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15"
+              className="w-full h-9 pl-3 pr-9 rounded-md border border-[#ecebf3] bg-white text-[13px] text-[#14112b] placeholder:text-[#a3a0b8] transition-colors hover:border-[#c8c6d6] focus:outline-none focus:border-[#5b35e8] focus:ring-2 focus:ring-[#5b35e8]/15"
             />
             <button
               type="button"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               onClick={() => setShowPassword(v => !v)}
-              className="absolute right-0 top-0 h-9 w-9 grid place-items-center text-[#8a93a5] hover:text-[#172033] transition-colors cursor-pointer"
+              className="absolute right-0 top-0 h-9 w-9 grid place-items-center text-[#a3a0b8] hover:text-[#14112b] transition-colors cursor-pointer"
             >
               {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
@@ -209,8 +209,8 @@ export const ClientPasswordSetupScreen: React.FC = () => {
         </div>
 
         <div>
-          <label htmlFor="setup-confirm-password" className="block text-xs font-medium text-[#172033] mb-1.5">
-            Confirm password <span className="text-[#d64545]">*</span>
+          <label htmlFor="setup-confirm-password" className="block text-xs font-medium text-[#14112b] mb-1.5">
+            Confirm password <span className="text-[#d13f45]">*</span>
           </label>
           <input
             id="setup-confirm-password"
@@ -225,7 +225,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
             autoCorrect="off"
             spellCheck={false}
             required
-            className="w-full h-9 px-3 rounded-md border border-[#e5e8ef] bg-white text-[13px] text-[#172033] placeholder:text-[#8a93a5] transition-colors hover:border-[#c9cfdb] focus:outline-none focus:border-[#243b64] focus:ring-2 focus:ring-[#243b64]/15"
+            className="w-full h-9 px-3 rounded-md border border-[#ecebf3] bg-white text-[13px] text-[#14112b] placeholder:text-[#a3a0b8] transition-colors hover:border-[#c8c6d6] focus:outline-none focus:border-[#5b35e8] focus:ring-2 focus:ring-[#5b35e8]/15"
           />
         </div>
 
@@ -235,7 +235,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
             <li
               key={text}
               className={`flex items-center gap-2 text-xs transition-colors ${
-                ok ? 'text-[#16845b]' : 'text-[#8a93a5]'
+                ok ? 'text-[#22895f]' : 'text-[#a3a0b8]'
               }`}
             >
               <CheckCircle2 size={13} strokeWidth={ok ? 2.5 : 2} className="shrink-0" />
@@ -247,7 +247,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
         <button
           type="submit"
           disabled={submitting || !isFormValid}
-          className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-md font-medium text-[13px] bg-[#243b64] text-white hover:bg-[#1c2f50] border border-[#243b64] transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+          className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-md font-medium text-[13px] bg-[#5b35e8] text-white hover:bg-[#4a27c7] border border-[#5b35e8] transition-colors disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
         >
           {submitting ? (
             <>
@@ -260,8 +260,8 @@ export const ClientPasswordSetupScreen: React.FC = () => {
         </button>
       </form>
 
-      <p className="text-xs text-[#8a93a5] mt-5 flex gap-1.5 leading-relaxed">
-        <ShieldCheck size={13} className="shrink-0 mt-0.5 text-[#243b64]" />
+      <p className="text-xs text-[#a3a0b8] mt-5 flex gap-1.5 leading-relaxed">
+        <ShieldCheck size={13} className="shrink-0 mt-0.5 text-[#5b35e8]" />
         <span>Passwords are stored securely and can’t be viewed by anyone, including administrators.</span>
       </p>
     </ClientAuthLayout>
