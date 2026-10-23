@@ -137,6 +137,7 @@ begin
     perform private.require(v_note is not null, 'Say what is blocking the task');
   elsif p_to = 'awaiting_review' then
     perform private.require(v_assignee and t.status in ('accepted','in_progress','revision_required'), 'This task can’t be handed in now');
+    v_link := coalesce(v_link, nullif(btrim(coalesce(t.submitted_link, '')), ''));  -- same link, updated file
     perform private.require(v_link is not null, 'Add the link to this draft');
     perform private.require(v_link ~* '^https?://', 'The link must start with http:// or https://');
     perform private.require(private.task_open_subtasks(t.id) = 0, 'Finish or cancel the subtasks first');

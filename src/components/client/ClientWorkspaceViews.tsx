@@ -1011,26 +1011,26 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
   const prog = computeProgress(ws.deliverables);
   const [depId, setDepId] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
+  const [link, setLink] = useState('');
   const [busy, setBusy] = useState(false);
   const dep = ws.dependencies.find(x => x.id === depId) ?? null;
+  const linkOk = /^https?:\/\/\S+$/i.test(link.trim());
   const openDeps = (deliverableId: string) =>
     ws.dependencies.filter(x => x.deliverable_id === deliverableId && ['Requested', 'Pending', 'Rejected', 'Resubmission Required'].includes(x.status));
 
   const submit = async () => {
     if (!dep) return;
     setBusy(true);
-    const uploaded: string[] = [];
     try {
-      for (const f of files) uploaded.push(await uploadAndAttach(f, 'dependency', dep.id, { visibility: 'client' }));
-      await rpc('client_submit_dependency', { p_dependency_id: dep.id, p_note: note.trim() || null, p_file_ids: uploaded });
-      toast('Thank you — your project team has been notified.');
+      const body = [linkOk ? `Link: ${link.trim()}` : '', note.trim()].filter(Boolean).join('\n\n');
+      await rpc('client_submit_dependency', { p_dependency_id: dep.id, p_note: body || null, p_file_ids: [] });
+      toast('Thank you — the IRA team has been notified.');
       setDepId(null);
-      setFiles([]);
+      setLink('');
       setNote('');
       await reload();
     } catch (e) {
-      toast(errorMessage(e) + (uploaded.length ? ' Uploaded files were saved; please submit again.' : ''), 'err');
+      toast(errorMessage(e), 'err');
       await reload();
     } finally {
       setBusy(false);
@@ -1087,7 +1087,7 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
         footer={
           <>
             <Button onClick={() => setDepId(null)} disabled={busy}>Cancel</Button>
-            <Button variant="primary" loading={busy} disabled={files.length === 0 && note.trim().length < 3} onClick={submit}>Submit</Button>
+            <Button variant="primary" loading={busy} disabled={(link.trim() !== '' && !linkOk) || (!linkOk && note.trim().length < 3)} onClick={submit}>Submit</Button>
           </>
         }
       >
@@ -1099,14 +1099,16 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
             <Alert tone="info" title="Do not upload passwords">
               If access credentials are needed, share them through your organisation’s password manager or ask the IRA team for a secure method.
             </Alert>
-            <FilePicker files={files} onChange={setFiles} />
-            <Field label="Note or link" hint="Optional when you attach files.">
+            <Field label="Link to the material" hint="Share a Google Drive, Dropbox, WeTransfer or similar link with view access.">
+              <Input value={link} inputMode="url" maxLength={1500} onChange={e => setLink(e.target.value)} placeholder="https://" />
+            </Field>
+            {link.trim() !== '' && !linkOk && <p className="text-xs text-err -mt-2">The link must start with https://</p>}
+            <Field label="Note" hint={linkOk ? 'Optional.' : 'Add a link, or describe what you are sending.'}>
               <Textarea value={note} maxLength={2000} onChange={e => setNote(e.target.value)} />
             </Field>
-            <FileList
-              files={latestFiles(ws.files.filter(f => f.parent_type === 'dependency' && f.parent_id === dep.id))}
-              emptyText="No files uploaded yet."
-            />
+            {ws.files.some(f => f.parent_type === 'dependency' && f.parent_id === dep.id) && (
+              <FileList files={latestFiles(ws.files.filter(f => f.parent_type === 'dependency' && f.parent_id === dep.id))} emptyText="" />
+            )}
           </div>
         )}
       </SidePanel>
@@ -1126,7 +1128,6 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
   const [payOpen, setPayOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pay, setPay] = useState({ amount: '', reference: '', paidOn: todayIST(), method: 'bank_transfer' });
-  const [proof, setProof] = useState<File[]>([]);
   const keyRef = useRef<string>(idempotencyKey('pay'));
 
   const inst = ws.installments.find(i => i.id === instId) ?? null;
@@ -1142,7 +1143,6 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
   const startPay = (i: InstallmentRow) => {
     setInstId(i.id);
     setPay({ amount: String(outstanding(i)), reference: '', paidOn: todayIST(), method: 'bank_transfer' });
-    setProof([]);
     keyRef.current = idempotencyKey('pay');
     setPayOpen(true);
   };
@@ -1151,15 +1151,13 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
     if (!inst) return;
     setBusy(true);
     try {
-      let proofId: string | null = null;
-      if (proof[0]) proofId = await uploadAndAttach(proof[0], 'payment', inst.id, { visibility: 'client' });
       await rpc('client_submit_payment', {
         p_installment_id: inst.id,
         p_amount: Number(pay.amount),
         p_reference: pay.reference.trim(),
         p_paid_on: pay.paidOn,
         p_method: pay.method,
-        p_proof_file_id: proofId,
+        p_proof_file_id: null,
         p_idempotency_key: keyRef.current,
       });
       toast('Payment details submitted. The milestone updates once finance verifies the receipt.');
@@ -1315,9 +1313,6 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
           </Field>
           <Field label="Transaction reference / UTR" required>
             <Input value={pay.reference} maxLength={120} onChange={e => setPay({ ...pay, reference: e.target.value })} placeholder="e.g. UTR 4021 8830 1123" />
-          </Field>
-          <Field label="Payment proof (optional)">
-            <FilePicker files={proof} onChange={f => setProof(f.slice(-1))} label="Attach receipt" />
           </Field>
         </div>
       </SidePanel>

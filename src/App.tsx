@@ -190,8 +190,14 @@ const CROSS_ROLE: Record<string, string> = {
 const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-tasks', 'emp-tasks>admin-tasks', 'admin-support>emp-support', 'emp-support>admin-support']);
 
 /** The page a path resolves to for this role; links meant for the other role land on the closest equivalent. */
+/** Older notification links that pre-date the current routes. */
+const LEGACY_ROUTES: Record<string, string> = {
+  'admin/clients': 'admin-clients', 'my-deliverables': 'emp-client-work', 'admin/tasks': 'admin-tasks', 'admin/leave': 'admin-requests',
+};
+
 function resolveTab(role: AuthUser['role'], raw: string): string {
-  const tab = raw.replace(/^\//, '').split('?')[0];
+  const stripped = raw.replace(/^\//, '').split('?')[0].replace(/\/$/, '');
+  const tab = LEGACY_ROUTES[stripped] ?? stripped;
   const allowed = role === 'admin' ? ADMIN_TABS : EMP_TABS;
   if (allowed.includes(tab)) return tab;
   if (role === 'admin' && tab === 'admin-reports') return 'admin-export';

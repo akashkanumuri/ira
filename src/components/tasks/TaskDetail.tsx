@@ -42,6 +42,36 @@ const EVENT_TEXT: Record<string, string> = {
 
 export interface TaskViewer { employeeId: string; isAdmin: boolean }
 
+/** Per-task review numbers: how many drafts it took and how they were judged. */
+function TaskScorecard({ drafts, rounds }: { drafts: TaskDraft[]; rounds: ClientRound[] }) {
+  const decided = drafts.filter((d) => d.decision !== 'pending');
+  const approved = decided.filter((d) => d.decision === 'approved' || d.decision === 'auto_approved');
+  const changes = decided.filter((d) => d.decision === 'changes_requested');
+  const onTime = drafts.filter((d) => d.on_time !== false).length;
+  const firstApproved = [...drafts].sort((a, b) => a.draft_no - b.draft_no).find((d) => d.decision === 'approved' || d.decision === 'auto_approved');
+  const rate = (n: number, of: number) => (of ? `${Math.round((n / of) * 100)}%` : '—');
+  const clientDecided = rounds.filter((r) => r.status === 'approved' || r.status === 'changes_requested');
+  const clientOk = rounds.find((r) => r.status === 'approved');
+  const tiles: Array<{ k: string; v: string; sub: string; tone?: string }> = [
+    { k: 'Drafts', v: String(drafts.length), sub: firstApproved ? `approved on draft ${firstApproved.draft_no}` : decided.length ? 'not approved yet' : 'waiting for review' },
+    { k: 'Approval rate', v: rate(approved.length, decided.length), sub: `${approved.length} of ${decided.length} reviewed`, tone: decided.length ? 'text-mint-700' : undefined },
+    { k: 'Changes requested', v: rate(changes.length, decided.length), sub: `${changes.length} draft${changes.length === 1 ? '' : 's'} sent back`, tone: changes.length ? 'text-rose-600' : undefined },
+    { k: 'On time', v: rate(onTime, drafts.length), sub: `${onTime} of ${drafts.length} by the due date` },
+  ];
+  if (rounds.length) tiles.push({ k: 'Client', v: clientOk ? `v${clientOk.round_no} ✓` : `${rounds.length} sent`, sub: `${clientDecided.filter((r) => r.status === 'changes_requested').length} change request${clientDecided.filter((r) => r.status === 'changes_requested').length === 1 ? '' : 's'}`, tone: clientOk ? 'text-mint-700' : undefined });
+  return (
+    <section aria-label="Task scorecard" className={cx('grid gap-2', tiles.length > 4 ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4')}>
+      {tiles.map((t) => (
+        <div key={t.k} className="rounded-2xl border border-ink-100 bg-white px-3.5 py-3 min-w-0">
+          <p className="text-[11px] font-semibold text-ink-500">{t.k}</p>
+          <p className={cx('font-display text-[22px] font-bold leading-tight tnum', t.tone ?? 'text-ink-900')}>{t.v}</p>
+          <p className="text-[11px] text-ink-500 truncate">{t.sub}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function TaskDetail({
   task, tasks, employees, viewer, subtaskTargets = [], deliverableName, onClose, onChanged,
 }: {
@@ -216,6 +246,7 @@ export function TaskDetail({
             <div key={k} className="inset-tile px-3.5 py-3 min-w-0"><dt className="text-[11px] font-semibold text-ink-500">{k}</dt><dd className="text-[13px] font-bold text-ink-900 truncate mt-0.5">{v}</dd></div>
           ))}
         </dl>
+        {drafts.length > 0 && <TaskScorecard drafts={drafts} rounds={isReviewer ? rounds : []} />}
         {task.deliverableId && <p className="text-[13px] text-ink-600">Client deliverable: <b className="text-brand-700">{deliverableName?.(task.deliverableId) ?? 'Linked deliverable'}</b></p>}
         {task.description && <p className="text-[14px] text-ink-700 whitespace-pre-wrap leading-relaxed">{task.description}</p>}
 

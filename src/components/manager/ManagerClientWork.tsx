@@ -43,9 +43,6 @@ import {
   openFile,
   rpc,
   todayIST,
-  uploadAndAttach,
-  validateFile,
-  ACCEPT_ATTR,
   type DeliverableRow,
   type DeliverableStatus,
   type DependencyRow,
@@ -148,7 +145,7 @@ function MyDeliverables({ user }: { user: AuthUser }) {
   const [statusDlg, setStatusDlg] = useState<DeliverableStatus | null>(null);
   const [note, setNote] = useState('');
   const [depForm, setDepForm] = useState<{ name: string; desc: string; by: string } | null>(null);
-  const [upload, setUpload] = useState<File | null>(null);
+
   const [resubmitId, setResubmitId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -263,17 +260,13 @@ function MyDeliverables({ user }: { user: AuthUser }) {
             </section>
 
             <section>
-              <h3 className="text-[13px] font-semibold mb-2">Work files</h3>
-              {dFiles.length === 0 ? <p className="text-xs text-ink-3">No files yet.</p> : (
+              <h3 className="text-[13px] font-semibold mb-2">Work</h3>
+              {dFiles.length === 0 ? null : (
                 <ul className="space-y-1">
                   {dFiles.map(f => <li key={f.id}><button className="text-xs text-info hover:underline" onClick={() => openFile(f).catch(e => toast(errorMessage(e), 'err'))}>{f.name} (v{f.version_no}{f.visibility === 'client' ? ', client-visible' : ''})</button></li>)}
                 </ul>
               )}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <input type="file" accept={ACCEPT_ATTR} aria-label="Upload work file" className="text-xs" onChange={e => { const f = e.target.files?.[0] ?? null; if (f && validateFile(f)) { toast(validateFile(f)!, 'err'); return; } setUpload(f); }} />
-                <Button size="sm" disabled={!upload} loading={busy === 'up'} onClick={() => upload && act('up', () => uploadAndAttach(upload, 'deliverable', d.id, { visibility: 'internal' }), 'Uploaded for internal review.').then(ok => ok && setUpload(null))}>Upload</Button>
-              </div>
-              <p className="text-[11px] text-ink-3 mt-1">Your uploads are internal. Your manager publishes final files to the client.</p>
+              <p className="text-[11px] text-ink-3 mt-2">Share your work as a draft link on the linked task (My tasks). Your manager reviews it and sends approved versions to the client.</p>
             </section>
 
             {dMods.length > 0 && (

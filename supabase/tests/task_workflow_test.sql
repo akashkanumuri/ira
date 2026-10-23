@@ -81,7 +81,7 @@ begin
   insert into _r values ('self-assigned subtask closed by assignee', v = 'completed', v);
 
   begin perform public.task_transition(t2, 'awaiting_review'); ok := false;
-  exception when others then ok := sqlerrm like 'Add a link%'; end;
+  exception when others then ok := sqlerrm like 'Add the link%'; end;
   insert into _r values ('hand-in needs link or file', ok, '');
   perform public.task_transition(t2, 'awaiting_review', 'Draft attached', 'https://example.com/brief');
   select status into v from public.tasks where id = t2;

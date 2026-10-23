@@ -413,7 +413,7 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
   const history = contract ? ws.acceptances.filter(a => a.contract_id === contract.id) : [];
 
   const numOrNull = (v: string) => (v.trim() === '' ? null : Number(v));
-  const valid = form.title.trim().length >= 3 && (form.url.trim().startsWith('https://') || !!docFile || panel === 'revise') && (!form.end || !form.start || form.end >= form.start);
+  const valid = form.title.trim().length >= 3 && (form.url.trim().startsWith('https://') || panel === 'revise') && (!form.end || !form.start || form.end >= form.start);
 
   const save = async () => {
     if (panel === 'create') {
@@ -563,16 +563,9 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
             <Field label="Renewal date"><Input type="date" value={form.renewal} onChange={e => setForm({ ...form, renewal: e.target.value })} /></Field>
           </div>
           <Field label="Key terms summary"><Textarea value={form.terms} onChange={e => setForm({ ...form, terms: e.target.value })} /></Field>
-          <Field label="Document link" hint="https:// link (e.g. signed PDF in Drive). Optional if you upload the file.">
+          <Field label="Document link" hint="Share the contract as an https:// link (Drive, Dropbox, DocuSign…) with view access for the client.">
             <Input value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://" />
           </Field>
-          <div>
-            <span className="block text-xs font-medium text-ink mb-1.5">Or upload the contract document</span>
-            <input type="file" accept=".pdf,.doc,.docx" aria-label="Contract document" className="block w-full text-xs" onChange={e => {
-              const f = e.target.files?.[0] ?? null;
-              setDocFile(f && !validateFile(f) ? f : null);
-            }} />
-          </div>
         </div>
       </SidePanel>
 
@@ -615,13 +608,16 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
   const d = ws.deliverables.find(x => x.id === selected) ?? null;
   const contract = ws.contracts[0] ?? null;
   const today = todayIST();
+  /** Staff-only lookup; the database no longer stores names on client-visible rows. */
+  const respName = (x: { responsible_id: string | null; responsible_name?: string | null }) =>
+    (x.responsible_id ? employees.find(e => e.id === x.responsible_id)?.name : null) ?? x.responsible_name ?? null;
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return ws.deliverables.filter(x =>
       (filter === 'All' || x.status === filter || (filter === 'Overdue' && x.due_date && x.due_date < today && !['Completed', 'Ready for Download', 'Cancelled'].includes(x.status)) || (filter === 'Locked' && isLocked(x.lock_state))) &&
-      (!q || `${x.deliverable_number} ${x.name} ${x.responsible_name ?? ''}`.toLowerCase().includes(q)),
+      (!q || `${x.deliverable_number} ${x.name} ${respName(x) ?? ''}`.toLowerCase().includes(q)),
     );
-  }, [ws.deliverables, search, filter, today]);
+  }, [ws.deliverables, search, filter, today, employees]);
 
   const toForm = (x: DeliverableRow): DelivForm => ({
     name: x.name, description: x.description ?? '', category: x.category ?? '', quantity: String(x.quantity), unit: x.unit ?? '',
@@ -708,7 +704,7 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
           { key: 'name', head: 'Deliverable', mobile: 'title', render: r => <div className="min-w-0"><div className="font-medium text-ink truncate">{r.name}</div><div className="text-xs text-ink-3">{r.category ?? ''}{r.weightage != null ? ` · ${r.weightage}%` : ''}</div></div> },
           { key: 'q', head: 'Qty', render: r => <span className="tnum">{fmtQty(r.quantity, r.unit)}</span> },
           { key: 'due', head: 'Due', render: r => <span className={r.due_date && r.due_date < today && !['Completed', 'Ready for Download', 'Cancelled'].includes(r.status) ? 'text-err text-xs font-medium' : 'text-xs text-ink-2'}>{fmtDate(r.due_date)}</span> },
-          { key: 'o', head: 'Responsible', render: r => r.responsible_name ?? <span className="text-warn text-xs">Unassigned</span> },
+          { key: 'o', head: 'Responsible', render: r => respName(r) ?? <span className="text-warn text-xs">Unassigned</span> },
           { key: 's', head: 'Status', render: r => <span className="flex items-center gap-1.5"><Status s={r.status} />{isLocked(r.lock_state) && <Lock size={12} className="text-err" aria-label="Locked" />}</span> },
         ]}
       />
@@ -745,7 +741,7 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
                 ['Due', fmtDate(d.due_date)],
                 ['Timeline', d.timeline ?? '—'],
                 ['Weightage', d.weightage != null ? `${d.weightage}%` : '—'],
-                ['Responsible', d.responsible_name ?? 'Unassigned'],
+                ['Responsible', respName(d) ?? 'Unassigned'],
                 ['Team', d.assigned_team ?? '—'],
                 ['Client action', d.client_action ?? '—'],
                 ['Reference', d.reference_url && /^https?:\/\//.test(d.reference_url) ? <LinkRef url={d.reference_url} label="Open" /> : '—'],
@@ -766,9 +762,9 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
             </section>
 
             <section>
-              <h3 className="text-[13px] font-semibold mb-2">Files</h3>
-              <StaffFiles files={files} onArchived={() => void reload()} />
-              <div className="mt-3"><UploadBox parentType="deliverable" parentId={d.id} existing={files} allowFinal onDone={() => void reload()} /></div>
+              <h3 className="text-[13px] font-semibold mb-2">Work links</h3>
+              <p className="text-xs text-ink-3">Work is shared as links, not uploads: the team submits numbered drafts on the linked task, and approved versions go to the client from <b>Client review</b> below.</p>
+              {files.length > 0 && <div className="mt-3"><p className="text-xs font-medium text-ink-2 mb-1.5">Earlier uploads</p><StaffFiles files={files} onArchived={() => void reload()} /></div>}
             </section>
 
             <StaffClientReview deliverableId={d.id} deliverableStatus={d.status} nameOf={(id) => employees.find((e) => e.id === id)?.name ?? 'Team member'} onChanged={reload} />
