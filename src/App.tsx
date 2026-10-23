@@ -9,10 +9,12 @@ import { ClientPortalView } from './components/client/ClientPortalView';
 import { AdminClientCenter } from './components/admin/AdminClientCenter';
 import { AdminHome } from './components/admin/AdminHome';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
+import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
 import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { AppShell, type NavGroup } from './ui/AppShell';
-import { Notice as UiNotice, SkeletonPage } from './ui';
+import { Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, SkeletonPage, Stat, StatusBadge as UiStatusBadge } from './ui';
 import { Modal } from './ui/Modal';
+import { ConfirmHost, confirmDialog } from './ui/confirm';
 import { ToastHost } from './components/common/ToastHost';
 import { notify, type NotificationCategory } from './lib/toast';
 import {
@@ -667,6 +669,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         )}
       </AppShell>
       <ToastHost />
+      <ConfirmHost />
     </>
   );
 }
@@ -714,65 +717,58 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-attendance') return <MyAttendancePage {...props} />;
   if (activeTab === 'emp-client-work') return <ManagerClientWork user={props.user} employees={props.employees} />;
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
-  if (activeTab === 'emp-leave') return <LeaveEmployee {...props} />;
-  if (activeTab === 'emp-wfh') return <WfhEmployee {...props} />;
+  if (activeTab === 'emp-leave') return <LeavePage {...props} />;
+  if (activeTab === 'emp-wfh') return <WfhPage {...props} />;
   if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
-  if (activeTab === 'emp-holidays') return <HolidaysEmployee {...props} />;
+  if (activeTab === 'emp-holidays') return <HolidaysPage {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
   return <EmployeeHome {...props} onSelectTab={props.onSelectTab} />;
 }
 
-function PayrollEmployee({ payrollPeriods, payrollRecords }: any) {
+function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
+  const monthOf = (r: PayrollRecord) => (payrollPeriods as PayrollPeriod[]).find((p) => p.id === r.periodId)?.monthStart ?? '';
   const finalized = [...(payrollRecords as PayrollRecord[])]
-    .filter(record => Boolean(record.finalizedAt))
-    .sort((a, b) => {
-      const aMonth = payrollPeriods.find((period: PayrollPeriod) => period.id === a.periodId)?.monthStart ?? '';
-      const bMonth = payrollPeriods.find((period: PayrollPeriod) => period.id === b.periodId)?.monthStart ?? '';
-      return bMonth.localeCompare(aMonth) || (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? '');
-    });
+    .filter((r) => Boolean(r.finalizedAt))
+    .sort((a, b) => monthOf(b).localeCompare(monthOf(a)) || (b.finalizedAt ?? '').localeCompare(a.finalizedAt ?? ''));
+  const latest = finalized[0];
+  const year = today().slice(0, 4);
+  const ytd = finalized.filter((r) => monthOf(r).startsWith(year)).reduce((s, r) => s + r.finalPay, 0);
+  const monthName = (r: PayrollRecord) => (monthOf(r) ? new Date(`${monthOf(r)}T12:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : '—');
 
   return (
-    <PageShell title="Payroll / Salary" subtitle="Review your finalized salary payments and the leave deductions used for each month.">
+    <Page>
+      <PageHeader title="Payroll" subtitle="Your finalized monthly pay and any leave deductions." />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Stat index={0} icon={<WalletCards className="w-5 h-5" />} tone="brand" label="Latest pay" value={latest ? money(latest.finalPay) : '—'} caption={latest ? monthName(latest) : 'No finalized payslip yet'} />
+        <Stat index={1} label={`Paid in ${year}`} value={ytd ? money(ytd) : '—'} caption={`${finalized.filter((r) => monthOf(r).startsWith(year)).length} payslip(s) this year`} />
+        <Stat index={2} label="Monthly salary" value={money(user.currentSalary)} caption="Current base salary" />
+      </div>
       {finalized.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-          <WalletCards className="w-6 h-6 text-slate-400 mx-auto" />
-          <h2 className="text-sm font-bold text-slate-900 mt-3">No finalized payroll yet</h2>
-          <p className="text-xs text-slate-500 mt-1">Finalized payments will appear here after payroll is processed.</p>
-        </div>
+        <div className="card"><EmptyState icon={<WalletCards className="w-6 h-6" />} title="No finalized payroll yet" text="Payslips appear here once payroll for a month is finalized." /></div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-bold text-slate-900">Finalized payment history</h2>
-            <p className="text-xs text-slate-500 mt-1">{finalized.length} payment record{finalized.length === 1 ? '' : 's'}</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider">
-                <tr>
-                  <Th>Period</Th><Th>Salary snapshot</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Deduction</Th><Th>Final pay</Th><Th>Finalized</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {finalized.map(record => {
-                  const period = payrollPeriods.find((item: PayrollPeriod) => item.id === record.periodId);
-                  return (
-                    <tr key={record.id}>
-                      <Td strong>{period?.monthStart?.slice(0, 7) ?? '—'}</Td>
-                      <Td>{money(record.salarySnapshot)}</Td>
-                      <Td>{record.paidLeaveDays}</Td>
-                      <Td>{record.unpaidLeaveDays}</Td>
-                      <Td>{money(record.leaveDeduction)}</Td>
-                      <Td strong>{money(record.finalPay)}</Td>
-                      <Td>{record.finalizedAt ? new Date(record.finalizedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {finalized.map((r, i) => (
+            <section key={r.id} className="card rise p-5 sm:p-6" style={{ ['--i' as any]: i }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="eyebrow">Payslip</p>
+                  <p className="font-display text-xl font-bold text-ink-950 mt-1">{monthName(r)}</p>
+                </div>
+                <Badge tone="mint" dot>Finalized</Badge>
+              </div>
+              <p className="stat-value text-[34px] text-ink-950 mt-5">{money(r.finalPay)}</p>
+              <div className="mt-4 space-y-0.5">
+                <InfoRow label="Salary for the month" value={money(r.salarySnapshot)} />
+                <InfoRow label="Paid leave used" value={`${r.paidLeaveDays} day(s)`} />
+                <InfoRow label="Unpaid leave" value={`${r.unpaidLeaveDays} day(s)`} />
+                <InfoRow label="Leave deduction" value={r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)} />
+              </div>
+              <p className="text-[11px] text-ink-400 mt-3">Finalized {r.finalizedAt ? new Date(r.finalizedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</p>
+            </section>
+          ))}
         </div>
       )}
-    </PageShell>
+    </Page>
   );
 }
 
@@ -947,7 +943,7 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
   }
   return <PageShell title="Work & Assignments" subtitle="Admin view of assignments, submissions and completion history.">
     {message && <Notice type="error" text={message} />}
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
+    <div className="card p-4 grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
       <FilterInput label="From date"><input type="date" value={from} onChange={e => setFrom(e.target.value)} className="input" /></FilterInput>
       <FilterInput label="To date"><input type="date" value={to} onChange={e => setTo(e.target.value)} className="input" /></FilterInput>
       <FilterInput label="Employee"><select value={employee} onChange={e => setEmployee(e.target.value)} className="input"><option value="all">All employees</option>{activeEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></FilterInput>
@@ -992,7 +988,7 @@ function TaskAssignForm({
   const hasNoTargets = targets.length === 0;
 
   return (
-    <form onSubmit={onSubmit} className="bg-white border border-slate-200 rounded-2xl p-5 mt-4 grid md:grid-cols-2 gap-4">
+    <form onSubmit={onSubmit} className="card p-5 mt-4 grid md:grid-cols-2 gap-4">
       {hasNoTargets && (
         <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 flex items-start gap-3">
           <div className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0 mt-0.5">
@@ -1098,9 +1094,9 @@ function TaskAssignForm({
 }
 
 function TaskTable({ tasks, employeeId, onSubmit, onDelete, archivingId, admin }: { tasks: Task[]; employeeId: string; onSubmit: (id: string) => void; onRefresh: () => Promise<void>; onDelete?: (task: Task) => void; archivingId?: string | null; admin?: boolean }) {
-  return <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs">
-    <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Task</Th><Th>Assigned To</Th><Th>Dates</Th><Th>Priority</Th><Th>Status</Th><Th>Work Link</Th><Th>Action</Th></tr></thead>
-    <tbody className="divide-y divide-slate-100">{tasks.map(t => <tr key={t.id}><Td strong>{t.title}<span className="block text-[10px] text-slate-400">{t.description}</span></Td><Td>{t.assignedToName}<span className="block text-[10px] text-slate-400">{t.assignedToDesignation}</span></Td><Td>{dateLabel(t.startDate)} → {dateLabel(t.dueDate)}</Td><Td><PriorityBadge value={t.priority} /></Td><Td><StatusBadge label={t.archivedAt ? 'Removed' : t.status} /></Td><Td>{t.submittedLink ? <div className="space-y-0.5"><a href={t.submittedLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Link2 className="w-3.5 h-3.5" />Open work</a>{t.submittedAt && <span className="block text-[10px] text-slate-400">{new Date(t.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>}</div> : '—'}</Td><Td>{admin ? (t.archivedAt ? <span className="text-[10px] text-slate-400">History kept</span> : <button type="button" title="Delete task" aria-label={`Delete task: ${t.title}`} disabled={archivingId === t.id} onClick={() => onDelete?.(t)} className="icon-btn text-rose-600 disabled:opacity-50">{archivingId === t.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>) : (!t.archivedAt && t.assignedTo === employeeId && t.status !== 'completed' ? <button onClick={() => onSubmit(t.id)} className="btn-secondary">Submit</button> : '—')}</Td></tr>)}{!tasks.length && <EmptyRow colSpan={7} text="No tasks match the current filters." />}</tbody>
+  return <div className="mt-4 card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
+    <thead><tr><Th>Task</Th><Th>Assigned To</Th><Th>Dates</Th><Th>Priority</Th><Th>Status</Th><Th>Work Link</Th><Th>Action</Th></tr></thead>
+    <tbody>{tasks.map(t => <tr key={t.id}><Td strong>{t.title}<span className="block text-[10px] text-slate-400">{t.description}</span></Td><Td>{t.assignedToName}<span className="block text-[10px] text-slate-400">{t.assignedToDesignation}</span></Td><Td>{dateLabel(t.startDate)} → {dateLabel(t.dueDate)}</Td><Td><PriorityBadge value={t.priority} /></Td><Td><StatusBadge label={t.archivedAt ? 'Removed' : t.status} /></Td><Td>{t.submittedLink ? <div className="space-y-0.5"><a href={t.submittedLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Link2 className="w-3.5 h-3.5" />Open work</a>{t.submittedAt && <span className="block text-[10px] text-slate-400">{new Date(t.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>}</div> : '—'}</Td><Td>{admin ? (t.archivedAt ? <span className="text-[10px] text-slate-400">History kept</span> : <button type="button" title="Delete task" aria-label={`Delete task: ${t.title}`} disabled={archivingId === t.id} onClick={() => onDelete?.(t)} className="icon-btn text-rose-600 disabled:opacity-50">{archivingId === t.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>) : (!t.archivedAt && t.assignedTo === employeeId && t.status !== 'completed' ? <button onClick={() => onSubmit(t.id)} className="btn-secondary">Submit</button> : '—')}</Td></tr>)}{!tasks.length && <EmptyRow colSpan={7} text="No tasks match the current filters." />}</tbody>
   </table></div></div>;
 }
 
@@ -1112,9 +1108,9 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
       <div className="flex gap-2 flex-1"><div className="relative flex-1 max-w-xl"><Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, employee ID or Login ID…" className="input pl-9" /></div><select value={status} onChange={e => setStatus(e.target.value)} className="input w-auto"><option value="all">All status</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
       <button onClick={() => { setEditing(null); setModal('create') }} className="btn-primary"><UserPlus className="w-4 h-4" />Add employee</button>
     </div>
-    <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs">
-      <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Login ID</Th><Th>Designation</Th><Th>Department</Th><Th>Work Mode</Th><Th>Salary</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
-      <tbody className="divide-y divide-slate-100">{filtered.map(e => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td mono>{e.loginId}</Td><Td>{e.designation}</Td><Td>{e.department || '—'}</Td><Td>{e.workMode === 'remote' ? 'Remote' : 'Office'}</Td><Td>{money(e.currentSalary)}</Td><Td><StatusBadge label={e.status} /></Td><Td><div className="flex items-center gap-1.5"><button title="Edit" onClick={() => { setEditing(e); setModal('edit') }} className="icon-btn"><Pencil className="w-4 h-4" /></button><button disabled={statusBusyId === e.id} title={e.status === 'active' ? 'Deactivate' : 'Activate'} onClick={async () => { if (statusBusyId) return; if (!confirm(e.status === 'active' ? 'Deactivate this employee account? Historical records will be preserved and login access will be disabled.' : 'Activate this employee account?')) return; setStatusBusyId(e.id); try { await invokeEmployeeAdmin({ action: 'set_status', employeeId: e.id, status: e.status === 'active' ? 'inactive' : 'active' }); notify(e.status === 'active' ? 'Employee access disabled; history preserved.' : 'Employee account activated.', 'success'); await onRefresh(); } catch (error) { notify(error instanceof Error ? error.message : 'Unable to update employee status.', 'error') } finally { setStatusBusyId(null); } }} className="icon-btn">{statusBusyId === e.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button></div></Td></tr>)}{!filtered.length && <EmptyRow colSpan={8} text="No employees yet. Add the first employee to create their login." />}</tbody>
+    <div className="mt-4 card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
+      <thead><tr><Th>Employee</Th><Th>Login ID</Th><Th>Designation</Th><Th>Department</Th><Th>Work Mode</Th><Th>Salary</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
+      <tbody>{filtered.map(e => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td mono>{e.loginId}</Td><Td>{e.designation}</Td><Td>{e.department || '—'}</Td><Td>{e.workMode === 'remote' ? 'Remote' : 'Office'}</Td><Td>{money(e.currentSalary)}</Td><Td><StatusBadge label={e.status} /></Td><Td><div className="flex items-center gap-1.5"><button title="Edit" onClick={() => { setEditing(e); setModal('edit') }} className="icon-btn"><Pencil className="w-4 h-4" /></button><button disabled={statusBusyId === e.id} title={e.status === 'active' ? 'Deactivate' : 'Activate'} onClick={async () => { if (statusBusyId) return; if (!(await confirmDialog(e.status === 'active' ? { title: `Deactivate ${e.name}?`, message: 'Their sign-in will be disabled. All attendance, leave and payroll history is kept.', confirmLabel: 'Deactivate', danger: true } : { title: `Activate ${e.name}?`, message: 'They will be able to sign in again.', confirmLabel: 'Activate' }))) return; setStatusBusyId(e.id); try { await invokeEmployeeAdmin({ action: 'set_status', employeeId: e.id, status: e.status === 'active' ? 'inactive' : 'active' }); notify(e.status === 'active' ? 'Employee access disabled; history preserved.' : 'Employee account activated.', 'success'); await onRefresh(); } catch (error) { notify(error instanceof Error ? error.message : 'Unable to update employee status.', 'error') } finally { setStatusBusyId(null); } }} className="icon-btn">{statusBusyId === e.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button></div></Td></tr>)}{!filtered.length && <EmptyRow colSpan={8} text="No employees yet. Add the first employee to create their login." />}</tbody>
     </table></div></div>
     {modal && <EmployeeModal mode={modal} employee={editing} departments={departments} designations={designations} employees={employees} onClose={() => setModal(null)} onSaved={onRefresh} />}
   </PageShell>;
@@ -1212,7 +1208,7 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, wfhRequests, ho
     const record = attendance.find((a: AttendanceRecord) => a.employeeId === e.id && a.date === date); const leave = leaveRequests.find((l: LeaveRequest) => l.employeeId === e.id && l.status === 'approved' && l.startDate <= date && l.endDate >= date);
     return { e, record, leave };
   });
-  return <PageShell title="Attendance" subtitle="Daily attendance with explicit login/check-in/break/check-out separation."><div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row gap-3"><label className="flex-1"><span className="label">Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" /></label><label className="flex-1"><span className="label">Search</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…" className="input" /></label></div><div className="mt-4 bg-white border border-slate-200 rounded-2xl p-4 text-xs flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600" /><b>{dateLabel(date, { weekday: 'long' })}</b><span className="text-slate-500">· {cl.label}</span></div><div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{cl.isWorkingDay ? rows.map(({ e, record, leave }: any) => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td>{leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : '—'}</Td><Td mono>{record?.checkIn ?? '—'}</Td><Td mono>{record ? duration(record.breakSeconds) : '—'}</Td><Td mono>{record?.checkOut ?? '—'}</Td><Td mono>{record ? duration(record.workingSeconds) : '—'}</Td><Td><StatusBadge label={leave ? 'Leave' : record?.status ?? (e.joinDate && date < e.joinDate ? 'Not joined' : date > today() ? 'Upcoming' : date === today() ? 'Not checked-in' : 'Not recorded')} /></Td></tr>) : <tr><td colSpan={7} className="p-10 text-center text-sm text-slate-500">{cl.label}. No check-in required.</td></tr>}{cl.isWorkingDay && !rows.length && <EmptyRow colSpan={7} text="No active employees." />}</tbody></table></div></div></PageShell>;
+  return <PageShell title="Attendance" subtitle="Daily attendance with explicit login/check-in/break/check-out separation."><div className="card p-4 flex flex-col sm:flex-row gap-3"><label className="flex-1"><span className="label">Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" /></label><label className="flex-1"><span className="label">Search</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…" className="input" /></label></div><div className="mt-4 card p-4 text-xs flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600" /><b>{dateLabel(date, { weekday: 'long' })}</b><span className="text-slate-500">· {cl.label}</span></div><div className="mt-4 card overflow-hidden"><div className="overflow-x-auto"><table className="data-table"><thead><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead><tbody>{cl.isWorkingDay ? rows.map(({ e, record, leave }: any) => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td>{leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : '—'}</Td><Td mono>{record?.checkIn ?? '—'}</Td><Td mono>{record ? duration(record.breakSeconds) : '—'}</Td><Td mono>{record?.checkOut ?? '—'}</Td><Td mono>{record ? duration(record.workingSeconds) : '—'}</Td><Td><StatusBadge label={leave ? 'Leave' : record?.status ?? (e.joinDate && date < e.joinDate ? 'Not joined' : date > today() ? 'Upcoming' : date === today() ? 'Not checked-in' : 'Not recorded')} /></Td></tr>) : <tr><td colSpan={7} className="p-10 text-center text-sm text-slate-500">{cl.label}. No check-in required.</td></tr>}{cl.isWorkingDay && !rows.length && <EmptyRow colSpan={7} text="No active employees." />}</tbody></table></div></div></PageShell>;
 }
 
 function RequestsAdmin({ leaveRequests, wfhRequests, user, onRefresh }: any) {
@@ -1269,7 +1265,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, user, onRefresh }: any) {
 
 function RequestTable({ type, rows, onReview, busyKey }: { type: 'leave' | 'wfh'; rows: any[]; onReview: (id: string, s: 'approved' | 'rejected') => void; busyKey: string | null }) {
   const title = type === 'leave' ? 'Leave requests' : 'WFH requests';
-  return <div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100"><h3 className="font-bold text-sm">{title}</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Date</Th><Th>Details</Th><Th>Status</Th><Th>Action</Th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map(r => <tr key={r.id}><Td strong>{r.employeeName}<span className="block text-[10px] text-slate-400">{r.department}</span></Td><Td>{type === 'leave' ? dateLabel(r.startDate) + ' → ' + dateLabel(r.endDate) : dateLabel(r.date)}</Td><Td>{type === 'leave' ? `${r.leaveType} · ${r.days} day(s) · paid ${r.paidDays ?? 0} · unpaid ${r.unpaidDays ?? 0} · ${r.reason}` : `${r.duration} · ${r.reason}`}</Td><Td><StatusBadge label={r.status} /></Td><Td>{r.status === 'pending' ? <div className="flex gap-1.5"><button disabled={!!busyKey} onClick={() => onReview(r.id, 'approved')} className="btn-approve">{busyKey ? 'Saving…' : 'Approve'}</button><button disabled={!!busyKey} onClick={() => onReview(r.id, 'rejected')} className="btn-reject">{busyKey ? 'Saving…' : 'Reject'}</button></div> : <span className="text-slate-400">Reviewed</span>}</Td></tr>)}{!rows.length && <EmptyRow colSpan={5} text="No requests." />}</tbody></table></div></div>;
+  return <div className="mt-4 card overflow-hidden"><div className="p-4 border-b border-slate-100"><h3 className="font-bold text-sm">{title}</h3></div><div className="overflow-x-auto"><table className="data-table"><thead><tr><Th>Employee</Th><Th>Date</Th><Th>Details</Th><Th>Status</Th><Th>Action</Th></tr></thead><tbody>{rows.map(r => <tr key={r.id}><Td strong>{r.employeeName}<span className="block text-[10px] text-slate-400">{r.department}</span></Td><Td>{type === 'leave' ? dateLabel(r.startDate) + ' → ' + dateLabel(r.endDate) : dateLabel(r.date)}</Td><Td>{type === 'leave' ? `${r.leaveType} · ${r.days} day(s) · paid ${r.paidDays ?? 0} · unpaid ${r.unpaidDays ?? 0} · ${r.reason}` : `${r.duration} · ${r.reason}`}</Td><Td><StatusBadge label={r.status} /></Td><Td>{r.status === 'pending' ? <div className="flex gap-1.5"><button disabled={!!busyKey} onClick={() => onReview(r.id, 'approved')} className="btn-approve">{busyKey ? 'Saving…' : 'Approve'}</button><button disabled={!!busyKey} onClick={() => onReview(r.id, 'rejected')} className="btn-reject">{busyKey ? 'Saving…' : 'Reject'}</button></div> : <span className="text-slate-400">Reviewed</span>}</Td></tr>)}{!rows.length && <EmptyRow colSpan={5} text="No requests." />}</tbody></table></div></div>;
 }
 
 function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: any) {
@@ -1309,7 +1305,7 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
 
   async function finalize() {
     if (!period || period.status !== 'draft' || busy) return;
-    if (!confirm('Finalize this payroll period? Employees will see the saved payroll snapshot.')) return;
+    if (!(await confirmDialog({ title: 'Finalize payroll?', message: 'Employees will see these amounts as their payslip. The figures are saved as they are now.', confirmLabel: 'Finalize payroll' }))) return;
     setBusy(true); setMessage('');
     try {
       const { error } = await (supabase as any).rpc('finalize_payroll', { p_period_id: period.id });
@@ -1325,7 +1321,7 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
 
   return <PageShell title="Payroll" subtitle="Monthly salary snapshots with a review-before-finalize workflow.">
     <div className="grid lg:grid-cols-3 gap-4">
-      <section className="bg-white rounded-2xl border border-slate-200 p-5">
+      <section className="card p-5">
         <p className="label">Payroll month</p>
         <input type="month" value={month} onChange={e => { setMonth(e.target.value); setMessage('') }} className="input" />
         <div className="mt-4 text-xs text-slate-500 space-y-2">
@@ -1340,14 +1336,14 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
         </div>
         {message && <p className="text-xs mt-3 text-slate-600">{message}</p>}
       </section>
-      <section className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <section className="lg:col-span-2 card overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div><h3 className="font-bold text-sm">Payroll records</h3><p className="text-xs text-slate-500 mt-1">{period ? period.status : 'No payroll period generated'} · {records.length} employee record(s)</p></div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Employee</Th><Th>Salary Snapshot</Th><Th>Paid Leave</Th><Th>Unpaid Leave</Th><Th>Deduction</Th><Th>Final Pay</Th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
+          <table className="data-table">
+            <thead><tr><Th>Employee</Th><Th>Salary Snapshot</Th><Th>Paid Leave</Th><Th>Unpaid Leave</Th><Th>Deduction</Th><Th>Final Pay</Th></tr></thead>
+            <tbody>
               {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td>{money(r.leaveDeduction)}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
               {!records.length && <EmptyRow colSpan={6} text={period ? 'No records for this period. Generate the payroll draft.' : 'Select a month and generate the payroll draft.'} />}
             </tbody>
@@ -1395,100 +1391,62 @@ function HolidaysAdmin({ holidays, user, onRefresh }: any) {
       setBusy(false);
     }
   }
-  async function del(id: string) { const item = (holidays as Holiday[]).find((h: Holiday) => h.id === id); if (item?.holidayType === 'public') { notify('Public calendar holidays are protected.', 'info'); return; } if (!confirm('Delete this company holiday?')) return; try { const { error } = await (supabase as any).from('holidays').delete().eq('id', id); if (error) throw error; notify('Company holiday removed.', 'success'); await onRefresh(); } catch (error) { notify(error instanceof Error ? error.message : 'Unable to remove holiday.', 'error') } }
-  return <PageShell title="Holidays" subtitle="All admin-added holidays are paid company non-working days."><div className="flex justify-end"><button onClick={() => setOpen(v => !v)} className="btn-primary"><Plus className="w-4 h-4" />Add holiday</button></div>{open && <form onSubmit={add} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-3 gap-4"><Field label="Holiday name"><input name="name" className="input" required /></Field><Field label="Date"><input name="date" type="date" className="input" required /></Field><Field label="Description"><input name="description" className="input" /></Field><div className="md:col-span-3 flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy ? 'Saving…' : 'Add holiday'}</button></div></form>}<div className="mt-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">{holidays.map((h: Holiday) => <div key={h.id} className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase font-bold tracking-wider text-indigo-600">{dateLabel(h.date, { weekday: 'long' })}</p><div className="flex items-center gap-2 mt-1"><h3 className="font-bold">{h.name}</h3>{h.holidayType === 'public' && <span className="text-[9px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 font-bold">Public</span>}</div><p className="text-xs text-slate-500 mt-1">{h.description || 'Company holiday'}</p></div>{h.holidayType !== 'public' && <button onClick={() => void del(h.id)} className="icon-btn text-rose-500" title="Delete company holiday"><Trash2 className="w-4 h-4" /></button>}</div></div>)}{!holidays.length && <EmptyCard text="No company holidays added yet." />}</div></PageShell>;
-}
-
-function HolidaysEmployee({ holidays }: any) {
-  const items = [...(holidays as Holiday[])].sort((a, b) => a.date.localeCompare(b.date));
-  return <PageShell title="Holidays" subtitle="Public and company holidays are paid non-working days."><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{items.map((h: Holiday) => <div key={h.id} className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between gap-3"><p className="text-[10px] uppercase tracking-wider font-bold text-indigo-600">{dateLabel(h.date, { weekday: 'long' })}</p>{h.holidayType === 'public' && <span className="text-[9px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 font-bold">Public</span>}</div><h3 className="font-bold mt-1">{h.name}</h3><p className="text-xs text-slate-500 mt-2">{h.description || (h.holidayType === 'public' ? 'Public calendar holiday' : 'Paid company holiday')}</p></div>)}{!items.length && <EmptyCard text="No holidays are scheduled yet." />}</div></PageShell>;
-}
-
-function LeaveEmployee({ user, leaveRequests, ledgers, holidays, onRefresh }: any) {
-  const [open, setOpen] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  const current = ledgers.find((l: LeaveLedger) => l.periodStart === `${today().slice(0, 7)}-01`);
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const form = e.currentTarget; setError(''); setBusy(true);
+  const [toDelete, setToDelete] = useState<Holiday | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  async function del(h: Holiday) {
+    if (h.holidayType === 'public') { notify('Public calendar holidays are protected.', 'info'); return; }
+    setDeleting(true);
     try {
-      const fd = new FormData(e.currentTarget);
-      const start = String(fd.get('startDate') || '');
-      const end = String(fd.get('endDate') || '');
-      if (end < start) throw new Error('End date cannot be before start date.');
-      if (start.slice(0, 7) !== end.slice(0, 7)) throw new Error('A leave request must stay within one calendar month.');
-      const leaveDuration = String(fd.get('duration'));
-      if (leaveDuration === 'half' && start !== end) throw new Error('Half-day leave must use one date.');
-      const { data: newLeave, error: err } = await (supabase as any).from('leave_requests').insert({
-        employee_id: user.employeeDbId,
-        leave_type: String(fd.get('leaveType')),
-        start_date: start,
-        end_date: end,
-        duration: leaveDuration,
-        reason: String(fd.get('reason') || '').trim()
-      }).select('id').maybeSingle();
-      if (err) throw err;
-      notify('Leave request submitted.', 'success', 4200, 'leave');
-
-      // Dispatch recipient notification to approvers (admins)
-      void notifyLeaveSubmitted({
-        employeeName: user.name,
-        days: leaveDuration === 'half' ? 0.5 : 1,
-        leaveType: String(fd.get('leaveType')),
-        startDate: start,
-        endDate: end,
-        leaveId: newLeave?.id ?? crypto.randomUUID(),
-        employeeDbId: user.employeeDbId,
-        actorUserId: user.id,
-      });
-
-      form.reset(); setOpen(false); await onRefresh();
+      const { error } = await (supabase as any).from('holidays').delete().eq('id', h.id);
+      if (error) throw error;
+      notify('Company holiday removed.', 'success');
+      setToDelete(null);
+      await onRefresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to submit leave request.';
-      setError(message); notify(message, 'error')
+      notify(error instanceof Error ? error.message : 'Unable to remove holiday.', 'error');
     } finally {
-      setBusy(false);
+      setDeleting(false);
     }
   }
-  return <PageShell title="Leave" subtitle="Paid leave accrues at 1.5 days/month and unused balance carries forward.">{error && <Notice type="error" text={error} />}<div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Summary label="Available" value={current?.closingBalance ?? '—'} /><Summary label="Carry forward" value={current?.openingBalance ?? '—'} /><Summary label="Added" value={current?.accrual ?? 1.5} /><Summary label="Unpaid used" value={current?.unpaidUsed ?? 0} /></div><div className="mt-4 flex justify-end"><button onClick={() => setOpen(v => !v)} className="btn-primary"><Plus className="w-4 h-4" />Apply leave</button></div>{open && <form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Leave type"><select name="leaveType" className="input"><option value="casual">Casual</option><option value="sick">Sick</option><option value="earned">Earned</option><option value="unpaid">Unpaid</option></select></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Start date"><input name="startDate" type="date" min={today()} className="input" required /></Field><Field label="End date"><input name="endDate" type="date" min={today()} className="input" required /></Field><Field label="Reason"><input name="reason" className="input md:col-span-2" required /></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy ? 'Submitting…' : 'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Dates</Th><Th>Type</Th><Th>Days</Th><Th>Paid / Unpaid</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{leaveRequests.map((r: LeaveRequest) => <tr key={r.id}><Td>{dateLabel(r.startDate)} → {dateLabel(r.endDate)}</Td><Td>{r.leaveType}</Td><Td>{r.days}</Td><Td>{r.paidDays ?? 0} / {r.unpaidDays ?? 0}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status} /></Td></tr>)}{!leaveRequests.length && <EmptyRow colSpan={6} text="No leave requests yet." />}</tbody></table></div></div></PageShell>;
-}
-
-function WfhEmployee({ user, wfhRequests, onRefresh }: any) {
-  const [open, setOpen] = useState(false); const [error, setError] = useState(''); const remote = user.workMode === 'remote';
-  const [busy, setBusy] = useState(false);
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const form = e.currentTarget; setError(''); setBusy(true);
-    try {
-      const fd = new FormData(e.currentTarget);
-      const date = String(fd.get('date') || '');
-      if (date <= today()) throw new Error('WFH requests must be for a future working day.');
-      const { data: newWfh, error: err } = await (supabase as any).from('wfh_requests').insert({
-        employee_id: user.employeeDbId,
-        date,
-        duration: String(fd.get('duration')),
-        reason: String(fd.get('reason') || '').trim(),
-        note: clean(fd.get('note'))
-      }).select('id').maybeSingle();
-      if (err) throw err;
-      notify('WFH request submitted.', 'success', 4200, 'wfh');
-
-      // Dispatch recipient notification to approvers (admins)
-      void notifyWfhSubmitted({
-        employeeName: user.name,
-        date,
-        duration: String(fd.get('duration')),
-        wfhId: newWfh?.id ?? crypto.randomUUID(),
-        employeeDbId: user.employeeDbId,
-        actorUserId: user.id,
-      });
-
-      form.reset(); setOpen(false); await onRefresh();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to submit WFH request.';
-      setError(message); notify(message, 'error')
-    } finally {
-      setBusy(false);
-    }
-  }
-  return <PageShell title="WFH" subtitle="Temporary WFH requests are for office-based employees.">{remote ? <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 text-sm text-sky-900"><b>Permanent remote employee</b><p className="text-xs mt-1">You do not need a daily WFH request. Your attendance check-in is automatically treated as WFH.</p></div> : <>{error && <Notice type="error" text={error} />}<div className="flex justify-end"><button onClick={() => setOpen(v => !v)} className="btn-primary"><Plus className="w-4 h-4" />Request WFH</button></div>{open && <form onSubmit={submit} className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4"><Field label="Date"><input type="date" name="date" min={tomorrow()} className="input" required /></Field><Field label="Duration"><select name="duration" className="input"><option value="full">Full day</option><option value="half">Half day</option></select></Field><Field label="Reason"><input name="reason" className="input" required /></Field><Field label="Note"><input name="note" className="input" /></Field><div className="md:col-span-2 flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} className="btn-secondary">Cancel</button><button disabled={busy} className="btn-primary">{busy ? 'Submitting…' : 'Submit request'}</button></div></form>}<div className="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="overflow-x-auto"><table className="w-full min-w-[560px] text-xs"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider"><tr><Th>Date</Th><Th>Duration</Th><Th>Reason</Th><Th>Status</Th></tr></thead><tbody className="divide-y divide-slate-100">{wfhRequests.map((r: WfhRequest) => <tr key={r.id}><Td>{dateLabel(r.date)}</Td><Td>{r.duration}</Td><Td>{r.reason}</Td><Td><StatusBadge label={r.status} /></Td></tr>)}{!wfhRequests.length && <EmptyRow colSpan={4} text="No WFH requests yet." />}</tbody></table></div></div></>}</PageShell>;
+  return (
+    <PageShell
+      title="Holidays"
+      subtitle="Company holidays you add are paid non-working days for everyone."
+      actions={<button onClick={() => setOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Add holiday</button>}
+    >
+      <HolidayList
+        holidays={holidays}
+        renderActions={(h) => h.holidayType !== 'public'
+          ? <button type="button" onClick={() => setToDelete(h)} className="icon-btn hover:!text-rose-600 hover:!bg-rose-50" title="Remove holiday" aria-label={`Remove ${h.name}`}><Trash2 className="w-4 h-4" /></button>
+          : null}
+      />
+      {open && (
+        <Modal title="Add a company holiday" onClose={() => setOpen(false)} closeDisabled={busy}>
+          <form onSubmit={add} className="space-y-4">
+            <Field label="Holiday name"><input name="name" className="input" placeholder="e.g. Founders’ Day" required /></Field>
+            <Field label="Date"><input name="date" type="date" className="input" required /></Field>
+            <Field label="Description" hint="optional"><input name="description" className="input" /></Field>
+            <p className="text-xs text-ink-400">Everyone is notified. Check-in is blocked on this day and leave days skip it.</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
+              <button disabled={busy} className="btn-primary">{busy ? 'Saving…' : 'Add holiday'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {toDelete && (
+        <Modal title="Remove this holiday?" onClose={() => setToDelete(null)} closeDisabled={deleting}>
+          <div className="space-y-5">
+            <p className="text-sm text-ink-600"><b className="text-ink-900">{toDelete.name}</b> on {dateLabel(toDelete.date, { weekday: 'long', day: 'numeric', month: 'long' })} will become a normal working day.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setToDelete(null)} disabled={deleting}>Keep it</button>
+              <button type="button" className="btn-danger" onClick={() => void del(toDelete)} disabled={deleting}>{deleting ? 'Removing…' : 'Remove holiday'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </PageShell>
+  );
 }
 
 function validateStrongPassword(password: string) { return password.length >= 12 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password) }
@@ -1546,7 +1504,7 @@ function ProfileEmployee({ user, onRefresh }: any) {
   async function savePhoto(file: File) { try { if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Use a JPG, PNG or WebP image.'); if (file.size > 5 * 1024 * 1024) throw new Error('Profile images must be 5 MB or smaller.'); const url = await uploadAvatar(user.employeeDbId, file); const { error: err } = await (supabase as any).from('employees').update({ avatar_url: url }).eq('id', user.employeeDbId); if (err) throw err; await onRefresh(); setMessage('Profile photo updated.'); notify('Profile photo updated.', 'success') } catch (e) { setError(e instanceof Error ? e.message : 'Unable to update photo.'); notify(e instanceof Error ? e.message : 'Unable to update photo.', 'error') } }
   async function password() { setError(''); setMessage(''); if (!currentPassword) { setError('Enter your current password.'); return } if (!validateStrongPassword(newPassword)) { setError('Password must be at least 12 characters and include uppercase, lowercase, number and symbol.'); return } if (newPassword !== confirm) { setError('New passwords do not match.'); return } setSaving(true); try { const authEmail = user.role === 'admin' ? 'ira.admin@ira-presence.local' : (user.loginId ? loginIdToAuthEmail(user.loginId) : ''); if (!authEmail) throw new Error('Unable to determine the account email.'); const { error: reauthError } = await supabase.auth.signInWithPassword({ email: authEmail, password: currentPassword }); if (reauthError) throw new Error('Current password is incorrect.'); if (await isPasswordLeaked(newPassword)) throw new Error('Choose a different password. This password has appeared in known data breaches.'); const { error: change } = await supabase.auth.updateUser({ password: newPassword }); if (change) throw change; setMessage('Password changed successfully.'); notify('Password changed successfully.', 'success'); setCurrentPassword(''); setNewPassword(''); setConfirm('') } catch (e) { setError(e instanceof Error ? e.message : 'Unable to change password.') } finally { setSaving(false) } }
   async function viewDocument(doc: EmployeeDocument) { try { const url = await getSignedDocumentUrl(doc.storagePath); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { setError(e instanceof Error ? e.message : 'Unable to open document.') } }
-  return <PageShell title="Profile" subtitle="Personal details, HR documents and password."><div className="space-y-4">{(error || message) && <div>{error && <Notice type="error" text={error} />} {message && <Notice type="success" text={message} />}</div>}<div className="grid lg:grid-cols-2 gap-4"><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-4"><div className="relative">{user.avatar ? <img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover ring-1 ring-slate-200" /> : <div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl font-bold">{user.name.slice(0, 1)}</div>}<label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer shadow-sm"><Upload className="w-4 h-4" /><input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void savePhoto(f) }} /></label></div><div><p className="text-lg font-bold">{user.name}</p><p className="text-xs text-slate-500">{user.designation} · {user.department}</p></div></div><div className="grid gap-4 mt-6"><Field label="Name"><input value={name} onChange={e => setName(e.target.value)} className="input" /></Field><Field label="Phone"><input value={phone} onChange={e => setPhone(e.target.value)} className="input" /></Field><InfoRow label="Login ID" value={user.loginId ?? '—'} /><InfoRow label="Employee ID" value={user.empId ?? '—'} /><InfoRow label="Work mode" value={user.workMode === 'remote' ? 'Remote' : 'Office'} /><InfoRow label="Designation" value={user.designation ?? '—'} /><InfoRow label="Manager" value={user.manager ?? '—'} /><InfoRow label="Monthly salary" value={money(user.currentSalary)} /><button disabled={saving} onClick={() => void save()} className="btn-primary w-fit">{saving ? 'Saving…' : 'Save personal details'}</button></div></section><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-2"><LockKeyhole className="w-4 h-4 text-blue-600" /><div><h3 className="font-bold text-sm">Change password</h3><p className="text-xs text-slate-500">Verify your current password before changing it.</p></div></div><div className="space-y-4 mt-5"><Field label="Current password"><input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="input" /></Field><Field label="New password"><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="input" minLength={12} /></Field><Field label="Confirm new password"><input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="input" minLength={12} /></Field><button disabled={saving} onClick={() => void password()} className="btn-primary">Change password</button></div></section></div><section className="bg-white rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between gap-3 flex-wrap"><div><div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-600" /><h3 className="font-bold text-sm">Phone Push Notifications</h3></div><p className="text-xs text-slate-500 mt-1">Receive real-time alerts on your phone lock screen for assignments and approvals.</p></div><div className="flex items-center gap-2"><button type="button" disabled={pushBusy} onClick={() => void handleTogglePush()} className={isSubscribed ? 'btn-secondary text-rose-600' : 'btn-primary text-xs'}>{pushBusy ? 'Updating…' : isSubscribed ? 'Disable on this phone' : 'Enable phone notifications'}</button></div></div>{pushFeedback && <div className={`mt-3 p-3 rounded-xl border text-xs ${pushFeedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>{pushFeedback.message}</div>}{isIosNeedsHomeScreen() && <div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1"><p className="font-bold">iPhone Setup Required</p><p className="text-[11px]">To enable push alerts on iOS, tap the Safari <b>Share</b> button, choose <b>Add to Home Screen</b>, and open the app from your home screen.</p></div>}</section><section className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600" /><div><h3 className="font-bold text-sm">HR Documents</h3><p className="text-xs text-slate-500">Your secure employee records.</p></div></div>{documentsLoading ? <div className="p-6 text-sm text-slate-500">Loading documents…</div> : documents.length ? <div className="divide-y divide-slate-100">{documents.map(doc => <div key={doc.id} className="px-5 py-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm font-semibold truncate">{doc.fileName}</p><p className="text-[11px] text-slate-500 mt-1">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0, 10))}</p></div><button className="btn-secondary shrink-0" onClick={() => void viewDocument(doc)}><Eye className="w-3.5 h-3.5 mr-1" />View</button></div>)}</div> : <div className="p-6 text-sm text-slate-500">No HR documents uploaded yet.</div>}</section></div></PageShell>;
+  return <PageShell title="Profile" subtitle="Personal details, HR documents and password."><div className="space-y-4">{(error || message) && <div>{error && <Notice type="error" text={error} />} {message && <Notice type="success" text={message} />}</div>}<div className="grid lg:grid-cols-2 gap-4"><section className="card p-5"><div className="flex items-center gap-4"><div className="relative">{user.avatar ? <img src={user.avatar} alt="" className="w-16 h-16 rounded-full object-cover ring-1 ring-slate-200" /> : <div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl font-bold">{user.name.slice(0, 1)}</div>}<label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer shadow-sm"><Upload className="w-4 h-4" /><input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void savePhoto(f) }} /></label></div><div><p className="text-lg font-bold">{user.name}</p><p className="text-xs text-slate-500">{user.designation} · {user.department}</p></div></div><div className="grid gap-4 mt-6"><Field label="Name"><input value={name} onChange={e => setName(e.target.value)} className="input" /></Field><Field label="Phone"><input value={phone} onChange={e => setPhone(e.target.value)} className="input" /></Field><InfoRow label="Login ID" value={user.loginId ?? '—'} /><InfoRow label="Employee ID" value={user.empId ?? '—'} /><InfoRow label="Work mode" value={user.workMode === 'remote' ? 'Remote' : 'Office'} /><InfoRow label="Designation" value={user.designation ?? '—'} /><InfoRow label="Manager" value={user.manager ?? '—'} /><InfoRow label="Monthly salary" value={money(user.currentSalary)} /><button disabled={saving} onClick={() => void save()} className="btn-primary w-fit">{saving ? 'Saving…' : 'Save personal details'}</button></div></section><section className="card p-5"><div className="flex items-center gap-2"><LockKeyhole className="w-4 h-4 text-blue-600" /><div><h3 className="font-bold text-sm">Change password</h3><p className="text-xs text-slate-500">Verify your current password before changing it.</p></div></div><div className="space-y-4 mt-5"><Field label="Current password"><input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="input" /></Field><Field label="New password"><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="input" minLength={12} /></Field><Field label="Confirm new password"><input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="input" minLength={12} /></Field><button disabled={saving} onClick={() => void password()} className="btn-primary">Change password</button></div></section></div><section className="card p-5"><div className="flex items-center justify-between gap-3 flex-wrap"><div><div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-600" /><h3 className="font-bold text-sm">Phone Push Notifications</h3></div><p className="text-xs text-slate-500 mt-1">Receive real-time alerts on your phone lock screen for assignments and approvals.</p></div><div className="flex items-center gap-2"><button type="button" disabled={pushBusy} onClick={() => void handleTogglePush()} className={isSubscribed ? 'btn-secondary text-rose-600' : 'btn-primary text-xs'}>{pushBusy ? 'Updating…' : isSubscribed ? 'Disable on this phone' : 'Enable phone notifications'}</button></div></div>{pushFeedback && <div className={`mt-3 p-3 rounded-xl border text-xs ${pushFeedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>{pushFeedback.message}</div>}{isIosNeedsHomeScreen() && <div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1"><p className="font-bold">iPhone Setup Required</p><p className="text-[11px]">To enable push alerts on iOS, tap the Safari <b>Share</b> button, choose <b>Add to Home Screen</b>, and open the app from your home screen.</p></div>}</section><section className="card overflow-hidden"><div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2"><FileText className="w-4 h-4 text-blue-600" /><div><h3 className="font-bold text-sm">HR Documents</h3><p className="text-xs text-slate-500">Your secure employee records.</p></div></div>{documentsLoading ? <div className="p-6 text-sm text-slate-500">Loading documents…</div> : documents.length ? <div className="divide-y divide-slate-100">{documents.map(doc => <div key={doc.id} className="px-5 py-4 flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-sm font-semibold truncate">{doc.fileName}</p><p className="text-[11px] text-slate-500 mt-1">{doc.documentType} · {dateLabel(String(doc.createdAt).slice(0, 10))}</p></div><button className="btn-secondary shrink-0" onClick={() => void viewDocument(doc)}><Eye className="w-3.5 h-3.5 mr-1" />View</button></div>)}</div> : <div className="p-6 text-sm text-slate-500">No HR documents uploaded yet.</div>}</section></div></PageShell>;
 }
 
 function ExportsAdmin({ employees, payrollPeriods }: any) {
@@ -1571,20 +1529,17 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
   async function addDesignation() { const value = name.trim(); if (!value) { notify('Enter a designation name.', 'error'); return; } try { const { error } = await (supabase as any).from('designations').insert({ name: value, can_assign_tasks: canAssign }); if (error) throw error; notify('Designation added.', 'success'); setName(''); setCanAssign(false); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add designation.', 'error') } }
   async function addDepartment() { const value = name.trim(); if (!value) { notify('Enter a department name.', 'error'); return; } try { const { error } = await (supabase as any).from('departments').insert({ name: value }); if (error) throw error; notify('Department added.', 'success'); setName(''); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add department.', 'error') } }
   async function addRule() { if (!assigner) { notify('Select an assigner designation.', 'error'); return; } try { const { error } = await (supabase as any).from('task_assignment_rules').insert({ assigner_designation_id: assigner, assignee_designation_id: assignee || null, scope }); if (error) throw error; notify('Assignment rule added.', 'success'); setAssigner(''); setAssignee(''); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to add rule.', 'error') } }
-  async function deleteRule(id: string) { if (!confirm('Delete this assignment rule?')) return; try { const { error } = await (supabase as any).from('task_assignment_rules').delete().eq('id', id); if (error) throw error; notify('Assignment rule removed.', 'success'); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to remove rule.', 'error') } }
+  async function deleteRule(id: string) { if (!(await confirmDialog({ title: 'Delete this assignment rule?', message: 'People with this designation will no longer be able to assign work to the other designation.', confirmLabel: 'Delete rule', danger: true }))) return; try { const { error } = await (supabase as any).from('task_assignment_rules').delete().eq('id', id); if (error) throw error; notify('Assignment rule removed.', 'success'); await onRefresh() } catch (error) { notify(error instanceof Error ? error.message : 'Unable to remove rule.', 'error') } }
   async function savePayroll() { if (payrollPolicyStatus !== 'ready') { notify('Load the current payroll policy before saving.', 'error'); return } try { const { data, error } = await (supabase as any).from('payroll_settings').update({ divisor_mode: payrollDivisor }).eq('id', true).select('id').maybeSingle(); if (error) throw error; if (!data) throw new Error('Payroll policy could not be found. Refresh and try again.'); notify('Payroll policy saved.', 'success') } catch (error) { notify(error instanceof Error ? error.message : 'Unable to save payroll policy.', 'error') } }
-  return <PageShell title="Settings" subtitle="Configure designations, assignment rules, departments and the payroll divisor policy."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['rules', 'Assignment rules'], ['designations', 'Designations'], ['departments', 'Departments'], ['payroll', 'Payroll policy']].map(([id, l]) => <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>{l}</button>)}</div>{tab === 'rules' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add assignment rule</h3><div className="space-y-4 mt-4"><Field label="Assigner designation"><select value={assigner} onChange={e => setAssigner(e.target.value)} className="input"><option value="">Select</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Assignee designation"><select value={assignee} onChange={e => setAssignee(e.target.value)} className="input"><option value="">Any designation</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Scope"><select value={scope} onChange={e => setScope(e.target.value as any)} className="input"><option value="direct_reports">Direct reports</option><option value="any">Any employee</option></select></Field><button onClick={() => void addRule()} className="btn-primary">Add rule</button></div></div><div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="p-5 border-b border-slate-100"><h3 className="font-bold text-sm">Current rules</h3></div>{rules.map((r: AssignmentRule) => <div key={r.id} className="p-4 border-b border-slate-100 flex items-center justify-between gap-3"><p className="text-xs"><b>{r.assignerDesignation}</b> → {r.assigneeDesignation} <span className="text-slate-400">· {r.scope}</span></p><button onClick={() => void deleteRule(r.id)} className="icon-btn text-rose-500"><Trash2 className="w-4 h-4" /></button></div>)}{!rules.length && <EmptyCard text="No assignment rules." />}</div></section>}{tab === 'designations' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add designation</h3><div className="space-y-4 mt-4"><Field label="Name"><input value={name} onChange={e => setName(e.target.value)} className="input" /></Field><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={canAssign} onChange={e => setCanAssign(e.target.checked)} />Can assign tasks</label><button onClick={() => void addDesignation()} className="btn-primary">Add designation</button></div></div><div className="bg-white rounded-2xl border border-slate-200 p-5">{designations.map((d: Designation) => <div key={d.id} className="flex justify-between p-3 border-b border-slate-100 last:border-0 text-xs"><b>{d.name}</b><span className="text-slate-500">{d.canAssignTasks ? 'Assigns tasks' : 'Receives tasks'}</span></div>)}</div></section>}{tab === 'departments' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="bg-white rounded-2xl border border-slate-200 p-5"><h3 className="font-bold text-sm">Add department</h3><div className="flex gap-2 mt-4"><input value={name} onChange={e => setName(e.target.value)} className="input" /><button onClick={() => void addDepartment()} className="btn-primary">Add</button></div></div><div className="bg-white rounded-2xl border border-slate-200 p-5">{departments.map((d: Department) => <div key={d.id} className="p-3 border-b border-slate-100 last:border-0 text-xs font-bold">{d.name}</div>)}</div></section>}{tab === 'payroll' && <section className="mt-4 bg-white rounded-2xl border border-slate-200 p-5 max-w-xl"><p className="text-sm font-bold">Payroll divisor</p><p className="text-xs text-slate-500 mt-1">Keep this configurable until the company confirms the final payroll policy.</p>{payrollPolicyStatus === 'loading' && <p role="status" className="text-xs text-slate-500 mt-3">Loading current payroll policy…</p>}{payrollPolicyStatus === 'error' && <div role="alert" className="mt-3 text-xs text-rose-700">Could not load the current payroll policy. Saving is disabled until it can be reloaded. <button type="button" onClick={() => setPayrollPolicyLoadKey(value => value + 1)} className="font-bold underline ml-1">Retry</button></div>}<select id="payroll-divisor" value={payrollDivisor} disabled={payrollPolicyStatus !== 'ready'} onChange={e => setPayrollDivisor(e.target.value as 'calendar_days' | 'working_days')} className="input mt-4 disabled:opacity-50"><option value="calendar_days">Calendar days</option><option value="working_days">Working days</option></select><button onClick={() => void savePayroll()} disabled={payrollPolicyStatus !== 'ready'} className="btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed">Save policy</button><p className="text-[11px] text-slate-400 mt-3">Paid leave accrual remains 1.5 days per month and carries forward.</p></section>}</PageShell>;
+  return <PageShell title="Settings" subtitle="Configure designations, assignment rules, departments and the payroll divisor policy."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['rules', 'Assignment rules'], ['designations', 'Designations'], ['departments', 'Departments'], ['payroll', 'Payroll policy']].map(([id, l]) => <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>{l}</button>)}</div>{tab === 'rules' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="card p-5"><h3 className="font-bold text-sm">Add assignment rule</h3><div className="space-y-4 mt-4"><Field label="Assigner designation"><select value={assigner} onChange={e => setAssigner(e.target.value)} className="input"><option value="">Select</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Assignee designation"><select value={assignee} onChange={e => setAssignee(e.target.value)} className="input"><option value="">Any designation</option>{designations.map((d: Designation) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field><Field label="Scope"><select value={scope} onChange={e => setScope(e.target.value as any)} className="input"><option value="direct_reports">Direct reports</option><option value="any">Any employee</option></select></Field><button onClick={() => void addRule()} className="btn-primary">Add rule</button></div></div><div className="card overflow-hidden"><div className="p-5 border-b border-slate-100"><h3 className="font-bold text-sm">Current rules</h3></div>{rules.map((r: AssignmentRule) => <div key={r.id} className="p-4 border-b border-slate-100 flex items-center justify-between gap-3"><p className="text-xs"><b>{r.assignerDesignation}</b> → {r.assigneeDesignation} <span className="text-slate-400">· {r.scope}</span></p><button onClick={() => void deleteRule(r.id)} className="icon-btn text-rose-500"><Trash2 className="w-4 h-4" /></button></div>)}{!rules.length && <EmptyCard text="No assignment rules." />}</div></section>}{tab === 'designations' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="card p-5"><h3 className="font-bold text-sm">Add designation</h3><div className="space-y-4 mt-4"><Field label="Name"><input value={name} onChange={e => setName(e.target.value)} className="input" /></Field><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={canAssign} onChange={e => setCanAssign(e.target.checked)} />Can assign tasks</label><button onClick={() => void addDesignation()} className="btn-primary">Add designation</button></div></div><div className="card p-5">{designations.map((d: Designation) => <div key={d.id} className="flex justify-between p-3 border-b border-slate-100 last:border-0 text-xs"><b>{d.name}</b><span className="text-slate-500">{d.canAssignTasks ? 'Assigns tasks' : 'Receives tasks'}</span></div>)}</div></section>}{tab === 'departments' && <section className="mt-4 grid lg:grid-cols-2 gap-4"><div className="card p-5"><h3 className="font-bold text-sm">Add department</h3><div className="flex gap-2 mt-4"><input value={name} onChange={e => setName(e.target.value)} className="input" /><button onClick={() => void addDepartment()} className="btn-primary">Add</button></div></div><div className="card p-5">{departments.map((d: Department) => <div key={d.id} className="p-3 border-b border-slate-100 last:border-0 text-xs font-bold">{d.name}</div>)}</div></section>}{tab === 'payroll' && <section className="mt-4 card p-5 max-w-xl"><p className="text-sm font-bold">Payroll divisor</p><p className="text-xs text-slate-500 mt-1">Keep this configurable until the company confirms the final payroll policy.</p>{payrollPolicyStatus === 'loading' && <p role="status" className="text-xs text-slate-500 mt-3">Loading current payroll policy…</p>}{payrollPolicyStatus === 'error' && <div role="alert" className="mt-3 text-xs text-rose-700">Could not load the current payroll policy. Saving is disabled until it can be reloaded. <button type="button" onClick={() => setPayrollPolicyLoadKey(value => value + 1)} className="font-bold underline ml-1">Retry</button></div>}<select id="payroll-divisor" value={payrollDivisor} disabled={payrollPolicyStatus !== 'ready'} onChange={e => setPayrollDivisor(e.target.value as 'calendar_days' | 'working_days')} className="input mt-4 disabled:opacity-50"><option value="calendar_days">Calendar days</option><option value="working_days">Working days</option></select><button onClick={() => void savePayroll()} disabled={payrollPolicyStatus !== 'ready'} className="btn-primary mt-4 disabled:opacity-50 disabled:cursor-not-allowed">Save policy</button><p className="text-[11px] text-slate-400 mt-3">Paid leave accrual remains 1.5 days per month and carries forward.</p></section>}</PageShell>;
 }
 
-function PageShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function PageShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="ira-page max-w-[1220px] mx-auto w-full">
-      <div className="mb-5 sm:mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-950">{title}</h2>
-        {subtitle && <p className="text-xs sm:text-sm text-slate-500 mt-1">{subtitle}</p>}
-      </div>
-      {children}
-    </div>
+    <Page>
+      <PageHeader title={title} subtitle={subtitle} actions={actions} />
+      <div className="space-y-4 sm:space-y-5">{children}</div>
+    </Page>
   );
 }
 
@@ -2105,20 +2060,20 @@ function NotificationBell({
 function LoadingScreen({ label = 'Loading IRA…' }: { label?: string }) { return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" />{label}</div></div> }
 
 
-function FormSection({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) { return <section className="ira-form-section"><div className="flex items-center gap-2 mb-3"><span className="w-8 h-8 rounded-xl bg-slate-100/85 border border-slate-200 flex items-center justify-center text-slate-600">{icon}</span><h4 className="text-sm font-bold text-slate-950">{title}</h4></div>{children}</section> }
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="block"><span className="label">{label}{hint && <span className="font-normal text-slate-400 ml-1">{hint}</span>}</span>{children}</label> }
+function FormSection({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) { return <section className="ira-form-section"><div className="flex items-center gap-3 mb-4"><IconChip icon={icon} tone="brand" size="sm" /><h4 className="font-display text-base font-bold text-ink-950">{title}</h4></div>{children}</section> }
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="block"><span className="label">{label}{hint && <span className="font-normal text-ink-400 ml-1">{hint}</span>}</span>{children}</label> }
 function FilterInput({ label, children }: { label: string; children: React.ReactNode }) { return <div><span className="label">{label}</span>{children}</div> }
-function InfoRow({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 text-xs"><span className="text-slate-500">{label}</span><b className="text-slate-800 text-right">{value}</b></div> }
-function Summary({ label, value }: { label: string; value: string | number }) { return <div className="summary-card"><span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 block">{label}</span><b className="text-lg mt-1 block text-slate-950">{value}</b></div> }
-function Kpi({ label, value, icon, textValue = false }: { label: string; value: any; icon: React.ReactNode; textValue?: boolean }) { return <div className="kpi-card"><div className="flex items-center justify-between text-slate-400"><span className="text-[10px] uppercase tracking-[0.12em] font-bold">{label}</span>{icon}</div><p className={`mt-3 font-bold text-slate-950 ${textValue ? 'text-base' : 'text-2xl'}`}>{value}</p></div> }
+function InfoRow({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-3 py-2.5 border-b border-ink-100 last:border-0 text-[13px]"><span className="text-ink-500">{label}</span><b className="text-ink-900 text-right font-semibold">{value}</b></div> }
+function Summary({ label, value }: { label: string; value: string | number }) { return <div className="card rise p-4 sm:p-5"><span className="text-[12px] font-semibold text-ink-500 block">{label}</span><b className="stat-value text-[28px] sm:text-[32px] mt-3 block text-ink-950">{value}</b></div> }
+function Kpi({ label, value, icon, textValue = false }: { label: string; value: any; icon: React.ReactNode; textValue?: boolean }) { return <div className="card rise p-5"><div className="flex items-center gap-3"><IconChip icon={icon} tone="brand" size="sm" /><span className="text-[13px] font-semibold text-ink-700">{label}</span></div><p className={`mt-4 stat-value text-ink-950 ${textValue ? 'text-2xl' : 'text-[36px]'}`}>{value}</p></div> }
 function DarkMetric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-white/5 border border-white/10 p-3"><span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">{label}</span><p className="text-sm font-bold font-mono mt-1">{value}</p></div> }
 function AttendanceMetric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">{label}</span><p className="text-sm font-bold font-mono mt-1">{value}</p></div> }
-function StatusBadge({ label, dark = false }: { label: string; dark?: boolean }) { const x = String(label).toLowerCase(); let c = 'bg-slate-100 text-slate-600 border-slate-200'; if (x === 'present' || x === 'approved' || x === 'completed' || x === 'active') c = 'bg-emerald-50 text-emerald-700 border-emerald-200'; if (x === 'late' || x === 'pending' || x === 'assigned') c = 'bg-amber-50 text-amber-700 border-amber-200'; if (x === 'rejected' || x === 'inactive' || x === 'absent') c = 'bg-rose-50 text-rose-700 border-rose-200'; if (x === 'wfh') c = 'bg-sky-50 text-sky-700 border-sky-200'; if (x === 'leave') c = 'bg-purple-50 text-purple-700 border-purple-200'; if (x === 'removed') c = 'bg-slate-100 text-slate-500 border-slate-200'; return <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[10px] font-bold uppercase ${dark ? 'bg-white/10 text-white border-white/10' : c}`}>{label}</span> }
-function PriorityBadge({ value }: { value: TaskPriority }) { return <span className="text-[10px] uppercase tracking-wider font-bold text-slate-600">{value}</span> }
-function Notice({ type, text }: { type: 'error' | 'success'; text: string }) { return <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm flex items-start gap-2 ${type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{type === 'error' ? <CircleAlert className="w-4 h-4 mt-0.5 shrink-0" /> : <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />}{text}</div> }
-function Th({ children }: { children: React.ReactNode }) { return <th className="px-4 py-3 font-semibold whitespace-nowrap">{children}</th> }
-function Td({ children, mono, strong }: { children: React.ReactNode; mono?: boolean; strong?: boolean }) { return <td className={`px-4 py-3.5 whitespace-nowrap ${mono ? 'font-mono' : ''} ${strong ? 'font-bold text-slate-800' : ''}`}>{children}</td> }
-function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) { return <tr><td colSpan={colSpan} className="p-10 text-center text-slate-500">{text}</td></tr> }
-function EmptyCard({ text }: { text: string }) { return <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-sm text-slate-500">{text}</div> }
+function StatusBadge({ label }: { label: string; dark?: boolean }) { return <UiStatusBadge status={String(label ?? '')} /> }
+function PriorityBadge({ value }: { value: TaskPriority }) { return <Badge tone={value === 'urgent' || value === 'high' ? 'rose' : value === 'medium' ? 'amber' : 'ink'}><span className="capitalize">{value}</span></Badge> }
+function Notice({ type, text }: { type: 'error' | 'success'; text: string }) { return <UiNotice tone={type === 'error' ? 'rose' : 'mint'}>{text}</UiNotice> }
+function Th({ children }: { children: React.ReactNode }) { return <th>{children}</th> }
+function Td({ children, mono, strong }: { children: React.ReactNode; mono?: boolean; strong?: boolean }) { return <td className={`whitespace-nowrap ${mono ? 'tnum' : ''} ${strong ? 'font-bold text-ink-900' : ''}`}>{children}</td> }
+function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) { return <tr><td colSpan={colSpan} className="!py-12 text-center text-ink-400">{text}</td></tr> }
+function EmptyCard({ text }: { text: string }) { return <div className="card"><EmptyState title={text} className="!py-10" /></div> }
 
 function clean(v: any) { const s = String(v ?? '').trim(); return s || null }
