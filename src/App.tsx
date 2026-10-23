@@ -16,6 +16,8 @@ import { TASK_STATUS, TASK_STATUS_ORDER, fmtMinutes, isTaskClosed, isTaskOpen, i
 import { RolesMatrix } from './components/admin/RolesMatrix';
 import { TeamApprovals } from './components/employee/TeamApprovals';
 import { LeavePolicySettings } from './components/admin/LeavePolicySettings';
+import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
+import { PerformancePage } from './components/performance/PerformancePage';
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
@@ -59,7 +61,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks, ClipboardCheck
+  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -176,11 +178,11 @@ function LiveClockDisplay() {
   );
 }
 
-const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications'];
-const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals'];
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
-  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests',
+  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance',
 };
 /** The page a path resolves to for this role; links meant for the other role land on the closest equivalent. */
 function resolveTab(role: AuthUser['role'], raw: string): string {
@@ -589,6 +591,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'admin-employees', label: 'Employees', icon: Users },
           { id: 'admin-attendance', label: 'Attendance', icon: Clock3 },
           { id: 'admin-requests', label: 'Requests', icon: FileClock, badge: pendingLeaveCount + pendingWfhCount },
+          { id: 'admin-performance', label: 'Performance', icon: Target },
           { id: 'admin-payroll', label: 'Payroll', icon: WalletCards },
           { id: 'admin-holidays', label: 'Holidays', icon: CalendarDays },
         ]
@@ -621,6 +624,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       ...(managesPeople ? [{ label: 'My team', items: [{ id: 'emp-approvals', label: 'Team approvals', icon: ClipboardCheck }] }] : []),
       {
         label: 'Me', items: [
+          { id: 'emp-performance', label: 'Performance', icon: Target },
           { id: 'emp-payroll', label: 'Payroll', icon: WalletCards },
           { id: 'emp-notifications', label: 'Notifications', icon: Bell },
           { id: 'emp-profile', label: 'Profile', icon: UserRound },
@@ -722,6 +726,8 @@ function getPageTitle(tab: string) {
     'admin-notifications': 'Notifications',
     'emp-notifications': 'Notifications',
     'emp-approvals': 'Team approvals',
+    'emp-performance': 'Performance',
+    'admin-performance': 'Performance',
     'admin-finance': 'Finance',
     'admin-activity': 'Activity log',
   } as Record<string, string>)[tab] ?? 'Dashboard';
@@ -740,6 +746,7 @@ function AdminContent(props: any) {
   if (activeTab === 'admin-settings') return <SettingsAdmin {...props} />;
   if (activeTab === 'admin-finance') return <FinancePage onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-activity') return <ActivityLogPage />;
+  if (activeTab === 'admin-performance') return <PerformanceAdmin employees={props.employees} designations={props.designations} />;
   if (activeTab === 'admin-notifications') return <NotificationsPage user={user} onOpen={onSelectTab} />;
   return <AdminHome {...props} onSelectTab={onSelectTab} />;
 }
@@ -754,6 +761,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysPage {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
+  if (activeTab === 'emp-performance') return <PerformancePage user={props.user} employees={props.employees} />;
   if (activeTab === 'emp-approvals') return <TeamApprovals onRefresh={props.onRefresh} />;
   if (activeTab === 'emp-notifications') return <NotificationsPage user={props.user} onOpen={props.onSelectTab} />;
   return <EmployeeHome {...props} onSelectTab={props.onSelectTab} />;
