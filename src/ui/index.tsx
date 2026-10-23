@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useCountUp } from './motion';
 
-const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ');
+const cx = (...parts: Array<string | number | false | null | undefined>) => parts.filter((p) => typeof p === 'string' && p).join(' ');
 export { cx };
 
 export type Tone = 'brand' | 'mint' | 'amber' | 'rose' | 'sky' | 'ink' | 'dark';
