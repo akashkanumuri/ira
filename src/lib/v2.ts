@@ -252,6 +252,8 @@ export function mapTask(row: any, employees: Map<string, Employee>): Task {
     archivedAt: row.archived_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    projectId: row.project_id ?? null,
+    deliverableId: row.deliverable_id ?? null,
   };
 }
 

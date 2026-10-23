@@ -171,6 +171,9 @@ export interface Task {
   archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Client delivery link (SIGMA 1): set via staff_link_task_to_deliverable. */
+  projectId?: string | null;
+  deliverableId?: string | null;
 }
 
 export interface LeaveLedger {
