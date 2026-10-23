@@ -11,6 +11,7 @@ import { AdminHome } from './components/admin/AdminHome';
 import { FinancePage } from './components/admin/FinancePage';
 import { ActivityLogPage } from './components/admin/ActivityLogPage';
 import { NotificationsPage } from './components/common/NotificationsPage';
+import { RolesMatrix } from './components/admin/RolesMatrix';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
 import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
 import { useLinkableDeliverables, type LinkableDeliverable } from './lib/linkableDeliverables';
@@ -2002,7 +2003,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
 }
 
 function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
-  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll'>('rules');
+  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'roles'>('rules');
   const [name, setName] = useState(''); const [canAssign, setCanAssign] = useState(false);
   const [deptName, setDeptName] = useState('');
   const [payrollDivisor, setPayrollDivisor] = useState<'calendar_days' | 'working_days'>('calendar_days');
@@ -2021,7 +2022,9 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
 
   return (
     <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments and the payroll policy.">
-      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'payroll', label: 'Payroll policy' }]} />
+      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
+
+      {tab === 'roles' && <section className="anim-fade" key="roles"><RolesMatrix /></section>}
 
       {tab === 'rules' && (
         <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="rules">
