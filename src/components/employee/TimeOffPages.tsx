@@ -103,7 +103,7 @@ export function LeavePage({ user, leaveRequests, ledgers, onRefresh }: { user: A
         startDate,
         endDate,
         leaveId: newLeave?.id ?? crypto.randomUUID(),
-        employeeDbId: user.employeeDbId,
+        employeeDbId: user.employeeDbId ?? "",
         actorUserId: user.id,
       });
       setOpen(false);
@@ -273,7 +273,7 @@ export function WfhPage({ user, wfhRequests, onRefresh }: { user: AuthUser; wfhR
         date,
         duration: wfhDuration,
         wfhId: newWfh?.id ?? crypto.randomUUID(),
-        employeeDbId: user.employeeDbId,
+        employeeDbId: user.employeeDbId ?? "",
         actorUserId: user.id,
       });
       setOpen(false);
