@@ -12,7 +12,7 @@ import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHo
 import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
 import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { AppShell, type NavGroup } from './ui/AppShell';
-import { Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, SkeletonPage, Stat, StatusBadge as UiStatusBadge } from './ui';
+import { Avatar, Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, PillTabs, SkeletonPage, Stat, StatusBadge as UiStatusBadge } from './ui';
 import { Modal } from './ui/Modal';
 import { ConfirmHost, confirmDialog } from './ui/confirm';
 import { ToastHost } from './components/common/ToastHost';
@@ -1211,7 +1211,7 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, wfhRequests, ho
   return <PageShell title="Attendance" subtitle="Daily attendance with explicit login/check-in/break/check-out separation."><div className="card p-4 flex flex-col sm:flex-row gap-3"><label className="flex-1"><span className="label">Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" /></label><label className="flex-1"><span className="label">Search</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…" className="input" /></label></div><div className="mt-4 card p-4 text-xs flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600" /><b>{dateLabel(date, { weekday: 'long' })}</b><span className="text-slate-500">· {cl.label}</span></div><div className="mt-4 card overflow-hidden"><div className="overflow-x-auto"><table className="data-table"><thead><tr><Th>Employee</Th><Th>Mode</Th><Th>Check-in</Th><Th>Break</Th><Th>Check-out</Th><Th>Working</Th><Th>Status</Th></tr></thead><tbody>{cl.isWorkingDay ? rows.map(({ e, record, leave }: any) => <tr key={e.id}><Td strong>{e.name}<span className="block text-[10px] text-slate-400">{e.empId}</span></Td><Td>{leave ? 'Leave' : record?.mode === 'wfh' ? 'WFH' : record ? 'Office' : e.workMode === 'remote' ? 'WFH' : '—'}</Td><Td mono>{record?.checkIn ?? '—'}</Td><Td mono>{record ? duration(record.breakSeconds) : '—'}</Td><Td mono>{record?.checkOut ?? '—'}</Td><Td mono>{record ? duration(record.workingSeconds) : '—'}</Td><Td><StatusBadge label={leave ? 'Leave' : record?.status ?? (e.joinDate && date < e.joinDate ? 'Not joined' : date > today() ? 'Upcoming' : date === today() ? 'Not checked-in' : 'Not recorded')} /></Td></tr>) : <tr><td colSpan={7} className="p-10 text-center text-sm text-slate-500">{cl.label}. No check-in required.</td></tr>}{cl.isWorkingDay && !rows.length && <EmptyRow colSpan={7} text="No active employees." />}</tbody></table></div></div></PageShell>;
 }
 
-function RequestsAdmin({ leaveRequests, wfhRequests, user, onRefresh }: any) {
+function RequestsAdmin({ leaveRequests, wfhRequests, ledgers = [], employees = [], user, onRefresh }: any) {
   const [tab, setTab] = useState<'leave' | 'wfh'>(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'wfh' ? 'wfh' : 'leave'
   );
@@ -1260,12 +1260,96 @@ function RequestsAdmin({ leaveRequests, wfhRequests, user, onRefresh }: any) {
       setBusyKey(null);
     }
   }
-  return <PageShell title="Requests" subtitle="Review employee leave and WFH requests."><div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">{[['leave', 'Leave'], ['wfh', 'WFH']].map(([id, l]) => <button key={id} onClick={() => setTab(id as any)} className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>{l}</button>)}</div>{tab === 'leave' && <RequestTable type="leave" rows={leaveRequests} onReview={(id, s) => void review('leave_requests', id, s)} busyKey={busyKey} />}{tab === 'wfh' && <RequestTable type="wfh" rows={wfhRequests} onReview={(id, s) => void review('wfh_requests', id, s)} busyKey={busyKey} />}</PageShell>;
-}
+  const leavePending = (leaveRequests as LeaveRequest[]).filter((r) => r.status === 'pending');
+  const wfhPending = (wfhRequests as WfhRequest[]).filter((r) => r.status === 'pending');
+  const balanceOf = (employeeId: string, date: string) =>
+    (ledgers as LeaveLedger[]).find((l) => l.employeeId === employeeId && l.periodStart === `${date.slice(0, 7)}-01`);
+  const avatarOf = (employeeId: string) => (employees as Employee[]).find((e) => e.id === employeeId)?.avatar || null;
+  const rows = tab === 'leave' ? (leaveRequests as LeaveRequest[]) : (wfhRequests as WfhRequest[]);
+  const pending = tab === 'leave' ? leavePending : wfhPending;
+  const reviewed = rows.filter((r: any) => r.status !== 'pending');
+  const table = tab === 'leave' ? 'leave_requests' : 'wfh_requests';
 
-function RequestTable({ type, rows, onReview, busyKey }: { type: 'leave' | 'wfh'; rows: any[]; onReview: (id: string, s: 'approved' | 'rejected') => void; busyKey: string | null }) {
-  const title = type === 'leave' ? 'Leave requests' : 'WFH requests';
-  return <div className="mt-4 card overflow-hidden"><div className="p-4 border-b border-slate-100"><h3 className="font-bold text-sm">{title}</h3></div><div className="overflow-x-auto"><table className="data-table"><thead><tr><Th>Employee</Th><Th>Date</Th><Th>Details</Th><Th>Status</Th><Th>Action</Th></tr></thead><tbody>{rows.map(r => <tr key={r.id}><Td strong>{r.employeeName}<span className="block text-[10px] text-slate-400">{r.department}</span></Td><Td>{type === 'leave' ? dateLabel(r.startDate) + ' → ' + dateLabel(r.endDate) : dateLabel(r.date)}</Td><Td>{type === 'leave' ? `${r.leaveType} · ${r.days} day(s) · paid ${r.paidDays ?? 0} · unpaid ${r.unpaidDays ?? 0} · ${r.reason}` : `${r.duration} · ${r.reason}`}</Td><Td><StatusBadge label={r.status} /></Td><Td>{r.status === 'pending' ? <div className="flex gap-1.5"><button disabled={!!busyKey} onClick={() => onReview(r.id, 'approved')} className="btn-approve">{busyKey ? 'Saving…' : 'Approve'}</button><button disabled={!!busyKey} onClick={() => onReview(r.id, 'rejected')} className="btn-reject">{busyKey ? 'Saving…' : 'Reject'}</button></div> : <span className="text-slate-400">Reviewed</span>}</Td></tr>)}{!rows.length && <EmptyRow colSpan={5} text="No requests." />}</tbody></table></div></div>;
+  return (
+    <PageShell
+      title="Requests"
+      subtitle="Approve or reject time off and work-from-home. Employees are notified straight away."
+      actions={<PillTabs value={tab} onChange={(v) => { setTab(v); window.history.replaceState(null, '', `/admin-requests?tab=${v}`); }} items={[{ id: 'leave', label: 'Leave', count: leavePending.length }, { id: 'wfh', label: 'Work from home', count: wfhPending.length }]} />}
+    >
+      <section className="space-y-3">
+        <p className="eyebrow">Waiting for you · {pending.length}</p>
+        {pending.length ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {pending.map((r: any, i: number) => {
+              const bal = tab === 'leave' ? balanceOf(r.employeeId, r.startDate) : null;
+              const available = bal ? Math.max(0, Number(bal.openingBalance) + Number(bal.accrual) + Number(bal.adjustment ?? 0) - Number(bal.paidUsed)) : null;
+              const busy = busyKey === `${table}:${r.id}`;
+              return (
+                <section key={r.id} className="card rise p-5" style={{ ['--i' as any]: i }}>
+                  <div className="flex items-start gap-3">
+                    <Avatar name={r.employeeName} src={avatarOf(r.employeeId)} size={42} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-ink-900 truncate">{r.employeeName}</p>
+                      <p className="text-xs text-ink-500 truncate">{r.department || '—'} · asked {r.requestedOn ? new Date(r.requestedOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }) : '—'}</p>
+                    </div>
+                    <Badge tone="amber" dot>Pending</Badge>
+                  </div>
+                  <div className="mt-4 inset-tile p-4">
+                    {tab === 'leave' ? (
+                      <>
+                        <p className="font-display text-lg font-bold text-ink-950">
+                          {r.startDate === r.endDate ? dateLabel(r.startDate, { weekday: 'short', day: 'numeric', month: 'short' }) : `${dateLabel(r.startDate)} → ${dateLabel(r.endDate)}`}
+                        </p>
+                        <p className="text-[13px] text-ink-600 mt-0.5"><span className="capitalize font-semibold">{r.leaveType}</span> · {r.days} working day{Number(r.days) === 1 ? '' : 's'}{r.duration === 'half' ? ' (half day)' : ''}</p>
+                        {available != null && r.leaveType !== 'unpaid' && (
+                          <p className={`text-xs mt-1.5 ${available < Number(r.days) ? 'text-amber-700 font-semibold' : 'text-ink-500'}`}>
+                            {available} paid day{available === 1 ? '' : 's'} available{available < Number(r.days) ? ` — ${Number(r.days) - available} would be unpaid` : ''}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-display text-lg font-bold text-ink-950">{dateLabel(r.date, { weekday: 'long', day: 'numeric', month: 'short' })}</p>
+                        <p className="text-[13px] text-ink-600 mt-0.5">{String(r.duration).startsWith('half') ? 'Half day' : 'Full day'} at home</p>
+                      </>
+                    )}
+                    <p className="text-[13px] text-ink-700 mt-3 leading-relaxed">“{r.reason}”</p>
+                    {r.note && <p className="text-xs text-ink-500 mt-1">{r.note}</p>}
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" disabled={!!busyKey} onClick={() => void review(table, r.id, 'rejected')} className="btn-secondary flex-1">Reject</button>
+                    <button type="button" disabled={!!busyKey} onClick={() => void review(table, r.id, 'approved')} className="btn-primary flex-1">{busy ? 'Saving…' : 'Approve'}</button>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="card"><EmptyState icon={<CheckCircle2 className="w-6 h-6" />} title="You’re all caught up" text={`No ${tab === 'leave' ? 'leave' : 'work-from-home'} requests are waiting.`} className="!py-10" /></div>
+        )}
+      </section>
+
+      <section className="card overflow-hidden">
+        <div className="p-5 sm:p-6"><h2 className="font-display text-lg font-bold text-ink-950">Reviewed</h2><p className="text-[13px] text-ink-500 mt-1">{reviewed.length} decision{reviewed.length === 1 ? '' : 's'}</p></div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead><tr><Th>Employee</Th><Th>{tab === 'leave' ? 'Dates' : 'Date'}</Th><Th>Details</Th><Th>Decision</Th></tr></thead>
+            <tbody>
+              {reviewed.map((r: any) => (
+                <tr key={r.id}>
+                  <Td strong>{r.employeeName}</Td>
+                  <Td>{tab === 'leave' ? (r.startDate === r.endDate ? dateLabel(r.startDate) : `${dateLabel(r.startDate)} → ${dateLabel(r.endDate)}`) : dateLabel(r.date)}</Td>
+                  <Td>{tab === 'leave' ? <><span className="capitalize">{r.leaveType}</span> · {r.days}d{r.status === 'approved' ? ` · ${r.paidDays ?? 0} paid / ${r.unpaidDays ?? 0} unpaid` : ''}</> : String(r.duration).startsWith('half') ? 'Half day' : 'Full day'}</Td>
+                  <Td><StatusBadge label={r.status} /></Td>
+                </tr>
+              ))}
+              {!reviewed.length && <EmptyRow colSpan={4} text="Nothing reviewed yet." />}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </PageShell>
+  );
 }
 
 function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: any) {
