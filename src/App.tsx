@@ -1585,10 +1585,22 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
   const todayClass = classifyDay(today(), holidays);
   const isHolidayToday = todayClass.type === 'holiday';
   const isSunday = todayClass.type === 'sunday_off';
+  // The database rejects check-in on approved leave, Sundays and company holidays
+  // (private.validate_attendance_insert), so the screen must not offer it.
+  const todayApprovedLeave = (leaveRequests as LeaveRequest[]).find(
+    (l) => l.employeeId === employeeId && l.status === 'approved' && l.startDate <= today() && l.endDate >= today()
+  ) ?? null;
+  const checkInBlockedReason = todayApprovedLeave
+    ? `You are on approved leave until ${dateLabel(todayApprovedLeave.endDate)}. No check-in is needed today.`
+    : isHolidayToday
+      ? 'Today is a company holiday. Attendance is not recorded today.'
+      : isSunday
+        ? 'Today is Sunday (weekly off). Attendance is not recorded today.'
+        : null;
 
   const selectedClass = selectedDate ? classifyDay(selectedDate, holidays) : null;
   const selectedApprovedLeave = selectedDate
-    ? (leaveRequests as LeaveRequest[]).find((l) => l.status === 'approved' && l.startDate <= selectedDate && l.endDate >= selectedDate)
+    ? (leaveRequests as LeaveRequest[]).find((l) => l.employeeId === employeeId && l.status === 'approved' && l.startDate <= selectedDate && l.endDate >= selectedDate)
     : null;
 
   return (
@@ -1603,7 +1615,9 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
             <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 font-bold">Today</p>
             <h2 className="text-2xl font-bold mt-1 text-slate-900">{dateLabel(today(), { weekday: 'long' })}</h2>
             <p className="text-xs text-slate-500 mt-1">
-              {isRemote
+              {todayApprovedLeave && !current
+                ? 'On approved leave today'
+                : isRemote
                 ? 'Permanent remote · WFH check-in'
                 : approvedWfhToday
                   ? 'Approved WFH today · choose your check-in mode'
@@ -1629,6 +1643,11 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600">
                 <span className="w-2 h-2 rounded-full bg-slate-400" />
                 Checked Out Today
+              </span>
+            ) : todayApprovedLeave ? (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-200 text-xs font-bold text-violet-700">
+                <span className="w-2 h-2 rounded-full bg-violet-500" />
+                On Leave
               </span>
             ) : (
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
@@ -1726,13 +1745,12 @@ function EmployeeAttendanceSection({ user, attendance, holidays, leaveRequests =
         {/* D. ATTENDANCE ACTION BUTTONS */}
         {!previousOpen && (
           <div className="mt-5">
-            {!current ? (
+            {!current && checkInBlockedReason ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs font-medium text-slate-600">
+                {checkInBlockedReason}
+              </div>
+            ) : !current ? (
               <div className="space-y-2">
-                {(isHolidayToday || isSunday) && (
-                  <p className="text-[11px] font-medium text-amber-700">
-                    {isHolidayToday ? 'Today is a scheduled holiday.' : 'Today is Sunday (weekly off).'} Check in below if you are working today:
-                  </p>
-                )}
                 <button
                   type="button"
                   disabled={busy}
