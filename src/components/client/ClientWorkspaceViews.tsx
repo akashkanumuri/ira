@@ -378,6 +378,7 @@ export function ClientDashboard({ user, project, ws, go }: ViewProps) {
               ['Value', contract.contract_value != null ? `${inr(contract.contract_value)}${contract.tax_note ? ' ' + contract.tax_note : ''}` : '—'],
               ['Accepted', contract.accepted_at ? fmtDate(contract.accepted_at) : 'Not yet'],
               ['Runs', `${fmtDate(contract.start_date)} – ${fmtDate(contract.end_date)}`],
+              ['Renewal date', fmtDate(contract.renewal_date)],
             ]} />
           ) : <p className="text-[13px] text-ink-500">Your project team will send the contract here for you to review and accept.</p>}
           {contract && <button type="button" onClick={() => go('contracts')} className="btn-secondary btn-sm mt-4">Open contract <ArrowRight className="w-3.5 h-3.5" /></button>}

@@ -5,7 +5,7 @@ import {
   Clock3, Download, FileSignature, FileClock, Home, Package, RefreshCw, Users, Wallet, Upload, Hourglass,
 } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
-import type { AttendanceRecord, BreakEvent, CorrectionRequest, Employee, Holiday, LeaveRequest, PayrollPeriod, PayrollRecord, WfhRequest } from '../../types/attendance';
+import type { AttendanceRecord, BreakEvent, CorrectionRequest, Employee, Holiday, LeaveRequest, PayrollPeriod, PayrollRecord, Task, WfhRequest } from '../../types/attendance';
 import { supabase } from '../../lib/supabase';
 import { notify } from '../../lib/toast';
 import { dateLabel, duration, money } from '../../lib/v2';
@@ -35,6 +35,7 @@ interface Props {
   holidays: Holiday[];
   payrollPeriods: PayrollPeriod[];
   payrollRecords: PayrollRecord[];
+  tasks?: Task[];
   onSelectTab: (tab: string) => void;
 }
 
@@ -60,7 +61,7 @@ function checkOutLabel(record?: AttendanceRecord) {
   return record.mode === 'wfh' ? 'Open (manual)' : 'Open';
 }
 
-export function AdminHome({ user, employees, attendance, leaveRequests, wfhRequests, corrections = [], holidays, payrollPeriods, payrollRecords, onSelectTab }: Props) {
+export function AdminHome({ user, employees, attendance, leaveRequests, wfhRequests, corrections = [], holidays, payrollPeriods, payrollRecords, tasks = [], onSelectTab }: Props) {
   const today = getKolkataDateString();
   const org = useOrgOverview(true);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -134,6 +135,9 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
   if (o?.modifications.open) attention.push({ key: 'mods', tone: 'amber', icon: <FileClock className="w-5 h-5" />, title: `${o.modifications.open} modification request${o.modifications.open === 1 ? '' : 's'} open`, caption: 'Client asked to change scope, quantity or timeline', to: 'admin-clients' });
   if (o?.dependencies.toReview) attention.push({ key: 'deps', tone: 'brand', icon: <Upload className="w-5 h-5" />, title: `${o.dependencies.toReview} client upload${o.dependencies.toReview === 1 ? '' : 's'} to review`, caption: 'Dependencies submitted by clients', to: 'admin-clients' });
   if (o?.delivery.awaitingReview) attention.push({ key: 'review', tone: 'brand', icon: <ClipboardCheck className="w-5 h-5" />, title: `${o.delivery.awaitingReview} deliverable${o.delivery.awaitingReview === 1 ? '' : 's'} in internal review`, caption: 'Ready for a reviewer before going to the client', to: 'admin-clients' });
+  const overdueTasks = tasks.filter((t) => t.status !== 'completed' && t.dueDate && t.dueDate < today);
+  if (overdueTasks.length) attention.push({ key: 'tasks', tone: 'rose', icon: <ClipboardCheck className="w-5 h-5" />, title: `${overdueTasks.length} task${overdueTasks.length === 1 ? '' : 's'} past due date`, caption: Array.from(new Set(overdueTasks.map((t) => t.assignedToName).filter(Boolean))).slice(0, 3).join(', '), to: 'admin-tasks' });
+  if (o?.contracts.expiringSoon) attention.push({ key: 'expiring', tone: 'amber', icon: <FileSignature className="w-5 h-5" />, title: `${o.contracts.expiringSoon} contract${o.contracts.expiringSoon === 1 ? '' : 's'} ending within 30 days`, caption: 'Plan the renewal with the client', to: 'admin-clients' });
   if (o?.contracts.awaitingClient) attention.push({ key: 'contracts', tone: 'ink', icon: <FileSignature className="w-5 h-5" />, title: `${o.contracts.awaitingClient} contract${o.contracts.awaitingClient === 1 ? '' : 's'} awaiting signature`, caption: 'Sent to the client, not yet accepted', to: 'admin-clients' });
   if (notCheckedIn > 0) attention.push({ key: 'absent', tone: 'ink', icon: <Hourglass className="w-5 h-5" />, title: `${notCheckedIn} not checked in yet`, caption: 'Working day, no attendance and no approved leave', to: 'admin-attendance' });
 
