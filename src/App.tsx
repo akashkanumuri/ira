@@ -1842,14 +1842,15 @@ function ProfileEmployee({ user, onRefresh }: any) {
           <div className="h-20 sm:h-24 bg-gradient-to-r from-brand-600 via-brand-500 to-brand-400 relative">
             <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '14px 14px' }} />
           </div>
-          <div className="px-5 sm:px-6 pb-5 -mt-10 flex flex-col sm:flex-row sm:items-end gap-4">
-            <div className="relative w-fit">
+          <div className="px-5 sm:px-6 pb-5">
+            <div className="relative w-fit -mt-10">
               {user.avatar ? <img src={user.avatar} alt="" className="w-20 h-20 rounded-full object-cover ring-4 ring-white" /> : <div className="w-20 h-20 rounded-full ring-4 ring-white"><Avatar name={user.name} size={80} /></div>}
               <label className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-white border border-ink-200 flex items-center justify-center cursor-pointer shadow-sm hover:bg-ink-50" title="Change photo">
                 <Upload className="w-4 h-4 text-ink-700" />
                 <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void savePhoto(f); e.target.value = '' }} />
               </label>
             </div>
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="font-display text-xl font-bold text-ink-900 truncate">{user.name}</p>
               <p className="text-[13px] text-ink-500">{[user.designation, user.department].filter(Boolean).join(' · ') || '—'}</p>
@@ -1857,6 +1858,7 @@ function ProfileEmployee({ user, onRefresh }: any) {
             <div className="flex flex-wrap gap-2">
               {user.empId && <Badge tone="brand">{user.empId}</Badge>}
               <Badge tone={user.workMode === 'remote' ? 'sky' : 'mint'} dot>{user.workMode === 'remote' ? 'Remote' : 'Office'}</Badge>
+            </div>
             </div>
           </div>
         </section>
