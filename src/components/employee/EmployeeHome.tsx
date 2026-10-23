@@ -46,7 +46,7 @@ export function EmployeeHome(props: Common & {
   const myOpen = useMemo(
     () =>
       tasks
-        .filter((t) => t.assignedTo === user.employeeDbId && t.status !== 'completed')
+        .filter((t) => t.assignedTo === user.employeeDbId && !['completed', 'cancelled', 'awaiting_review'].includes(t.status))
         .sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     [tasks, user.employeeDbId]
   );

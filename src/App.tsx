@@ -11,6 +11,8 @@ import { AdminHome } from './components/admin/AdminHome';
 import { FinancePage } from './components/admin/FinancePage';
 import { ActivityLogPage } from './components/admin/ActivityLogPage';
 import { NotificationsPage } from './components/common/NotificationsPage';
+import { TaskDetail } from './components/tasks/TaskDetail';
+import { TASK_STATUS, TASK_STATUS_ORDER, fmtMinutes, isTaskClosed, isTaskOpen, isTaskWithAssignee } from './lib/tasks';
 import { RolesMatrix } from './components/admin/RolesMatrix';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
 import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
@@ -53,7 +55,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck
+  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -487,8 +489,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             notify('New task assigned to you.', 'info', 4200, 'task');
           } else if (user.role === 'employee' && payload.eventType === 'UPDATE' && next.assigned_to === user.employeeDbId && previous.assigned_to !== next.assigned_to) {
             notify('A task has been assigned to you.', 'info', 4200, 'task');
-          } else if (user.role === 'admin' && payload.eventType === 'UPDATE' && previous.status !== 'completed' && next.status === 'completed') {
-            notify('Employee submitted completed work.', 'success', 4200, 'task');
+          } else if (user.role === 'admin' && payload.eventType === 'UPDATE' && previous.status !== next.status && (next.status === 'awaiting_review' || next.status === 'blocked')) {
+            notify(next.status === 'blocked' ? 'A task is blocked.' : 'Work handed in for review.', next.status === 'blocked' ? 'info' : 'success', 4200, 'task');
           }
         } else if ((table === 'leave_requests' || table === 'wfh_requests' || table === 'regularization_requests') && user.role === 'employee') {
           if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
@@ -564,7 +566,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
 
   const pendingLeaveCount = leaveRequests.filter(x => x.status === 'pending').length;
   const pendingWfhCount = wfhRequests.filter(x => x.status === 'pending').length;
-  const employeeOpenTasksCount = tasks.filter(t => t.assignedTo === user.employeeDbId && t.status === 'assigned').length;
+  const employeeOpenTasksCount = tasks.filter(t => !t.archivedAt && ((t.assignedTo === user.employeeDbId && (t.status === 'assigned' || t.status === 'revision_required')) || (t.assignedBy === user.employeeDbId && t.status === 'awaiting_review'))).length;
 
   const navGroups: NavGroup[] = user.role === 'admin'
     ? [
@@ -573,7 +575,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         label: 'Clients & delivery', items: [
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
           { id: 'admin-finance', label: 'Finance', icon: BadgeIndianRupee },
-          { id: 'admin-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness },
+          { id: 'admin-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness, badge: tasks.filter(t => !t.archivedAt && t.status === 'awaiting_review').length },
         ]
       },
       {
@@ -801,81 +803,50 @@ async function linkTaskToDeliverable(taskId: string | null | undefined, delivera
   if (error) notify(`Task created, but it couldn’t be linked to the deliverable: ${error.message}`, 'error', 7000);
 }
 
+/** Hide subtasks from a list when their parent is also listed — they're shown inside the parent. */
+function topLevel(list: Task[]) {
+  const ids = new Set(list.map((t) => t.id));
+  return list.filter((t) => !t.parentTaskId || !ids.has(t.parentTaskId));
+}
+const byDue = (a: Task, b: Task) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title);
+
 function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh }: any) {
-  const [submitId, setSubmitId] = useState('');
-  const [link, setLink] = useState('');
-  const [submitBusy, setSubmitBusy] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [assignBusy, setAssignBusy] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('task'));
   const assignRequestRef = useRef<string | null>(null);
   const myId = user.employeeDbId!;
   const myDesignation = (designations as Designation[]).find((d: Designation) => d.id === user.designationId);
   const canAssign = Boolean(user.designationId && (myDesignation?.canAssignTasks ?? (designations as Designation[]).some((d: Designation) => d.id === user.designationId && d.canAssignTasks)));
-  const visibleAll = tasks.filter((t: Task) => !t.archivedAt && (t.assignedTo === myId || t.assignedBy === myId)).sort((a: Task, b: Task) => a.status === b.status ? a.dueDate.localeCompare(b.dueDate) : a.status === 'completed' ? 1 : -1);
-  const [view, setView] = useState<'open' | 'done' | 'given'>('open');
-  const mineOpen = visibleAll.filter((t: Task) => t.assignedTo === myId && t.status !== 'completed');
-  const mineDone = visibleAll.filter((t: Task) => t.assignedTo === myId && t.status === 'completed');
-  const given = visibleAll.filter((t: Task) => t.assignedBy === myId);
-  const visible = view === 'open' ? mineOpen : view === 'done' ? mineDone : given;
-  const overdueCount = mineOpen.filter((t: Task) => t.dueDate < today()).length;
+  const all = (tasks as Task[]).filter((t) => !t.archivedAt && (t.assignedTo === myId || t.assignedBy === myId));
+  const [view, setView] = useState<'open' | 'review' | 'done' | 'given'>('open');
+  const mine = all.filter((t) => t.assignedTo === myId);
+  const mineOpen = mine.filter(isTaskWithAssignee).sort(byDue);
+  const mineReview = mine.filter((t) => t.status === 'awaiting_review').sort(byDue);
+  const mineDone = mine.filter(isTaskClosed).sort((a, b) => (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt));
+  const given = all.filter((t) => t.assignedBy === myId && t.assignedTo !== myId).sort((a, b) => (a.status === 'awaiting_review' ? -1 : 0) - (b.status === 'awaiting_review' ? -1 : 0) || byDue(a, b));
+  const toReview = given.filter((t) => t.status === 'awaiting_review').length;
+  const visible = topLevel(view === 'open' ? mineOpen : view === 'review' ? mineReview : view === 'done' ? mineDone : given);
+  const overdueCount = mineOpen.filter((t) => t.dueDate < today()).length;
   const weekEnd = (() => { const d = new Date(`${today()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); })();
-  const dueThisWeek = mineOpen.filter((t: Task) => t.dueDate >= today() && t.dueDate <= weekEnd).length;
+  const dueThisWeek = mineOpen.filter((t) => t.dueDate >= today() && t.dueDate <= weekEnd).length;
   const linkable = useLinkableDeliverables(canAssign);
   const deliverableName = (id?: string | null) => { const d = id ? linkable.all.find((x) => x.id === id) : null; return d ? `${d.number ? d.number + ' · ' : ''}${d.name}` : null; };
 
   const myRules = (rules as AssignmentRule[]).filter(r => r.assignerDesignationId === user.designationId);
   const hasDirectReportRules = myRules.some(r => r.scope === 'direct_reports');
   const directReportDesignations = Array.from(new Set(myRules.filter(r => r.scope === 'direct_reports').map(r => r.assigneeDesignation || 'Direct reports'))).filter(Boolean);
-
   const targets = (employees as Employee[]).filter((e) =>
-    e.status === 'active' &&
-    e.id !== myId &&
-    myRules.some(
-      r => (!r.assigneeDesignationId || r.assigneeDesignationId === e.designationId) &&
-        (r.scope === 'any' || (r.scope === 'direct_reports' && e.managerId === myId))
-    )
+    e.status === 'active' && e.id !== myId &&
+    myRules.some(r => (!r.assigneeDesignationId || r.assigneeDesignationId === e.designationId) && (r.scope === 'any' || (r.scope === 'direct_reports' && e.managerId === myId)))
   );
-
-  async function submitTask() {
-    if (submitBusy || !submitId) return;
-    setMessage('');
-    const cleanLink = link.trim();
-    if (!/^https?:\/\//i.test(cleanLink)) { setMessage('Paste a valid http(s) work link.'); notify('Paste a valid work link.', 'error'); return; }
-    setSubmitBusy(true);
-    try {
-      const { error } = await (supabase as any).rpc('submit_task', { p_task_id: submitId, p_submitted_link: cleanLink });
-      if (error) throw error;
-      notify('Work submitted successfully.', 'success');
-
-      // Dispatch recipient notification to the assigner / admin
-      const targetTask = (tasks as Task[]).find((t: Task) => t.id === submitId);
-      void notifyTaskSubmitted({
-        assignerEmployeeId: targetTask?.assignedBy ?? null,
-        taskTitle: targetTask?.title ?? 'Task',
-        taskId: submitId,
-        actorUserId: user.id,
-      });
-
-      setSubmitId(''); setLink('');
-      await onRefresh();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to submit work.';
-      setMessage(message);
-      notify(message, 'error');
-    } finally {
-      setSubmitBusy(false);
-    }
-  }
+  const openTask = openId ? (tasks as Task[]).find((t) => t.id === openId) ?? null : null;
 
   async function assignTask(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; setMessage('');
     if (assignBusy) return;
-    if (targets.length === 0) {
-      setMessage('No employees are available for assignment.');
-      notify('No employees are available for assignment.', 'error');
-      return;
-    }
+    if (targets.length === 0) { setMessage('No employees are available for assignment.'); notify('No employees are available for assignment.', 'error'); return; }
     const fd = new FormData(e.currentTarget);
     const title = String(fd.get('title') ?? '').trim(), to = String(fd.get('assignedTo') ?? ''), start = String(fd.get('startDate') ?? ''), due = String(fd.get('dueDate') ?? '');
     if (!title || !to || !start || !due) { setMessage('Complete all required task fields.'); return; }
@@ -884,20 +855,9 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
     try {
       const { data: createdTaskId, error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: clean(fd.get('description')), p_assigned_to: to, p_start_date: start, p_due_date: due, p_priority: String(fd.get('priority') ?? 'medium'), p_client_request_id: assignRequestRef.current });
       if (error) throw error;
-      notify('Task assigned successfully.', 'success');
-
-      const finalTaskId = createdTaskId || assignRequestRef.current;
+      notify('Task assigned.', 'success');
       await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
-
-      // Dispatch recipient notification to assigned employee
-      void notifyTaskAssigned({
-        assigneeEmployeeId: to,
-        taskTitle: title,
-        dueDate: due,
-        taskId: finalTaskId,
-        actorUserId: user.id,
-      });
-
+      void notifyTaskAssigned({ assigneeEmployeeId: to, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current, actorUserId: user.id });
       form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
     finally { assignRequestRef.current = null; setAssignBusy(false); }
@@ -905,53 +865,59 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
 
   return <PageShell
     title="Work & Assignments"
-    subtitle="Your assignments, what you’ve handed in, and work you’ve given others."
+    subtitle="What you’re working on, what’s waiting for review, and work you’ve given others."
     actions={canAssign ? <button onClick={() => setAssignOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Assign task</button> : undefined}
   >
-    {message && <Notice type="error" text={message} />}
+    {message && <UiNotice tone="rose">{message}</UiNotice>}
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-      <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="Open" value={mineOpen.length} caption={mineOpen[0] ? `Next due ${dateLabel(mineOpen[0].dueDate)}` : 'Nothing open'} />
-      <Stat index={1} label="Due this week" value={dueThisWeek} caption="Next 7 days" />
-      <Stat index={2} label="Overdue" value={overdueCount} caption={overdueCount ? 'Past their due date' : 'All on time'} />
-      <Stat index={3} label="Completed" value={mineDone.length} caption="Handed in with a work link" />
+      <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="To do" value={mineOpen.length} caption={mineOpen[0] ? `Next due ${dateLabel(mineOpen[0].dueDate)}` : 'Nothing open'} onClick={() => setView('open')} />
+      <Stat index={1} label="Due this week" value={dueThisWeek} caption="Next 7 days" onClick={() => setView('open')} />
+      <Stat index={2} label="Overdue" value={overdueCount} tone={overdueCount ? 'rose' : 'brand'} caption={overdueCount ? 'Past their due date' : 'All on time'} onClick={() => setView('open')} />
+      <Stat index={3} label={given.length ? 'Waiting for your review' : 'In review'} value={given.length ? toReview : mineReview.length} caption={given.length ? 'Handed in by your team' : 'Handed in, awaiting approval'} onClick={() => setView(given.length ? 'given' : 'review')} />
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <PillTabs value={view} onChange={setView} items={[{ id: 'open', label: 'Open', count: mineOpen.length }, { id: 'done', label: 'Completed', count: mineDone.length }, ...(canAssign || given.length ? [{ id: 'given' as const, label: 'Assigned by me', count: given.length }] : [])]} />
-      {canAssign && (
-        <Badge tone={targets.length > 0 ? 'brand' : 'amber'}>{targets.length > 0 ? `${targets.length} people you can assign` : 'Direct reports required to assign'}</Badge>
-      )}
+      <PillTabs value={view} onChange={setView} items={[
+        { id: 'open', label: 'To do', count: mineOpen.length },
+        { id: 'review', label: 'In review', count: mineReview.length || undefined },
+        { id: 'done', label: 'Done', count: mineDone.length || undefined },
+        ...(canAssign || given.length ? [{ id: 'given' as const, label: toReview ? `Assigned by me · ${toReview} to review` : 'Assigned by me', count: given.length }] : []),
+      ]} />
+      {canAssign && <Badge tone={targets.length > 0 ? 'brand' : 'amber'}>{targets.length > 0 ? `${targets.length} people you can assign` : 'Direct reports required to assign'}</Badge>}
     </div>
     {assignOpen && (
       <Modal title="Assign work" onClose={() => setAssignOpen(false)} closeDisabled={assignBusy} wide>
-        <TaskAssignForm
-          targets={targets}
-          onSubmit={assignTask}
-          onClose={() => setAssignOpen(false)}
-          busy={assignBusy}
-          isAdmin={false}
-          userDesignation={user.designation || myDesignation?.name || 'Manager'}
-          directReportDesignations={directReportDesignations}
-          hasDirectReportRules={hasDirectReportRules}
-          deliverables={linkable.open}
-        />
+        <TaskAssignForm targets={targets} onSubmit={assignTask} onClose={() => setAssignOpen(false)} busy={assignBusy} isAdmin={false}
+          userDesignation={user.designation || myDesignation?.name || 'Manager'} directReportDesignations={directReportDesignations}
+          hasDirectReportRules={hasDirectReportRules} deliverables={linkable.open} />
       </Modal>
     )}
-    <TaskTable tasks={visible} employeeId={myId} onSubmit={(id) => { setSubmitId(id); setLink('') }} onRefresh={onRefresh} deliverableName={deliverableName} />
-    {submitId && <Modal title="Submit completed work" onClose={() => setSubmitId('')}><div className="space-y-4"><div className="rounded-2xl bg-slate-50 border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">Paste the final work link</p><p className="text-xs text-slate-500 mt-1">Submitting the link marks the assignment completed and makes the result visible to the person who assigned it.</p></div><input autoFocus value={link} onChange={e => setLink(e.target.value)} placeholder="https://your-work-link.com" className="input" /><div className="flex justify-end gap-2"><button onClick={() => setSubmitId('')} className="btn-secondary">Cancel</button><button disabled={!link.trim() || submitBusy} onClick={() => void submitTask()} className="btn-primary">{submitBusy ? <><RefreshCw className="w-4 h-4 animate-spin" />Submitting…</> : <><CheckCircle2 className="w-4 h-4" />Submit work</>}</button></div></div></Modal>}
+    <TaskTable tasks={visible} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee={view === 'given'} deliverableName={deliverableName}
+      empty={view === 'open' ? 'Nothing to do right now.' : view === 'review' ? 'Nothing waiting for review.' : view === 'done' ? 'No finished tasks yet.' : 'You haven’t assigned any work yet.'} />
+    {openTask && <TaskDetail task={openTask} tasks={tasks} employees={employees} viewer={{ employeeId: myId, isAdmin: false }} subtaskTargets={targets}
+      deliverableName={deliverableName} onClose={() => setOpenId(null)} onChanged={onRefresh} />}
   </PageShell>;
 }
 
 function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
-  const [from, setFrom] = useState(''); const [to, setTo] = useState(''); const [employee, setEmployee] = useState('all'); const [designation, setDesignation] = useState('all'); const [status, setStatus] = useState('all'); const [priority, setPriority] = useState('all'); const [assignOpen, setAssignOpen] = useState(false); const [showRemoved, setShowRemoved] = useState(false); const [archiveTarget, setArchiveTarget] = useState<Task | null>(null); const [archiveBusy, setArchiveBusy] = useState(false); const [message, setMessage] = useState(''); const [assignBusy, setAssignBusy] = useState(false); const assignRequestRef = useRef<{ signature: string; id: string } | null>(null);
+  const [search, setSearch] = useState(''); const [employee, setEmployee] = useState('all'); const [designation, setDesignation] = useState('all'); const [status, setStatus] = useState<string>('open'); const [priority, setPriority] = useState('all'); const [assignOpen, setAssignOpen] = useState(false); const [archiveTarget, setArchiveTarget] = useState<Task | null>(null); const [archiveBusy, setArchiveBusy] = useState(false); const [message, setMessage] = useState(''); const [assignBusy, setAssignBusy] = useState(false); const assignRequestRef = useRef<{ signature: string; id: string } | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('task'));
   const activeEmployees = (employees as Employee[]).filter(e => e.status === 'active');
   const linkable = useLinkableDeliverables(true);
   const deliverableName = (id?: string | null) => { const d = id ? linkable.all.find((x) => x.id === id) : null; return d ? `${d.number ? d.number + ' · ' : ''}${d.name}` : null; };
   const live = (tasks as Task[]).filter((t) => !t.archivedAt);
-  const openCount = live.filter((t) => t.status !== 'completed').length;
-  const overdueAll = live.filter((t) => t.status !== 'completed' && t.dueDate < today()).length;
-  const doneCount = live.filter((t) => t.status === 'completed').length;
-  const linkedCount = live.filter((t) => t.deliverableId).length;
-  const filtered = (tasks as Task[]).filter(t => (showRemoved ? Boolean(t.archivedAt) : !t.archivedAt) && (!from || t.startDate >= from) && (!to || t.startDate <= to) && (employee === 'all' || t.assignedTo === employee) && (designation === 'all' || t.assignedToDesignation === designation) && (status === 'all' || t.status === status) && (priority === 'all' || t.priority === priority)).sort((a: Task, b: Task) => b.updatedAt.localeCompare(a.updatedAt));
+  const openCount = live.filter(isTaskOpen).length;
+  const overdueAll = live.filter((t) => isTaskWithAssignee(t) && t.dueDate < today()).length;
+  const reviewCount = live.filter((t) => t.status === 'awaiting_review').length;
+  const blockedCount = live.filter((t) => t.status === 'blocked').length;
+  const q = search.trim().toLowerCase();
+  const filtered = topLevel((tasks as Task[]).filter(t =>
+    (status === 'removed' ? Boolean(t.archivedAt) : !t.archivedAt) &&
+    (status === 'all' || status === 'removed' || (status === 'open' ? isTaskOpen(t) : status === 'overdue' ? isTaskWithAssignee(t) && t.dueDate < today() : t.status === status)) &&
+    (employee === 'all' || t.assignedTo === employee) && (designation === 'all' || t.assignedToDesignation === designation) &&
+    (priority === 'all' || t.priority === priority) && (!q || `${t.title} ${t.assignedToName} ${t.description ?? ''}`.toLowerCase().includes(q))
+  )).sort((a: Task, b: Task) => (status === 'open' || status === 'overdue' ? byDue(a, b) : b.updatedAt.localeCompare(a.updatedAt)));
+  const openTask = openId ? (tasks as Task[]).find((t) => t.id === openId) ?? null : null;
+
   async function assignTask(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; setMessage('');
     if (assignBusy) return;
@@ -966,20 +932,9 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
     try {
       const { data: createdTaskId, error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: description, p_assigned_to: toId, p_start_date: start, p_due_date: due, p_priority: priorityValue, p_client_request_id: assignRequestRef.current.id });
       if (error) throw error;
-
-      const finalTaskId = createdTaskId || assignRequestRef.current?.id;
       await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
-
-      // Dispatch recipient notification to assigned employee
-      void notifyTaskAssigned({
-        assigneeEmployeeId: toId,
-        taskTitle: title,
-        dueDate: due,
-        taskId: finalTaskId,
-        actorUserId: user?.id ?? '',
-      });
-
-      assignRequestRef.current = null; notify('Task assigned successfully.', 'success'); form.reset(); setAssignOpen(false); await onRefresh();
+      void notifyTaskAssigned({ assigneeEmployeeId: toId, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current?.id, actorUserId: user?.id ?? '' });
+      assignRequestRef.current = null; notify('Task assigned.', 'success'); form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
     finally { setAssignBusy(false); }
   }
@@ -989,43 +944,49 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
     try {
       const { error } = await (supabase as any).rpc('archive_task', { p_task_id: archiveTarget.id });
       if (error) throw error;
-      notify('Task deleted. Its history is retained under Show removed.', 'success');
-      setArchiveTarget(null);
+      notify('Task removed. Its history is kept under Removed.', 'success');
+      setArchiveTarget(null); setOpenId(null);
       await onRefresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to delete this task.';
+      const message = error instanceof Error ? error.message : 'Unable to remove this task.';
       setMessage(message); notify(message, 'error');
     } finally { setArchiveBusy(false); }
   }
   return <PageShell
     title="Work & Assignments"
-    subtitle="Everything assigned across the team — what’s open, late, handed in, and which client deliverable it serves."
+    subtitle="Everything assigned across the team — what’s moving, what’s stuck, what’s waiting for review, and which client deliverable it serves."
     actions={<button onClick={() => setAssignOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Assign task</button>}
   >
-    {message && <Notice type="error" text={message} />}
+    {message && <UiNotice tone="rose">{message}</UiNotice>}
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-      <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="Open" value={openCount} caption={`${activeEmployees.length} active people`} onClick={() => { setStatus('assigned'); setShowRemoved(false); }} />
-      <Stat index={1} label="Overdue" value={overdueAll} caption={overdueAll ? 'Open past due date' : 'All on time'} />
-      <Stat index={2} label="Handed in" value={doneCount} caption="Completed with a work link" onClick={() => { setStatus('completed'); setShowRemoved(false); }} />
-      <Stat index={3} label="Linked to clients" value={linkedCount} caption="Tasks serving a client deliverable" />
+      <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="Open" value={openCount} caption={`${activeEmployees.length} active people`} onClick={() => setStatus('open')} />
+      <Stat index={1} label="To review" value={reviewCount} tone={reviewCount ? 'amber' : 'brand'} caption="Handed in, waiting for approval" onClick={() => setStatus('awaiting_review')} />
+      <Stat index={2} label="Blocked" value={blockedCount} tone={blockedCount ? 'rose' : 'brand'} caption="Can’t continue without help" onClick={() => setStatus('blocked')} />
+      <Stat index={3} label="Overdue" value={overdueAll} tone={overdueAll ? 'rose' : 'brand'} caption={overdueAll ? 'Past due, not handed in' : 'All on time'} onClick={() => setStatus('overdue')} />
     </div>
-    <div className="card p-4 grid sm:grid-cols-2 lg:grid-cols-6 gap-2">
-      <FilterInput label="From date"><input type="date" value={from} onChange={e => setFrom(e.target.value)} className="input" /></FilterInput>
-      <FilterInput label="To date"><input type="date" value={to} onChange={e => setTo(e.target.value)} className="input" /></FilterInput>
+    <div className="card p-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
+      <FilterInput label="Search"><SearchInput value={search} onChange={setSearch} placeholder="Task or person" /></FilterInput>
+      <FilterInput label="Status"><select value={status} onChange={e => setStatus(e.target.value)} className="input">
+        <option value="open">All open</option><option value="overdue">Overdue</option>
+        {TASK_STATUS_ORDER.map((s) => <option key={s} value={s}>{TASK_STATUS[s].label}</option>)}
+        <option value="all">Everything</option><option value="removed">Removed</option>
+      </select></FilterInput>
       <FilterInput label="Employee"><select value={employee} onChange={e => setEmployee(e.target.value)} className="input"><option value="all">All employees</option>{activeEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></FilterInput>
       <FilterInput label="Designation"><select value={designation} onChange={e => setDesignation(e.target.value)} className="input"><option value="all">All</option>{(designations as Designation[]).map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></FilterInput>
-      <FilterInput label="Status"><select value={status} onChange={e => setStatus(e.target.value)} className="input"><option value="all">All</option><option value="assigned">Assigned</option><option value="completed">Completed</option></select></FilterInput>
-      <FilterInput label="Priority"><select value={priority} onChange={e => setPriority(e.target.value)} className="input"><option value="all">All</option>{['low', 'medium', 'high', 'urgent'].map(x => <option key={x}>{x}</option>)}</select></FilterInput>
+      <FilterInput label="Priority"><select value={priority} onChange={e => setPriority(e.target.value)} className="input"><option value="all">All</option>{['low', 'medium', 'high', 'urgent'].map(x => <option key={x} value={x} className="capitalize">{x}</option>)}</select></FilterInput>
     </div>
-    <div className="flex items-center gap-3"><p className="text-[13px] font-semibold text-ink-600">{filtered.length} task{filtered.length === 1 ? '' : 's'}</p><label className="inline-flex items-center gap-2 text-[13px] text-ink-600"><input type="checkbox" checked={showRemoved} onChange={e => setShowRemoved(e.target.checked)} className="accent-[var(--brand)]" />Show removed</label></div>
+    <p className="text-[13px] font-semibold text-ink-600">{filtered.length} task{filtered.length === 1 ? '' : 's'}</p>
     {assignOpen && <Modal title="Assign work" onClose={() => setAssignOpen(false)} closeDisabled={assignBusy} wide><TaskAssignForm targets={activeEmployees} onSubmit={assignTask} onClose={() => setAssignOpen(false)} busy={assignBusy} isAdmin={true} deliverables={linkable.open} /></Modal>}
-    <TaskTable tasks={filtered} employeeId="" onSubmit={() => { }} onRefresh={onRefresh} admin onDelete={setArchiveTarget} archivingId={archiveBusy ? archiveTarget?.id : null} deliverableName={deliverableName} />
-    {archiveTarget && <Modal title="Delete task allocation?" onClose={() => setArchiveTarget(null)} closeDisabled={archiveBusy}>
+    <TaskTable tasks={filtered} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee deliverableName={deliverableName}
+      onDelete={status === 'removed' ? undefined : setArchiveTarget} archivingId={archiveBusy ? archiveTarget?.id : null} empty="No tasks match these filters." />
+    {openTask && <TaskDetail task={openTask} tasks={tasks} employees={employees} viewer={{ employeeId: '', isAdmin: true }} subtaskTargets={activeEmployees}
+      deliverableName={deliverableName} onClose={() => setOpenId(null)} onChanged={onRefresh} />}
+    {archiveTarget && <Modal title="Remove this task?" onClose={() => setArchiveTarget(null)} closeDisabled={archiveBusy}>
       <div className="space-y-4">
-        <p className="text-sm text-slate-600">“{archiveTarget.title}” will be removed from active task lists. Its assignment, submission and event history will remain available under Show removed.</p>
+        <p className="text-sm text-ink-600">“{archiveTarget.title}” will be removed from active lists. Its history stays available under the Removed filter.</p>
         <div className="flex justify-end gap-2">
           <button type="button" disabled={archiveBusy} onClick={() => setArchiveTarget(null)} className="btn-secondary disabled:opacity-50">Cancel</button>
-          <button type="button" disabled={archiveBusy} onClick={() => void removeTask()} className="btn-secondary border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50">{archiveBusy ? <><RefreshCw className="w-4 h-4 animate-spin" />Deleting…</> : <><Trash2 className="w-4 h-4" />Delete task</>}</button>
+          <button type="button" disabled={archiveBusy} onClick={() => void removeTask()} className="btn-danger disabled:opacity-50">{archiveBusy ? <><RefreshCw className="w-4 h-4 animate-spin" />Removing…</> : <><Trash2 className="w-4 h-4" />Remove task</>}</button>
         </div>
       </div>
     </Modal>}
@@ -1178,10 +1139,37 @@ function TaskAssignForm({
   );
 }
 
-function TaskTable({ tasks, employeeId, onSubmit, onDelete, archivingId, admin, deliverableName }: { tasks: Task[]; employeeId: string; onSubmit: (id: string) => void; onRefresh: () => Promise<void>; onDelete?: (task: Task) => void; archivingId?: string | null; admin?: boolean; deliverableName?: (id?: string | null) => string | null }) {
-  return <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
-    <thead><tr><Th>Task</Th><Th>Assigned To</Th><Th>Dates</Th><Th>Priority</Th><Th>Status</Th><Th>Work Link</Th><Th>Action</Th></tr></thead>
-    <tbody>{tasks.map(t => <tr key={t.id}><Td strong><span className="block max-w-[320px] truncate">{t.title}</span>{t.deliverableId ? <span className="mt-1 inline-flex max-w-[320px] truncate items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</span> : t.description ? <span className="block max-w-[320px] truncate text-[11px] font-normal text-ink-400">{t.description}</span> : null}</Td><Td>{t.assignedToName}<span className="block text-[10px] text-slate-400">{t.assignedToDesignation}</span></Td><Td>{dateLabel(t.startDate)} → {dateLabel(t.dueDate)}</Td><Td><PriorityBadge value={t.priority} /></Td><Td><StatusBadge label={t.archivedAt ? 'Removed' : t.status} /></Td><Td>{t.submittedLink ? <div className="space-y-0.5"><a href={t.submittedLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><Link2 className="w-3.5 h-3.5" />Open work</a>{t.submittedAt && <span className="block text-[10px] text-slate-400">{new Date(t.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>}</div> : '—'}</Td><Td>{admin ? (t.archivedAt ? <span className="text-[10px] text-slate-400">History kept</span> : <button type="button" title="Delete task" aria-label={`Delete task: ${t.title}`} disabled={archivingId === t.id} onClick={() => onDelete?.(t)} className="icon-btn text-rose-600 disabled:opacity-50">{archivingId === t.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>) : (!t.archivedAt && t.assignedTo === employeeId && t.status !== 'completed' ? <button onClick={() => onSubmit(t.id)} className="btn-primary btn-sm">Hand in</button> : '—')}</Td></tr>)}{!tasks.length && <EmptyRow colSpan={7} text="No tasks match the current filters." />}</tbody>
+function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssignee, deliverableName, empty = 'No tasks.' }: { tasks: Task[]; allTasks: Task[]; onOpen: (task: Task) => void; onDelete?: (task: Task) => void; archivingId?: string | null; showAssignee?: boolean; deliverableName?: (id?: string | null) => string | null; empty?: string }) {
+  const subCount = (id: string) => { const subs = allTasks.filter((s) => s.parentTaskId === id && !s.archivedAt); return subs.length ? `${subs.filter((s) => s.status === 'completed').length}/${subs.length}` : null; };
+  if (!tasks.length) return <div className="card"><EmptyState icon={<BriefcaseBusiness className="w-6 h-6" />} title={empty} /></div>;
+  return <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table min-w-[760px]">
+    <thead><tr><Th>Task</Th>{showAssignee && <Th>Assigned to</Th>}<Th>Due</Th><Th>Priority</Th><Th>Status</Th><Th>Time</Th>{onDelete && <Th> </Th>}</tr></thead>
+    <tbody>{tasks.map(t => {
+      const meta = TASK_STATUS[t.status] ?? TASK_STATUS.assigned;
+      const late = !t.archivedAt && isTaskWithAssignee(t) && t.dueDate < today();
+      const subs = subCount(t.id);
+      return (
+        <tr key={t.id} className="cursor-pointer hover:bg-ink-50/60" onClick={() => onOpen(t)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(t) }}>
+          <td>
+            <span className="block max-w-[340px] truncate font-bold text-ink-900">{t.parentTaskId && <CornerDownRight className="inline w-3.5 h-3.5 mr-1 text-ink-400 -mt-0.5" />}{t.title}</span>
+            <span className="mt-1 flex flex-wrap gap-1.5">
+              {t.deliverableId && <span className="inline-flex max-w-[260px] truncate items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</span>}
+              {subs && <span className="inline-flex items-center gap-1 rounded-full bg-ink-50 px-2 py-0.5 text-[11px] font-semibold text-ink-600"><ListChecks className="w-3 h-3" />{subs}</span>}
+              {t.submittedLink && <span className="inline-flex items-center gap-1 rounded-full bg-mint-50 px-2 py-0.5 text-[11px] font-semibold text-mint-700"><Link2 className="w-3 h-3" />Work linked</span>}
+            </span>
+          </td>
+          {showAssignee && <td><div className="flex items-center gap-2"><Avatar name={t.assignedToName} size={28} /><div className="min-w-0"><p className="font-semibold text-ink-800 truncate">{t.assignedToName}</p><p className="text-[11px] text-ink-400 truncate">{t.assignedToDesignation}</p></div></div></td>}
+          <td className={`tnum whitespace-nowrap ${late ? 'text-rose-700 font-semibold' : ''}`}>{dateLabel(t.dueDate)}{late && <span className="block text-[11px] font-semibold">Overdue</span>}</td>
+          <td><PriorityBadge value={t.priority} /></td>
+          <td className="min-w-[150px]">
+            {t.archivedAt ? <Badge tone="ink">Removed</Badge> : <Badge tone={meta.tone} dot>{meta.label}</Badge>}
+            {!t.archivedAt && !isTaskClosed(t) && <div className="mt-1.5 h-1.5 w-28 rounded-full bg-ink-100 overflow-hidden"><div className={`h-full rounded-full ${t.status === 'blocked' ? 'bg-rose-500' : 'bg-brand-500'}`} style={{ width: `${t.progressPct ?? 0}%` }} /></div>}
+          </td>
+          <td className="tnum text-ink-600">{fmtMinutes(t.timeSpentMinutes)}</td>
+          {onDelete && <td onClick={(e) => e.stopPropagation()}>{!t.archivedAt && <button type="button" title="Remove task" aria-label={`Remove task: ${t.title}`} disabled={archivingId === t.id} onClick={() => onDelete(t)} className="icon-btn text-ink-400 hover:!text-rose-600 disabled:opacity-50">{archivingId === t.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>}</td>}
+        </tr>
+      );
+    })}</tbody>
   </table></div></div>;
 }
 
@@ -1962,7 +1950,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
     { id: 'payroll', group: 'Money', title: 'Payroll', text: 'Monthly payroll records with leave deductions and final pay.', icon: <WalletCards className="w-5 h-5" />, tone: 'brand', build: async () => { const rows = await fetchAll('payroll_records', 'created_at'); return rows.map(r => { const p = mapPayrollRecord(r, employeeMap); const period = payrollPeriodMap.get(p.periodId); return { Period: period?.monthStart?.slice(0, 7) ?? '', Status: p.finalizedAt ? 'finalized' : (period?.status ?? 'draft'), Employee: p.employeeName, Salary: p.salarySnapshot, PaidLeave: p.paidLeaveDays, UnpaidLeave: p.unpaidLeaveDays, Deduction: p.leaveDeduction, FinalPay: p.finalPay } }) } },
     { id: 'billing', group: 'Money', title: 'Billing milestones', text: 'Every payment milestone with invoice number, due date, amount and balance.', icon: <BadgeIndianRupee className="w-5 h-5" />, tone: 'mint', build: async () => (await fetchAll('payment_installments', 'due_date', 'installment_number, name, amount, tax_amount, amount_paid, status, due_date, invoice_number, deleted_at, projects:project_id (name), clients:client_id (company_name)')).filter(r => !r.deleted_at).map(r => { const total = Number(r.amount ?? 0) + Number(r.tax_amount ?? 0); const paid = Number(r.amount_paid ?? 0); return { Client: r.clients?.company_name ?? '', Project: r.projects?.name ?? '', Number: r.installment_number ?? '', Milestone: r.name, Invoice: r.invoice_number ?? '', Due: r.due_date ?? '', Amount: Number(r.amount ?? 0), Tax: Number(r.tax_amount ?? 0), Total: total, Paid: paid, Balance: Math.max(0, total - paid), Status: r.status } }) },
     { id: 'payments', group: 'Money', title: 'Payments', text: 'Client payment submissions and verified receipts with references.', icon: <CheckCircle2 className="w-5 h-5" />, tone: 'amber', build: async () => (await fetchAll('payments', 'submitted_at', 'amount, reference, method, paid_on, submitted_at, status, rejection_reason, projects:project_id (name), clients:client_id (company_name), payment_installments:installment_id (name)')).map(r => ({ Client: r.clients?.company_name ?? '', Project: r.projects?.name ?? '', Milestone: r.payment_installments?.name ?? '', Amount: Number(r.amount ?? 0), Reference: r.reference ?? '', Method: r.method ?? '', PaidOn: r.paid_on ?? '', SubmittedAt: String(r.submitted_at ?? '').slice(0, 16).replace('T', ' '), Status: r.status, RejectionReason: r.rejection_reason ?? '' })) },
-    { id: 'tasks', group: 'Work', title: 'Tasks', text: 'Assigned work with dates, priority, status and handed-in links.', icon: <BriefcaseBusiness className="w-5 h-5" />, tone: 'sky', build: async () => { const rows = await fetchAll('tasks', 'start_date'); return rows.map(r => { const t = mapTask(r, employeeMap); return { Task: t.title, Employee: t.assignedToName, Start: t.startDate, Due: t.dueDate, Priority: t.priority, Status: t.status, SubmittedLink: t.submittedLink ?? '' } }) } },
+    { id: 'tasks', group: 'Work', title: 'Tasks', text: 'Assigned work with dates, priority, status and handed-in links.', icon: <BriefcaseBusiness className="w-5 h-5" />, tone: 'sky', build: async () => { const rows = await fetchAll('tasks', 'start_date'); return rows.map(r => { const t = mapTask(r, employeeMap); return { Task: t.title, Subtask: t.parentTaskId ? 'Yes' : '', Employee: t.assignedToName, AssignedBy: t.assignedByName ?? '', Start: t.startDate, Due: t.dueDate, Priority: t.priority, Status: TASK_STATUS[t.status]?.label ?? t.status, ProgressPct: t.progressPct ?? 0, HoursSpent: Math.round(((t.timeSpentMinutes ?? 0) / 60) * 100) / 100, CompletedOn: t.completedAt ? t.completedAt.slice(0, 10) : '', Note: t.statusNote ?? '', SubmittedLink: t.submittedLink ?? '' } }) } },
     { id: 'clients', group: 'Work', title: 'Clients & projects', text: 'Client directory with each project, its status and dates.', icon: <Building2 className="w-5 h-5" />, tone: 'ink', build: async () => { const [clients, projects] = await Promise.all([fetchAll('clients', 'company_name', 'id, company_name, primary_contact, email, phone, industry, gstin, status, deleted_at'), fetchAll('projects', 'created_at', 'client_id, name, status, start_date, target_date, deleted_at')]); const out: any[] = []; for (const c of clients.filter(c => !c.deleted_at)) { const ps = projects.filter(p => p.client_id === c.id && !p.deleted_at); const base = { Client: c.company_name, Contact: c.primary_contact ?? '', Email: c.email ?? '', Phone: c.phone ?? '', Industry: c.industry ?? '', GSTIN: c.gstin ?? '', ClientStatus: c.status }; if (!ps.length) out.push({ ...base, Project: '', ProjectStatus: '', Start: '', Target: '' }); for (const p of ps) out.push({ ...base, Project: p.name, ProjectStatus: p.status, Start: p.start_date ?? '', Target: p.target_date ?? '' }) } return out } },
   ];
   const groups = ['People', 'Money', 'Work'];

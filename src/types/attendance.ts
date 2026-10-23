@@ -4,7 +4,7 @@ export type AttendanceStatus = 'present' | 'late' | 'absent' | 'wfh' | 'leave' |
 export type AttendanceState = 'not_checked_in' | 'working' | 'on_break' | 'completed';
 export type RequestStatus = 'pending' | 'approved' | 'rejected';
 export type WorkMode = 'office' | 'remote';
-export type TaskStatus = 'assigned' | 'completed';
+export type TaskStatus = 'assigned' | 'accepted' | 'in_progress' | 'blocked' | 'awaiting_review' | 'revision_required' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface Department {
@@ -174,6 +174,16 @@ export interface Task {
   /** Client delivery link (SIGMA 1): set via staff_link_task_to_deliverable. */
   projectId?: string | null;
   deliverableId?: string | null;
+  /** Task workflow (SIGMA 1 spec 27–28). */
+  progressPct?: number;
+  timeSpentMinutes?: number;
+  parentTaskId?: string | null;
+  statusNote?: string | null;
+  acceptedAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  reviewedAt?: string | null;
 }
 
 export interface LeaveLedger {

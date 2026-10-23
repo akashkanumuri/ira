@@ -254,6 +254,15 @@ export function mapTask(row: any, employees: Map<string, Employee>): Task {
     updatedAt: row.updated_at,
     projectId: row.project_id ?? null,
     deliverableId: row.deliverable_id ?? null,
+    progressPct: Number(row.progress_pct ?? (row.status === 'completed' ? 100 : 0)),
+    timeSpentMinutes: Number(row.time_spent_minutes ?? 0),
+    parentTaskId: row.parent_task_id ?? null,
+    statusNote: row.status_note ?? null,
+    acceptedAt: row.accepted_at ?? null,
+    startedAt: row.started_at ?? null,
+    completedAt: row.completed_at ?? null,
+    cancelledAt: row.cancelled_at ?? null,
+    reviewedAt: row.reviewed_at ?? null,
   };
 }
 
