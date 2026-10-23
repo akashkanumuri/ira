@@ -116,18 +116,27 @@ Deno.serve(async (req: Request) => {
         return json({ valid: false, error: 'This invitation link has expired. Please contact the administrator.' }, 400, origin);
       }
 
-      // Lookup company name and primary contact
+      // Lookup company name and contact: the primary client account, or a colleague added later.
       const { data: client } = await admin
         .from('clients')
         .select('company_name, primary_contact, email')
         .eq('profile_id', invite.client_id)
         .maybeSingle();
+      let colleague: { full_name: string | null; email: string; clients: { company_name: string } | null } | null = null;
+      if (!client) {
+        const { data } = await admin
+          .from('client_users')
+          .select('full_name, email, clients:client_id (company_name)')
+          .eq('profile_id', invite.client_id)
+          .maybeSingle();
+        colleague = data as any;
+      }
 
       return json({
         valid: true,
-        email: client?.email ?? invite.email,
-        companyName: client?.company_name ?? 'Client Account',
-        primaryContact: client?.primary_contact ?? '',
+        email: client?.email ?? colleague?.email ?? invite.email,
+        companyName: client?.company_name ?? colleague?.clients?.company_name ?? 'Client Account',
+        primaryContact: client?.primary_contact ?? colleague?.full_name ?? '',
       }, 200, origin);
     }
 
@@ -210,6 +219,14 @@ Deno.serve(async (req: Request) => {
           origin,
         );
       }
+
+      // 4a. A colleague added by their organisation: activate their portal membership.
+      const { error: memberError } = await admin
+        .from('client_users')
+        .update({ status: 'active', updated_at: nowIso })
+        .eq('profile_id', updated.client_id)
+        .eq('status', 'invited');
+      if (memberError) console.error('[client-setup] Client user activation delayed:', memberError.message);
 
       // 4. Mark client record active with retry logic (up to 3 attempts)
       let clientActivated = false;

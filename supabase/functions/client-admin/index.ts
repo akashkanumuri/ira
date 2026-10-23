@@ -16,7 +16,24 @@ interface ResendInvitationInput {
   clientId: string;
 }
 
-type Input = CreateClientInput | ResendInvitationInput;
+interface InviteClientUserInput {
+  action: 'invite_client_user';
+  fullName: string;
+  email: string;
+  role: 'client_admin' | 'client_user';
+  /** clients.id — required for IRA admins, ignored for client admins (they can only invite to their own organisation) */
+  clientId?: string | null;
+}
+
+interface ResendClientUserInput {
+  action: 'resend_client_user_invitation';
+  clientUserId: string;
+}
+
+type Input = CreateClientInput | ResendInvitationInput | InviteClientUserInput | ResendClientUserInput;
+
+/** Who is calling: an IRA administrator, or an active client admin of one organisation. */
+type Caller = { kind: 'admin' } | { kind: 'client_admin'; clientId: string };
 
 const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -618,6 +635,112 @@ async function resendClientInvitation(
   };
 }
 
+async function issueClientUserInvitation(
+  admin: ReturnType<typeof createClient>,
+  params: { userId: string; email: string; fullName: string; companyName: string; actorId: string },
+) {
+  const trustedBaseUrl = getTrustedBaseUrl();
+  // Invalidate earlier unused links for this person.
+  await admin.from('client_invitations').update({ used_at: new Date().toISOString() }).eq('client_id', params.userId).is('used_at', null);
+  const rawToken = generateSecureToken();
+  const tokenHash = await sha256Hex(rawToken);
+  const { error: inviteError } = await admin.from('client_invitations').insert({
+    client_id: params.userId, // existing convention: the invited auth user id
+    email: params.email,
+    token_hash: tokenHash,
+    created_by: params.actorId,
+  });
+  if (inviteError) throw new Error(`Failed to create the invitation: ${inviteError.message}`);
+  const invitationUrl = `${trustedBaseUrl}/client/setup?token=${rawToken}`;
+  const emailDelivery = await sendInvitationEmail({
+    toEmail: params.email,
+    companyName: params.companyName,
+    primaryContact: params.fullName,
+    invitationUrl,
+  });
+  return { invitationUrl, emailDelivery };
+}
+
+async function inviteClientUser(input: InviteClientUserInput, admin: ReturnType<typeof createClient>, actorId: string, caller: Caller) {
+  const fullName = input.fullName?.trim();
+  const email = input.email?.trim().toLowerCase();
+  const role = input.role === 'client_admin' ? 'client_admin' : 'client_user';
+  const clientId = caller.kind === 'client_admin' ? caller.clientId : input.clientId?.trim();
+
+  if (!clientId) throw new Error('Choose the client organisation.');
+  if (!fullName || fullName.length < 2) throw new Error('Enter their full name.');
+  if (!email || !validateEmail(email)) throw new Error('Enter a valid email address.');
+
+  const { data: client, error: clientError } = await admin
+    .from('clients').select('id, company_name, status, deleted_at').eq('id', clientId).maybeSingle();
+  if (clientError || !client || client.deleted_at) throw new Error('Client organisation not found.');
+  if (client.status === 'inactive') throw new Error('This client organisation is inactive.');
+
+  const { data: existingUser } = await admin.from('client_users').select('id').ilike('email', email).maybeSingle();
+  if (existingUser) throw new Error('Someone with this email already has portal access.');
+  const { data: existingClient } = await admin.from('clients').select('id').ilike('email', email).maybeSingle();
+  if (existingClient) throw new Error('This email belongs to another client account.');
+
+  const initialTempSecret = 'IRA_CLIENT_' + crypto.randomUUID().replace(/-/g, '') + '!Aa9';
+  const { data: authUser, error: authError } = await admin.auth.admin.createUser({
+    email,
+    password: initialTempSecret,
+    email_confirm: false,
+    user_metadata: { full_name: fullName, company_name: client.company_name, role: 'client' },
+    app_metadata: { role: 'client' },
+  });
+  if (authError || !authUser.user) {
+    throw new Error(/already/i.test(authError?.message ?? '') ? 'This email is already registered.' : authError?.message ?? 'Unable to create the login.');
+  }
+  const userId = authUser.user.id;
+  let clientUserId: string | null = null;
+
+  try {
+    const { error: profileError } = await admin.from('profiles').upsert({ id: userId, role: 'client' });
+    if (profileError) throw profileError;
+    const { data: cu, error: cuError } = await admin.from('client_users').insert({
+      client_id: client.id, profile_id: userId, role, status: 'invited', full_name: fullName, email, invited_by: actorId,
+    }).select('id').single();
+    if (cuError || !cu) throw cuError ?? new Error('Unable to add the user.');
+    clientUserId = cu.id;
+
+    const { invitationUrl, emailDelivery } = await issueClientUserInvitation(admin, {
+      userId, email, fullName, companyName: client.company_name, actorId,
+    });
+    return {
+      success: true,
+      clientUserId,
+      email,
+      emailDelivery,
+      // Only IRA administrators receive the setup link; a client admin must not hold a credential link for someone else's account.
+      invitationUrl: caller.kind === 'admin' ? invitationUrl : undefined,
+    };
+  } catch (error) {
+    try {
+      if (clientUserId) await admin.from('client_users').delete().eq('id', clientUserId);
+      await admin.from('client_invitations').delete().eq('client_id', userId);
+    } finally {
+      await admin.auth.admin.deleteUser(userId);
+    }
+    throw error;
+  }
+}
+
+async function resendClientUserInvitation(input: ResendClientUserInput, admin: ReturnType<typeof createClient>, actorId: string, caller: Caller) {
+  const id = input.clientUserId?.trim();
+  if (!id) throw new Error('User not found.');
+  const { data: cu, error } = await admin
+    .from('client_users').select('id, client_id, profile_id, status, full_name, email, clients:client_id (company_name, profile_id)').eq('id', id).maybeSingle();
+  if (error || !cu) throw new Error('User not found.');
+  if (caller.kind === 'client_admin' && cu.client_id !== caller.clientId) throw new Error('User not found.');
+  if (cu.status !== 'invited') throw new Error('This person has already set up their account.');
+  if ((cu as any).clients?.profile_id === cu.profile_id) throw new Error('Use “Resend invitation” on the client account for the primary contact.');
+  const { invitationUrl, emailDelivery } = await issueClientUserInvitation(admin, {
+    userId: cu.profile_id, email: cu.email, fullName: cu.full_name ?? cu.email, companyName: (cu as any).clients?.company_name ?? 'your organisation', actorId,
+  });
+  return { success: true, email: cu.email, emailDelivery, invitationUrl: caller.kind === 'admin' ? invitationUrl : undefined };
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get('origin');
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(origin) });
@@ -632,7 +755,7 @@ Deno.serve(async (req: Request) => {
     const admin = ctx.supabaseAdmin;
     const actorId = ctx.userClaims.id;
 
-    // Server-side admin verification: caller must have role = 'admin' in public.profiles
+    // Server-side authorization from the database, never from the request body.
     const { data: profile, error: profileError } = await ctx.supabase
       .from('profiles')
       .select('role')
@@ -641,20 +764,44 @@ Deno.serve(async (req: Request) => {
 
     if (profileError) {
       console.error('[client-admin] profile lookup error:', profileError);
-      return json({ error: 'Unable to verify administrator authorization.' }, 500, origin);
-    }
-
-    if (profile?.role !== 'admin') {
-      return json({ error: 'Admin access required.' }, 403, origin);
+      return json({ error: 'Unable to verify authorization.' }, 500, origin);
     }
 
     const input = (await req.json()) as Input;
+    const clientUserActions = input.action === 'invite_client_user' || input.action === 'resend_client_user_invitation';
+
+    let caller: Caller;
+    if (profile?.role === 'admin') {
+      caller = { kind: 'admin' };
+    } else if (profile?.role === 'client' && clientUserActions) {
+      // Client admins (permission client.users.manage) may manage people in their own organisation only.
+      const { data: me } = await admin
+        .from('client_users')
+        .select('client_id, role, status, clients:client_id (status, deleted_at)')
+        .eq('profile_id', actorId)
+        .maybeSingle();
+      const org = (me as any)?.clients;
+      if (!me || me.role !== 'client_admin' || me.status !== 'active' || !org || org.deleted_at || org.status === 'inactive') {
+        return json({ error: 'Only your organisation’s administrator can add people.' }, 403, origin);
+      }
+      caller = { kind: 'client_admin', clientId: me.client_id };
+    } else {
+      return json({ error: 'Admin access required.' }, 403, origin);
+    }
+
+    if (caller.kind !== 'admin' && !clientUserActions) {
+      return json({ error: 'Admin access required.' }, 403, origin);
+    }
 
     switch (input.action) {
       case 'create_client':
         return json(await createClientAccount(input, admin, actorId), 201, origin);
       case 'resend_invitation':
         return json(await resendClientInvitation(input, admin, actorId), 200, origin);
+      case 'invite_client_user':
+        return json(await inviteClientUser(input, admin, actorId, caller), 201, origin);
+      case 'resend_client_user_invitation':
+        return json(await resendClientUserInvitation(input, admin, actorId, caller), 200, origin);
       default:
         return json({ error: 'Unsupported action' }, 400, origin);
     }

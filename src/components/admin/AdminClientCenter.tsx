@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ClientTeam } from '../client/ClientTeam';
 import type { Employee } from '../../types/attendance';
 import {
   Building2,
@@ -516,6 +517,11 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
                           },
                         ]}
                       />
+                    </Card>
+
+                    <Card className="lg:col-span-2">
+                      <CardHead title="Portal users" desc="Everyone at this client who can sign in. The client’s own admins can manage this list too." />
+                      <ClientTeam clientId={selectedClient.id} primaryProfileId={selectedClient.profile_id ?? null} mode="admin" canManage />
                     </Card>
                   </div>
                 )}

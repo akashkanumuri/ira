@@ -18,6 +18,7 @@ import { supabase } from '../../lib/supabase';
 import { AppShell, type NavGroup as ShellNavGroup } from '../../ui/AppShell';
 import { SkeletonPage } from '../../ui';
 import { ClientSupport } from './ClientSupport';
+import { ClientTeam } from './ClientTeam';
 import {
   cx,
   Button,
@@ -594,6 +595,12 @@ function ClientSettingsView({
         </div>
       )}
 
+      {user.clientId && (
+        <Card className="mt-5">
+          <CardHead title={`People at ${user.companyName || 'your organisation'}`} desc="Everyone here can sign in to this portal and see your projects." />
+          <ClientTeam clientId={user.clientId} mode="client" canManage={user.clientRole === 'client_admin'} currentUserId={user.id} />
+        </Card>
+      )}
     </>
   );
 }
