@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { Employee, Task, TaskStatus } from '../../types/attendance';
 import { dateLabel } from '../../lib/v2';
+import { supabase } from '../../lib/supabase';
 import { notify } from '../../lib/toast';
 import { getKolkataDateString } from '../../lib/workingDays';
 import { fmtBytes, openFile } from '../../lib/sigma';
@@ -104,8 +105,20 @@ export function TaskDetail({
   const [fwd, setFwd] = useState<{ id: string; note: string } | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
 
-  const byId = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
-  const byProfile = useMemo(() => new Map(employees.filter((e) => e.profileId).map((e) => [e.profileId as string, e])), [employees]);
+  // Employees can only read their own record; task_people adds the names of the people on their tasks.
+  const [people, setPeople] = useState<Array<{ id: string; profile_id: string | null; name: string }>>([]);
+  useEffect(() => {
+    let live = true;
+    void (supabase as any).rpc('task_people').then(({ data }: any) => { if (live && Array.isArray(data)) setPeople(data); });
+    return () => { live = false; };
+  }, []);
+  const allPeople = useMemo(() => {
+    const list: Array<Pick<Employee, 'id' | 'name' | 'profileId'>> = [...employees];
+    for (const p of people) if (!employees.some((e) => e.id === p.id)) list.push({ id: p.id, name: p.name, profileId: p.profile_id });
+    return list;
+  }, [employees, people]);
+  const byId = useMemo(() => new Map(allPeople.map((e) => [e.id, e])), [allPeople]);
+  const byProfile = useMemo(() => new Map(allPeople.filter((e) => e.profileId).map((e) => [e.profileId as string, e])), [allPeople]);
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const isAssignee = Boolean(viewer.employeeId) && task.assignedTo === viewer.employeeId;
@@ -239,7 +252,7 @@ export function TaskDetail({
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             ['Assigned to', task.assignedToName],
-            ['Assigned by', task.assignedByName || 'Admin'],
+            ['Assigned by', (task.assignedBy ? byId.get(task.assignedBy)?.name : null) ?? task.assignedByName ?? 'Admin'],
             ['Dates', `${dateLabel(task.startDate)} → ${dateLabel(task.dueDate)}`],
             ['Time', task.estimateMinutes ? `${fmtMinutes(task.timeSpentMinutes)} of ${fmtMinutes(task.estimateMinutes)}` : fmtMinutes(task.timeSpentMinutes)],
           ].map(([k, v]) => (

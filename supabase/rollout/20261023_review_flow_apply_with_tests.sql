@@ -1,4 +1,4 @@
--- Applies 20261023100000..20261023150000 and runs all 7 test suites (each rolled back). Commits only if every suite reports failed=0.
+-- Applies 20261023100000..20261023150000 and 20261023170000 and runs all 7 test suites (each rolled back). Commits only if every suite reports failed=0.
 begin;
 set local statement_timeout='280s';
 set local lock_timeout = '5s';
@@ -1961,6 +1961,23 @@ grant execute on function public.task_timer_start(uuid), public.task_timer_stop(
 grant execute on function private.today_ist() to authenticated;
 revoke execute on function public.employee_review_metrics(uuid, date, date), public.team_review_metrics(date, date) from public, anon;
 grant execute on function public.employee_review_metrics(uuid, date, date), public.team_review_metrics(date, date) to authenticated;
+
+create or replace function public.task_people()
+returns table (id uuid, profile_id uuid, name text, designation text, avatar_url text)
+language sql stable security definer set search_path = '' as $$
+  select e.id, e.profile_id, e.name, d.name, e.avatar_url
+  from public.employees e
+  left join public.designations d on d.id = e.designation_id
+  where private.current_client_id() is null
+    and (private.is_admin()
+      or e.id in (
+        select t.assigned_by from public.tasks t where t.assigned_to = private.current_employee_id() and t.assigned_by is not null
+        union select t.assigned_to from public.tasks t where t.assigned_by = private.current_employee_id()
+        union select m.manager_id from public.employees m where m.id = private.current_employee_id() and m.manager_id is not null
+        union select x.id from public.employees x where x.manager_id = private.current_employee_id()))
+$$;
+revoke execute on function public.task_people() from public, anon;
+grant execute on function public.task_people() to authenticated;
 create temp table _all(m text);
 do $test$
 declare
@@ -2987,7 +3004,7 @@ if exists (select 1 from _all where not (m ~ '^[A-Z_]+_TEST_RESULTS \{' and ((su
  raise exception 'NOT APPLIED %', r; end if;
 insert into supabase_migrations.schema_migrations(version, name) values
 ('20261023100000','task_workflow'),('20261023110000','leave_approvals'),('20261023120000','performance'),
-('20261023130000','client_collaboration'),('20261023140000','client_team'),('20261023150000','review_flow');
+('20261023130000','client_collaboration'),('20261023140000','client_team'),('20261023150000','review_flow'),('20261023170000','task_people');
 end $$;
 commit;
 select string_agg(split_part(m,' ',1)||'='||((substr(m,position('{' in m)))::jsonb->>'failed')||'/'||((substr(m,position('{' in m)))::jsonb->>'total'),' ') as applied_tests from _all;

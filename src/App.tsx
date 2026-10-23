@@ -328,7 +328,13 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           }
           setAttendance((attR.data ?? []).map((r: any) => mapAttendance(r, employeeMap, breaksBy)));
         }
-        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, employeeMap)));
+        const taskPeople = new Map<string, Employee>(employeeMap);
+        if (!peopleR.error) {
+          for (const p of (peopleR.data ?? []) as Array<{ id: string; profile_id: string | null; name: string; designation: string | null; avatar_url: string | null }>) {
+            if (!taskPeople.has(p.id)) taskPeople.set(p.id, { ...emp, id: p.id, profileId: p.profile_id, name: p.name, designation: p.designation ?? '', avatar: p.avatar_url ?? '', managerId: null, manager: null } as Employee);
+          }
+        }
+        if (!taskR.error) setTasks((taskR.data ?? []).map((r: any) => mapTask(r, taskPeople)));
         if (!leaveR.error) setLeaveRequests((leaveR.data ?? []).map((r: any) => mapLeave(r, employeeMap)));
         if (!wfhR.error) setWfhRequests((wfhR.data ?? []).map((r: any) => mapWfh(r, employeeMap)));
         if (!corrR.error) {
@@ -369,6 +375,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           safe(db.from('salary_history').select('*').eq('employee_id', employeeId).lte('effective_from', today()).order('effective_from', { ascending: false }).limit(120), 'salary history'),
           safe(db.from('task_assignment_rules').select('*').order('created_at'), 'assignment rules'),
         ]);
+        // Names of the people on my tasks (my manager, who assigned me work), which employee RLS hides.
+        const peopleR = await db.rpc('task_people');
 
         const emp = authEmployee(user);
         const fallbackEmployees = dataSnapshot.current.employees;
