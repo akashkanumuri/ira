@@ -6,6 +6,7 @@
  *  - Managed projects: the full project workspace for projects I manage.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { DeliverableThread } from '../common/DeliverableThread';
 import { FolderKanban, Package, RefreshCw } from 'lucide-react';
 import type { Employee } from '../../types/attendance';
 import type { AuthUser } from '../../contexts/AuthContext';
@@ -282,6 +283,7 @@ function MyDeliverables({ user }: { user: AuthUser }) {
                 <Timeline items={dMods.map(m => ({ title: `${m.request_number} · ${m.field} · ${m.status}`, meta: fmtDate(m.created_at, true), body: <span>{m.previous_value} → {m.requested_value}{m.reason ? ` · ${m.reason}` : ''}</span> }))} />
               </section>
             )}
+            <DeliverableThread deliverableId={d.id} staff />
           </div>
         )}
       </SidePanel>

@@ -80,10 +80,11 @@ import {
   type ProjectWorkspace,
 } from '../../lib/sigma';
 import { Stat as UiStat } from '../../ui';
+import { DeliverableThread } from '../common/DeliverableThread';
 import { Gauge, Ring } from '../../ui/charts';
 import { greeting } from '../../ui/motion';
 
-export type ClientPage = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications';
+export type ClientPage = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications' | 'support';
 
 export interface WorkspaceProject {
   id: string;
@@ -843,6 +844,8 @@ export function ClientDeliverables({ user, ws, reload }: ViewProps) {
                 <p className="text-[11px] text-ink-3 mt-1.5">Final files become downloadable when the deliverable is marked ready.</p>
               )}
             </section>
+
+            <DeliverableThread deliverableId={d.id} staff={false} />
 
             {mods(d.id).filter(m => m.status === 'Counter Proposed').map(m => (
               <Card key={m.id} className="!p-4">

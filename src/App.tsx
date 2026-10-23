@@ -12,6 +12,7 @@ import { FinancePage } from './components/admin/FinancePage';
 import { ActivityLogPage } from './components/admin/ActivityLogPage';
 import { NotificationsPage } from './components/common/NotificationsPage';
 import { GlobalSearch } from './components/common/GlobalSearch';
+import { SupportInbox } from './components/common/SupportInbox';
 import { TaskDetail } from './components/tasks/TaskDetail';
 import { TASK_STATUS, TASK_STATUS_ORDER, fmtMinutes, isTaskClosed, isTaskOpen, isTaskWithAssignee } from './lib/tasks';
 import { RolesMatrix } from './components/admin/RolesMatrix';
@@ -62,7 +63,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target
+  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -179,12 +180,15 @@ function LiveClockDisplay() {
   );
 }
 
-const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance'];
-const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance'];
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
-  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance',
+  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work',
 };
+/** Cross-role mappings whose pages understand the same deep-link query. */
+const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-tasks', 'emp-tasks>admin-tasks', 'admin-support>emp-support', 'emp-support>admin-support']);
+
 /** The page a path resolves to for this role; links meant for the other role land on the closest equivalent. */
 function resolveTab(role: AuthUser['role'], raw: string): string {
   const tab = raw.replace(/^\//, '').split('?')[0];
@@ -586,6 +590,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         label: 'Clients & delivery', items: [
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
           { id: 'admin-finance', label: 'Finance', icon: BadgeIndianRupee },
+          { id: 'admin-support', label: 'Client support', icon: LifeBuoy },
           { id: 'admin-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness, badge: tasks.filter(t => !t.archivedAt && t.status === 'awaiting_review').length },
         ]
       },
@@ -642,7 +647,8 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const navigate = (target: string) => {
     const [rawTab, rawQuery] = target.split('?');
     const tab = resolveTab(user.role, rawTab);
-    const query = tab === rawTab.replace(/^\//, '') ? rawQuery : undefined;
+    const cleanRaw = rawTab.replace(/^\//, '');
+    const query = tab === cleanRaw || QUERY_SAFE.has(`${cleanRaw}>${tab}`) ? rawQuery : undefined;
     const url = `/${tab}${query ? `?${query}` : ''}`;
     if (typeof window !== 'undefined' && `${window.location.pathname}${window.location.search}` !== url) {
       window.history.pushState(null, '', url);
@@ -733,6 +739,8 @@ function getPageTitle(tab: string) {
     'emp-approvals': 'Team approvals',
     'emp-performance': 'Performance',
     'admin-performance': 'Performance',
+    'admin-support': 'Client support',
+    'emp-support': 'Client support',
     'admin-finance': 'Finance',
     'admin-activity': 'Activity log',
   } as Record<string, string>)[tab] ?? 'Dashboard';
@@ -751,6 +759,7 @@ function AdminContent(props: any) {
   if (activeTab === 'admin-settings') return <SettingsAdmin {...props} />;
   if (activeTab === 'admin-finance') return <FinancePage onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-activity') return <ActivityLogPage />;
+  if (activeTab === 'admin-support') return <SupportInbox employees={props.employees} canAssign />;
   if (activeTab === 'admin-performance') return <PerformanceAdmin employees={props.employees} designations={props.designations} />;
   if (activeTab === 'admin-notifications') return <NotificationsPage user={user} onOpen={onSelectTab} />;
   return <AdminHome {...props} onSelectTab={onSelectTab} />;
@@ -766,6 +775,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
   if (activeTab === 'emp-holidays') return <HolidaysPage {...props} />;
   if (activeTab === 'emp-profile') return <ProfileEmployee {...props} />;
+  if (activeTab === 'emp-support') return <SupportInbox employees={props.employees} canAssign={false} />;
   if (activeTab === 'emp-performance') return <PerformancePage user={props.user} employees={props.employees} />;
   if (activeTab === 'emp-approvals') return <TeamApprovals onRefresh={props.onRefresh} />;
   if (activeTab === 'emp-notifications') return <NotificationsPage user={props.user} onOpen={props.onSelectTab} />;

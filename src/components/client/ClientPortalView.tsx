@@ -12,10 +12,12 @@ import {
   Settings,
   Bell,
   AlertTriangle,
+  LifeBuoy,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { AppShell, type NavGroup as ShellNavGroup } from '../../ui/AppShell';
 import { SkeletonPage } from '../../ui';
+import { ClientSupport } from './ClientSupport';
 import {
   cx,
   Button,
@@ -59,10 +61,12 @@ const ACTION_PAGES: Record<string, ClientNavPage> = {
   '/client/deliverables': 'deliverables',
   '/client/progress': 'progress',
   '/client/payments': 'payments',
+  '/client/support': 'support',
   contracts: 'contracts',
   deliverables: 'deliverables',
   progress: 'progress',
   payments: 'payments',
+  support: 'support',
 };
 
 interface Props {
@@ -245,6 +249,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
     {
       label: 'Account',
       items: [
+        { id: 'support', label: 'Help & support', icon: LifeBuoy },
         { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifCount || undefined },
         { id: 'settings', label: 'Profile & Organisation', icon: Settings },
       ],
@@ -266,6 +271,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
         />
       );
     }
+    if (page === 'support') return <ClientSupport projects={projects.map(p => ({ id: p.id, name: p.name }))} managerName={selectedProject?.managerName} />;
     if (page === 'settings') return <ClientSettingsView user={user} changePassword={changePassword} />;
 
     if (loadingProjects) {

@@ -5,6 +5,7 @@
  * database: managers cannot verify payments or change billing settings).
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { DeliverableThread } from '../common/DeliverableThread';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -768,6 +769,8 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
               <StaffFiles files={files} onArchived={() => void reload()} />
               <div className="mt-3"><UploadBox parentType="deliverable" parentId={d.id} existing={files} allowFinal onDone={() => void reload()} /></div>
             </section>
+
+            <DeliverableThread deliverableId={d.id} staff />
 
             <section>
               <h3 className="text-[13px] font-semibold mb-2">Download access</h3>
