@@ -14,6 +14,9 @@ import { NotificationsPage } from './components/common/NotificationsPage';
 import { GlobalSearch } from './components/common/GlobalSearch';
 import { SupportInbox } from './components/common/SupportInbox';
 import { TaskDetail } from './components/tasks/TaskDetail';
+import { WorkBar, WorkProvider, useWork } from './components/work/WorkTracker';
+import { MyTimePage, TeamTimePage } from './components/work/WorkViews';
+import { workApi } from './lib/work';
 import { TASK_STATUS, TASK_STATUS_ORDER, fmtMinutes, isTaskClosed, isTaskOpen, isTaskWithAssignee } from './lib/tasks';
 import { RolesMatrix } from './components/admin/RolesMatrix';
 import { TeamApprovals } from './components/employee/TeamApprovals';
@@ -27,7 +30,7 @@ import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/empl
 import { useLinkableDeliverables, type LinkableDeliverable } from './lib/linkableDeliverables';
 import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { AppShell, type NavGroup } from './ui/AppShell';
-import { Avatar, Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, PillTabs, SearchInput, SkeletonPage, Stat, StatusBadge as UiStatusBadge } from './ui';
+import { Avatar, Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, PillTabs, SearchInput, SkeletonPage, Stat, StatusBadge as UiStatusBadge, cx } from './ui';
 import { Modal } from './ui/Modal';
 import { ConfirmHost, confirmDialog } from './ui/confirm';
 import { ToastHost } from './components/common/ToastHost';
@@ -180,8 +183,8 @@ function LiveClockDisplay() {
   );
 }
 
-const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support'];
-const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support'];
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
   'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work',
@@ -613,6 +616,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'admin-employees', label: 'Employees', icon: Users },
           { id: 'admin-attendance', label: 'Attendance', icon: Clock3 },
           { id: 'admin-requests', label: 'Requests', icon: FileClock, badge: pendingLeaveCount + pendingWfhCount },
+          { id: 'admin-worktime', label: 'Work time', icon: Activity },
           { id: 'admin-performance', label: 'Performance', icon: Target },
           { id: 'admin-payroll', label: 'Payroll', icon: WalletCards },
           { id: 'admin-holidays', label: 'Holidays', icon: CalendarDays },
@@ -638,12 +642,13 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       {
         label: 'Time', items: [
           { id: 'emp-attendance', label: 'My Attendance', icon: Clock3 },
+          { id: 'emp-time', label: 'My time', icon: Activity },
           { id: 'emp-leave', label: 'Leave', icon: CalendarDays },
           { id: 'emp-wfh', label: 'Work from home', icon: Home },
           { id: 'emp-holidays', label: 'Holidays', icon: Sparkles },
         ]
       },
-      ...(managesPeople ? [{ label: 'My team', items: [{ id: 'emp-approvals', label: 'Team approvals', icon: ClipboardCheck }] }] : []),
+      ...(managesPeople ? [{ label: 'My team', items: [{ id: 'emp-team-time', label: 'Team time', icon: Users }, { id: 'emp-approvals', label: 'Team approvals', icon: ClipboardCheck }] }] : []),
       {
         label: 'Me', items: [
           { id: 'emp-performance', label: 'Performance', icon: Target },
@@ -693,8 +698,13 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       onRefresh={reload} onSelectTab={navigate}
     />;
 
+  const trackingId = user.role === 'employee' ? user.employeeDbId ?? null : null;
+  const todayAtt = trackingId ? attendance.find((a) => a.employeeId === trackingId && a.date === getKolkataDateString()) : undefined;
+  const attendanceKey = todayAtt ? `${todayAtt.id}:${todayAtt.attendanceState ?? ''}:${todayAtt.checkOutIso ?? ''}:${todayAtt.breaks?.length ?? 0}` : 'none';
+
   return (
-    <>
+    <WorkProvider employeeId={trackingId} tasks={tasks} attendanceKey={attendanceKey} onAttendanceChanged={reload}
+      onOpenTask={(id) => navigate(`emp-tasks?task=${id}`)}>
       <AppShell
         groups={navGroups}
         active={activeTab}
@@ -705,7 +715,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           subtitle: user.role === 'admin' ? 'Administrator' : (user.designation || 'Employee'),
           avatar: user.avatar || null,
         }}
-        onSignOut={() => void onLogout()}
+        onSignOut={() => void (async () => { if (trackingId) { try { await workApi.pause('logout'); } catch { /* signing out anyway */ } } await onLogout(); })()}
         topRight={
           <>
             <GlobalSearch role={user.role} onNavigate={navigate} />
@@ -713,7 +723,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
             <NotificationBell activeTab={activeTab} user={user} onSelectTab={navigate} />
           </>
         }
-        banner={dataError ? <UiNotice tone="rose" action={<button type="button" onClick={() => void reload()} className="btn-secondary btn-sm">Retry</button>}>{dataError}</UiNotice> : null}
+        banner={(dataError || trackingId) ? <div className="space-y-2">{dataError && <UiNotice tone="rose" action={<button type="button" onClick={() => void reload()} className="btn-secondary btn-sm">Retry</button>}>{dataError}</UiNotice>}{trackingId && <WorkBar />}</div> : null}
       >
         {loadingData ? <SkeletonPage /> : (
           <div key={activeTab} className="ira-section-transition">
@@ -723,7 +733,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       </AppShell>
       <ToastHost />
       <ConfirmHost />
-    </>
+    </WorkProvider>
   );
 }
 
@@ -757,6 +767,9 @@ function getPageTitle(tab: string) {
     'emp-support': 'Client support',
     'admin-finance': 'Finance',
     'admin-activity': 'Activity log',
+    'admin-worktime': 'Work time',
+    'emp-time': 'My time',
+    'emp-team-time': 'Team time',
   } as Record<string, string>)[tab] ?? 'Dashboard';
 }
 
@@ -773,6 +786,7 @@ function AdminContent(props: any) {
   if (activeTab === 'admin-settings') return <SettingsAdmin {...props} />;
   if (activeTab === 'admin-finance') return <FinancePage onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-activity') return <ActivityLogPage />;
+  if (activeTab === 'admin-worktime') return <TeamTimePage admin />;
   if (activeTab === 'admin-support') return <SupportInbox employees={props.employees} canAssign />;
   if (activeTab === 'admin-performance') return <PerformanceAdmin employees={props.employees} designations={props.designations} />;
   if (activeTab === 'admin-notifications') return <NotificationsPage user={user} onOpen={onSelectTab} />;
@@ -792,6 +806,8 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-support') return <SupportInbox employees={props.employees} canAssign={false} />;
   if (activeTab === 'emp-performance') return <PerformancePage user={props.user} employees={props.employees} />;
   if (activeTab === 'emp-approvals') return <TeamApprovals onRefresh={props.onRefresh} />;
+  if (activeTab === 'emp-time') return <MyTimePage />;
+  if (activeTab === 'emp-team-time') return <TeamTimePage />;
   if (activeTab === 'emp-notifications') return <NotificationsPage user={props.user} onOpen={props.onSelectTab} />;
   return <EmployeeHome {...props} onSelectTab={props.onSelectTab} />;
 }
@@ -945,7 +961,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
           hasDirectReportRules={hasDirectReportRules} deliverables={linkable.open} />
       </Modal>
     )}
-    <TaskTable tasks={visible} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee={view === 'given'} deliverableName={deliverableName}
+    <TaskTable tasks={visible} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee={view === 'given'} deliverableName={deliverableName} startable={view === 'open'}
       empty={view === 'open' ? 'Nothing to do right now.' : view === 'review' ? 'Nothing waiting for review.' : view === 'done' ? 'No finished tasks yet.' : 'You haven’t assigned any work yet.'} />
     {openTask && <TaskDetail task={openTask} tasks={tasks} employees={employees} viewer={{ employeeId: myId, isAdmin: false }} subtaskTargets={targets}
       deliverableName={deliverableName} onClose={() => setOpenId(null)} onChanged={onRefresh} />}
@@ -1200,17 +1216,56 @@ function TaskAssignForm({
   );
 }
 
-function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssignee, deliverableName, empty = 'No tasks.' }: { tasks: Task[]; allTasks: Task[]; onOpen: (task: Task) => void; onDelete?: (task: Task) => void; archivingId?: string | null; showAssignee?: boolean; deliverableName?: (id?: string | null) => string | null; empty?: string }) {
+function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssignee, deliverableName, empty = 'No tasks.', startable }: { tasks: Task[]; allTasks: Task[]; onOpen: (task: Task) => void; onDelete?: (task: Task) => void; archivingId?: string | null; showAssignee?: boolean; deliverableName?: (id?: string | null) => string | null; empty?: string; startable?: boolean }) {
+  const work = useWork();
+  const runningId = work?.state?.current?.kind === 'task' ? work.state.current.task_id : null;
   const subCount = (id: string) => { const subs = allTasks.filter((s) => s.parentTaskId === id && !s.archivedAt); return subs.length ? `${subs.filter((s) => s.status === 'completed').length}/${subs.length}` : null; };
   if (!tasks.length) return <div className="card"><EmptyState icon={<BriefcaseBusiness className="w-6 h-6" />} title={empty} /></div>;
-  return <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table min-w-[760px]">
-    <thead><tr><Th>Task</Th>{showAssignee && <Th>Assigned to</Th>}<Th>Due</Th><Th>Priority</Th><Th>Status</Th><Th>Time</Th>{onDelete && <Th> </Th>}</tr></thead>
+  const canStartRow = (t: Task) => Boolean(startable && work?.enabled && !t.archivedAt && !['completed', 'cancelled', 'awaiting_review'].includes(t.status));
+  const startBlocked = !work?.state?.checked_in || work.state.checked_out || work.state.attendance_state !== 'working' || !work.canStart;
+  const startBtn = (t: Task) => {
+    if (!canStartRow(t)) return null;
+    if (runningId === t.id) return <button type="button" className="btn-secondary btn-sm" disabled={Boolean(work?.busy)} onClick={(e) => { e.stopPropagation(); void work?.pause(); }}><span className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />Pause</button>;
+    return <button type="button" className="btn-primary btn-sm" disabled={Boolean(work?.busy) || startBlocked}
+      title={startBlocked ? (!work?.state?.checked_in ? 'Check in first' : work?.state?.attendance_state === 'on_break' ? 'End your break first' : !work?.canStart ? 'Allow notifications first' : 'You have checked out') : undefined}
+      onClick={(e) => { e.stopPropagation(); void work?.startTask(t.id); }}><Play className="w-3.5 h-3.5" />Start</button>;
+  };
+  return <div className="card overflow-hidden">
+    {/* phones */}
+    <ul className="md:hidden divide-y divide-ink-100">
+      {tasks.map((t) => {
+        const meta = TASK_STATUS[t.status] ?? TASK_STATUS.assigned;
+        const late = !t.archivedAt && isTaskWithAssignee(t) && t.dueDate < today();
+        return (
+          <li key={t.id} className={cx('px-4 py-3 flex items-start gap-3', runningId === t.id && 'bg-brand-50/60')} onClick={() => onOpen(t)}>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-[14px] text-ink-900 leading-snug line-clamp-2">{t.title}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {t.archivedAt ? <Badge tone="ink">Removed</Badge> : <Badge tone={meta.tone} dot>{meta.label}</Badge>}
+                <PriorityBadge value={t.priority} />
+                <span className={`text-[12px] tnum ${late ? 'text-rose-700 font-semibold' : 'text-ink-500'}`}>{late ? 'Overdue · ' : 'Due '}{dateLabel(t.dueDate)}</span>
+              </div>
+              {showAssignee && <p className="text-[12px] text-ink-500 mt-1 truncate">{t.assignedToName}</p>}
+              {t.deliverableId && <p className="text-[11px] font-semibold text-brand-700 mt-1 truncate">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</p>}
+            </div>
+            <div className="shrink-0 flex flex-col items-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+              {startBtn(t)}
+              <span className="text-[11px] tnum text-ink-500">{fmtMinutes(t.timeSpentMinutes)}</span>
+              {onDelete && !t.archivedAt && <button type="button" title="Remove task" aria-label={`Remove task: ${t.title}`} disabled={archivingId === t.id} onClick={() => onDelete(t)} className="icon-btn text-ink-400 hover:!text-rose-600 disabled:opacity-50">{archivingId === t.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+    {/* tablets and desktop */}
+    <div className="hidden md:block overflow-x-auto"><table className="data-table min-w-[760px]">
+    <thead><tr><Th>Task</Th>{showAssignee && <Th>Assigned to</Th>}<Th>Due</Th><Th>Priority</Th><Th>Status</Th><Th>Time</Th>{startable && <Th> </Th>}{onDelete && <Th> </Th>}</tr></thead>
     <tbody>{tasks.map(t => {
       const meta = TASK_STATUS[t.status] ?? TASK_STATUS.assigned;
       const late = !t.archivedAt && isTaskWithAssignee(t) && t.dueDate < today();
       const subs = subCount(t.id);
       return (
-        <tr key={t.id} className="cursor-pointer hover:bg-ink-50/60" onClick={() => onOpen(t)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(t) }}>
+        <tr key={t.id} className={cx('cursor-pointer hover:bg-ink-50/60', runningId === t.id && 'bg-brand-50/60')} onClick={() => onOpen(t)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(t) }}>
           <td>
             <span className="block max-w-[340px] truncate font-bold text-ink-900">{t.parentTaskId && <CornerDownRight className="inline w-3.5 h-3.5 mr-1 text-ink-400 -mt-0.5" />}{t.title}</span>
             <span className="mt-1 flex flex-wrap gap-1.5">
@@ -1227,6 +1282,7 @@ function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssigne
             {!t.archivedAt && !isTaskClosed(t) && <div className="mt-1.5 h-1.5 w-28 rounded-full bg-ink-100 overflow-hidden"><div className={`h-full rounded-full ${t.status === 'blocked' ? 'bg-rose-500' : 'bg-brand-500'}`} style={{ width: `${t.progressPct ?? 0}%` }} /></div>}
           </td>
           <td className="tnum text-ink-600">{fmtMinutes(t.timeSpentMinutes)}</td>
+          {startable && <td onClick={(e) => e.stopPropagation()} className="text-right">{startBtn(t)}</td>}
           {onDelete && <td onClick={(e) => e.stopPropagation()}>{!t.archivedAt && <button type="button" title="Remove task" aria-label={`Remove task: ${t.title}`} disabled={archivingId === t.id} onClick={() => onDelete(t)} className="icon-btn text-ink-400 hover:!text-rose-600 disabled:opacity-50">{archivingId === t.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>}</td>}
         </tr>
       );

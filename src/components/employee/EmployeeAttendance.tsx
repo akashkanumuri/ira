@@ -119,6 +119,7 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
       }
       notify(ok, 'success', 4200, 'attendance');
       await onRefresh();
+      window.dispatchEvent(new Event('ira:attendance'));
     } catch (e) {
       const m = e instanceof Error ? e.message : 'Action failed.';
       setMessage(m);
