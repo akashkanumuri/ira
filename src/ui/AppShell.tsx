@@ -135,9 +135,9 @@ export function AppShell({
           <div className={cx('card h-full flex flex-col transition-[width] duration-300 ease-[cubic-bezier(.2,.7,.2,1)]', collapsed ? 'w-[76px]' : 'w-[248px]')}>
             <div className={cx('flex items-center h-[76px] shrink-0', collapsed ? 'justify-center px-2' : 'px-6')}>
               {collapsed ? (
-                {brand === 'sigma' ? <img src="/brand/sigma1-mark.svg" alt="SIGMA 1" className="w-8 h-8 object-contain" /> : <img src="/icon-192.png" alt="IRA Hospitality" className="w-10 h-10 object-contain" />}
+                (brand === 'sigma' ? <img src="/brand/sigma1-mark.svg" alt="SIGMA 1" className="w-8 h-8 object-contain" /> : <img src="/icon-192.png" alt="IRA Hospitality" className="w-10 h-10 object-contain" />)
               ) : (
-                {brand === 'sigma' ? <img src="/brand/sigma1-wordmark.svg" alt="SIGMA 1" className="h-6 w-auto object-contain object-left" /> : <img src="/ira-logo-wordmark.png" alt="IRA Hospitality" className="h-9 w-auto object-contain object-left" />}
+                (brand === 'sigma' ? <img src="/brand/sigma1-wordmark.svg" alt="SIGMA 1" className="h-6 w-auto object-contain object-left" /> : <img src="/ira-logo-wordmark.png" alt="IRA Hospitality" className="h-9 w-auto object-contain object-left" />)
               )}
             </div>
             <nav className="flex-1 overflow-y-auto px-3 pb-3 space-y-5" aria-label="Main navigation">
