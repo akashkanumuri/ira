@@ -760,7 +760,7 @@ begin
   insert into _r values ('meeting running', v->'current'->>'kind' = 'meeting', v::text);
 
   -- break closes the meeting; start blocked during break
-  insert into public.break_events(attendance_id, employee_id) values (att, e_emp) returning id into brk;
+  insert into public.break_events(attendance_id, employee_id, break_start) values (att, e_emp, now() - interval '2 min') returning id into brk;
   insert into _r values ('break closes session', not exists (select 1 from public.work_sessions where employee_id = e_emp and ended_at is null), '');
   begin perform public.work_start_task(t1); ok := false; exception when others then ok := sqlerrm like 'End your break%'; end;
   insert into _r values ('no task during break', ok, '');
@@ -842,7 +842,9 @@ begin
     (e_emp, 'meeting', null, d0 + interval '70 min', d0 + interval '100 min', 'pause'),
     (e_emp, 'task', t1, d0 + interval '120 min', d0 + interval '180 min', 'pause');
   update public.work_sessions set meeting_type = 'team_brief' where employee_id = e_emp and kind = 'meeting';
-  insert into public.break_events(attendance_id, employee_id, break_start, break_end) values (att, e_emp, d0 + interval '180 min', d0 + interval '255 min');
+  perform set_config('request.jwt.claims', json_build_object('sub', u_emp, 'role', 'authenticated')::text, true);
+  insert into public.break_events(attendance_id, employee_id, break_start) values (att, e_emp, d0 + interval '180 min') returning id into brk;
+  update public.break_events set break_end = d0 + interval '255 min' where id = brk;
   perform set_config('request.jwt.claims', json_build_object('sub', u_mgr, 'role', 'authenticated')::text, true);
   v := public.work_day(e_emp, v_today);
   insert into _r values ('day: buffer 10', (v->>'buffer_min')::int = 10, v::text);
