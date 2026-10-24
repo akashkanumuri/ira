@@ -7,8 +7,8 @@ export function useLoginScene(): LoginScene | 'aurora' {
   const [v] = useState<LoginScene | 'aurora'>(() => {
     try {
       const q = new URLSearchParams(window.location.search).get('login');
-      if (q === 'portal' || q === 'bot' || q === 'sigma' || q === 'aurora') { localStorage.setItem('ira-login-scene', q); return q; }
-      const s = localStorage.getItem('ira-login-scene');
+      if (q === 'portal' || q === 'bot' || q === 'sigma' || q === 'aurora') { localStorage.setItem('sigma1-login-scene', q); return q; }
+      const s = localStorage.getItem('sigma1-login-scene');
       if (s === 'portal' || s === 'bot' || s === 'sigma') return s;
     } catch { /* storage blocked */ }
     return 'aurora';
