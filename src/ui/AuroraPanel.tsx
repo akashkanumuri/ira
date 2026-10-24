@@ -133,11 +133,11 @@ const CSS = `
 .aur-center{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0 8%;gap:34px;translate:calc(var(--mx)*-14px) calc(var(--my)*-10px);transition:translate .3s ease-out}
 .aur-kicker{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.6);font-weight:700;animation:aurIn 1s .2s both}
 .aur-live{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 0 0 rgba(52,211,153,.7);animation:aurPulse 1.6s infinite}
-.aur-clock{display:flex;align-items:center;font-family:var(--font-display,inherit);font-weight:800;font-size:clamp(64px,8.6vw,132px);line-height:1;letter-spacing:-.04em;color:#fff;font-variant-numeric:tabular-nums;text-shadow:0 0 40px rgba(167,139,250,.55),0 0 90px rgba(34,211,238,.25);animation:aurRise 1.2s cubic-bezier(.2,.8,.2,1) both}
+.aur-clock{display:flex;align-items:center;font-family:var(--font-display,inherit);font-weight:800;font-size:clamp(64px,8.6vw,132px);line-height:1;letter-spacing:-.04em;color:#fff;font-variant-numeric:tabular-nums;filter:drop-shadow(0 0 28px rgba(167,139,250,.55)) drop-shadow(0 0 60px rgba(34,211,238,.22));animation:aurRise 1.2s cubic-bezier(.2,.8,.2,1) both}
 .aur-digit{display:inline-block;height:1em;overflow:hidden;width:.62em;text-align:center;-webkit-mask-image:linear-gradient(180deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(180deg,transparent,#000 18%,#000 82%,transparent)}
 .aur-digit-strip{display:flex;flex-direction:column;transition:transform .7s cubic-bezier(.65,0,.35,1)}
 .aur-digit-strip>span{height:1em;display:block;background:linear-gradient(180deg,#fff 30%,#c4b5fd 75%,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent}
-.aur-colon{margin:0 .04em;transform:translateY(-.06em);color:rgba(255,255,255,.55);animation:aurBlink 1s steps(1) infinite}
+.aur-colon{margin:0 .02em;transform:translateY(-.06em);color:#d8ccff;animation:aurBlink 2s ease-in-out infinite}
 .aur-sec{display:inline-flex;font-size:.42em;align-self:flex-start;margin-top:.12em;opacity:.8}
 
 .aur-line{position:relative;width:min(100%,520px);height:58px;animation:aurIn 1s .5s both}
@@ -166,8 +166,8 @@ const CSS = `
 @keyframes aurWave{0%{transform:translateX(-8%) rotate(-6deg) scaleY(.8)}50%{transform:translateX(6%) rotate(4deg) scaleY(1.2)}100%{transform:translateX(10%) rotate(-2deg) scaleY(.9)}}
 @keyframes aurTwinkle{from{opacity:.35}to{opacity:.9}}
 @keyframes aurPulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.7)}70%{box-shadow:0 0 0 10px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
-@keyframes aurBlink{50%{opacity:.15}}
-@keyframes aurRise{from{opacity:0;transform:translateY(30px) scale(.96);filter:blur(10px)}to{opacity:1;transform:none;filter:none}}
+@keyframes aurBlink{0%,100%{opacity:.9}50%{opacity:.35}}
+@keyframes aurRise{from{opacity:0;transform:translateY(30px) scale(.96)}to{opacity:1;transform:none}}
 @keyframes aurIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes aurCard{from{opacity:0;transform:translateY(10px) scale(.97);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 `;
