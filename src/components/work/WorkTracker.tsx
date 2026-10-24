@@ -22,6 +22,8 @@ interface WorkCtx {
   notifyPermission: NotificationPermission | 'unsupported';
   requestNotifications: () => Promise<void>;
   busy: string | null;
+  startingId: string | null;
+  tasksReady: boolean;
   startTask: (taskId: string) => Promise<boolean>;
   pause: () => Promise<void>;
   startMeeting: (type: MeetingType, note?: string | null) => Promise<boolean>;
@@ -59,9 +61,11 @@ export function taskReason(t: Task, lastTaskId?: string | null) {
   return { text: `Due ${dateLabel(t.dueDate)}`, tone: 'ink' as const };
 }
 
-export function WorkProvider({ employeeId, tasks, attendanceKey, onAttendanceChanged, onOpenTask, children }: {
+export function WorkProvider({ employeeId, tasks, tasksReady = true, attendanceKey, onAttendanceChanged, onOpenTask, children }: {
   employeeId: string | null;
   tasks: Task[];
+  /** False while the task list is still loading. */
+  tasksReady?: boolean;
   /** Changes whenever today’s attendance changes (check-in, break, check-out). */
   attendanceKey: string;
   onAttendanceChanged: () => Promise<void> | void;
@@ -74,6 +78,7 @@ export function WorkProvider({ employeeId, tasks, attendanceKey, onAttendanceCha
   const [unavailable, setUnavailable] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
+  const [startingId, setStartingId] = useState<string | null>(null);
   const [perm, setPerm] = useState(permissionNow);
   const [picker, setPicker] = useState<PickerMode>(null);
   const [meetingOpen, setMeetingOpen] = useState(false);
@@ -189,7 +194,9 @@ export function WorkProvider({ employeeId, tasks, attendanceKey, onAttendanceCha
 
   const startTask = useCallback(async (taskId: string) => {
     if (!canStart) { notify('Allow notifications first — progress checks arrive as notifications.', 'error', 6000); return false; }
+    setStartingId(taskId);
     const ok = await act('start', () => workApi.startTask(taskId));
+    setStartingId(null);
     if (ok) setPicker(null);
     return ok;
   }, [canStart, busy]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -227,7 +234,7 @@ export function WorkProvider({ employeeId, tasks, attendanceKey, onAttendanceCha
   }, [employeeId, busy, onAttendanceChanged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const value: WorkCtx = {
-    enabled: enabled && !unavailable, ready, state, now, canStart, notifyPermission: perm, requestNotifications, busy,
+    enabled: enabled && !unavailable, ready, state, now, canStart, notifyPermission: perm, requestNotifications, busy, startingId, tasksReady,
     startTask, pause, startMeeting, startBreak, endBreak,
     openPicker: setPicker, openMeeting: () => setMeetingOpen(true), openCheck: () => setCheckOpen(state?.pending[0]?.id ?? null), refresh,
     draftSubmitted: (taskId) => { localRef.current = true; void refresh(); setPicker({ kind: 'next', doneTaskId: taskId }); },
@@ -294,7 +301,7 @@ export function WorkBar() {
   } else if (s.current?.kind === 'task') {
     tone = 'bg-brand-50 border-brand-200 text-brand-900';
     icon = <span className="relative flex w-2.5 h-2.5"><span className="absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-60 animate-ping" /><span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-brand-600" /></span>;
-    main = <><span className="opacity-80">Working on </span><b className="truncate">{s.current.title}</b><span className="tnum font-bold ml-2">{ticker((nowMs - Date.parse(s.current.started_at)) / 1000)}</span></>;
+    main = <><span className="opacity-80 mr-1">Working on</span><b className="truncate">{s.current.title}</b><span className="tnum font-bold ml-2">{ticker((nowMs - Date.parse(s.current.started_at)) / 1000)}</span></>;
     actions = <>
       <button type="button" className="btn-secondary btn-sm !bg-white" disabled={Boolean(w.busy)} onClick={() => void w.pause()}><Pause className="w-3.5 h-3.5" />Pause</button>
       <button type="button" className="btn-ghost btn-sm" disabled={Boolean(w.busy)} onClick={() => w.openMeeting()}><Users className="w-3.5 h-3.5" /><span className="hidden sm:inline">Meeting</span></button>
@@ -361,7 +368,9 @@ function TaskPicker({ mode, state, tasks, ctx, onOpenTask, onClose }: { mode: No
             <button type="button" className="btn-primary btn-sm" onClick={() => void ctx.requestNotifications()}><Bell className="w-3.5 h-3.5" />Allow</button>
           </div>
         )}
-        {list.length ? (
+        {!ctx.tasksReady && !list.length ? (
+          <p className="rounded-2xl bg-ink-50 px-4 py-6 text-center text-[13px] text-ink-500 flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" />Loading your tasks…</p>
+        ) : list.length ? (
           <ul className="space-y-2 max-h-[min(52vh,420px)] overflow-y-auto -mx-1 px-1">
             {list.slice(0, 12).map((t) => {
               const r = taskReason(t, lastId);
@@ -377,7 +386,7 @@ function TaskPicker({ mode, state, tasks, ctx, onOpenTask, onClose }: { mode: No
                     <span className="block font-semibold text-[14px] text-ink-900 truncate mt-1">{t.title}</span>
                   </button>
                   <button type="button" className={cx(isNext ? 'btn-primary' : 'btn-secondary', 'btn-sm shrink-0')} disabled={Boolean(ctx.busy) || !ctx.canStart || onBreak} onClick={() => void ctx.startTask(t.id)}>
-                    {ctx.busy === 'start' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}Start
+                    {ctx.startingId === t.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}Start
                   </button>
                 </li>
               );

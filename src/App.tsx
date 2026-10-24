@@ -703,7 +703,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const attendanceKey = todayAtt ? `${todayAtt.id}:${todayAtt.attendanceState ?? ''}:${todayAtt.checkOutIso ?? ''}:${todayAtt.breaks?.length ?? 0}` : 'none';
 
   return (
-    <WorkProvider employeeId={trackingId} tasks={tasks} attendanceKey={attendanceKey} onAttendanceChanged={reload}
+    <WorkProvider employeeId={trackingId} tasks={tasks} tasksReady={!loadingData} attendanceKey={attendanceKey} onAttendanceChanged={reload}
       onOpenTask={(id) => navigate(`emp-tasks?task=${id}`)}>
       <AppShell
         groups={navGroups}

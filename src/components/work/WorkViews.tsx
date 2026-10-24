@@ -64,6 +64,12 @@ export function DayView({ employeeId, date, onDate, title }: { employeeId: strin
       </div>
       {error ? <Notice tone={error === WORK_NOT_READY ? 'amber' : 'rose'}>{error}</Notice> : loading && !d ? <Skeleton className="h-48" /> : !d ? (
         <EmptyState title="No attendance this day" text="Nothing was tracked — not checked in, on leave, or a day off." className="!py-8" />
+      ) : (d as any).untracked ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5">{d.late && <Badge tone="rose">Late check-in</Badge>}{d.left_early && <Badge tone="amber">Left early</Badge>}</div>
+          <div className="grid grid-cols-2 gap-2"><Tile label="Check-in → out" value={`${clockOf(d.check_in)}–${d.check_out ? clockOf(d.check_out) : '—'}`} sub={`Shift ${d.shift_start}–${d.shift_end}`} tone={d.late ? 'rose' : undefined} /></div>
+          <Notice tone="ink">Work tracking wasn’t running yet on this day, so only attendance is shown.</Notice>
+        </div>
       ) : (
         <>
           <div className="flex flex-wrap gap-1.5">
@@ -199,7 +205,11 @@ export function MonthView({ employeeId, month, onMonth, onDay, title }: { employ
                 {days.map((d) => (
                   <tr key={d.date} className={cx(d.kind === 'present' || d.kind === 'today' ? 'cursor-pointer hover:bg-ink-50/60' : 'text-ink-400')} onClick={() => (d.kind === 'present' || d.kind === 'today') && d.check_in && onDay(d.date)}>
                     <td className="whitespace-nowrap"><b className="text-ink-900">{weekday(d.date)} {dateLabel(d.date)}</b></td>
-                    {d.check_in ? <>
+                    {d.check_in && (d as any).untracked ? <>
+                      <td className="tnum whitespace-nowrap">{clockOf(d.check_in)}–{d.check_out ? clockOf(d.check_out) : '…'}</td>
+                      <td colSpan={5} className="text-[12px] text-ink-400">Attendance only (before tracking)</td>
+                      <td className="whitespace-nowrap">{d.late && <Badge tone="rose">Late</Badge>}</td>
+                    </> : d.check_in ? <>
                       <td className="tnum whitespace-nowrap">{clockOf(d.check_in)}–{d.check_out ? clockOf(d.check_out) : '…'}</td>
                       <td className="tnum text-right">{hm(d.task_min)}</td>
                       <td className="tnum text-right">{hm(d.meeting_min)}</td>
@@ -222,7 +232,9 @@ export function MonthView({ employeeId, month, onMonth, onDay, title }: { employ
               <li key={d.date}>
                 <button type="button" disabled={!d.check_in} onClick={() => d.check_in && onDay(d.date)} className="w-full text-left px-1 py-2.5 flex items-center gap-3 disabled:opacity-60">
                   <span className="w-14 shrink-0"><b className="block text-[13px] text-ink-900">{dateLabel(d.date).replace(/ \d{4}$/, '')}</b><span className="text-[11px] text-ink-500">{weekday(d.date)}</span></span>
-                  {d.check_in ? (
+                  {d.check_in && (d as any).untracked ? (
+                    <span className="flex-1 min-w-0"><span className="tnum text-[12px] text-ink-600">{clockOf(d.check_in)}–{d.check_out ? clockOf(d.check_out) : '…'}</span><span className="block text-[11px] text-ink-400">Attendance only (before tracking)</span>{d.late && <Badge tone="rose">Late</Badge>}</span>
+                  ) : d.check_in ? (
                     <span className="flex-1 min-w-0">
                       <span className="flex items-center justify-between gap-2"><span className="tnum text-[12px] text-ink-600">{clockOf(d.check_in)}–{d.check_out ? clockOf(d.check_out) : '…'}</span><b className={cx('tnum text-[13px]', d.below_min ? 'text-rose-600' : 'text-ink-900')}>{hm(d.effective_min)} · {pctText(d.effective_pct)}</b></span>
                       <span className="mt-1 flex h-1.5 rounded-full overflow-hidden bg-ink-100">

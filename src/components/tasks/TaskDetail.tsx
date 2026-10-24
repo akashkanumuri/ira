@@ -276,7 +276,7 @@ export function TaskDetail({
             {canWork && work?.enabled && (running
               ? <button type="button" className="btn-secondary" disabled={Boolean(work.busy)} onClick={() => void work.pause()}><Pause className="w-4 h-4" />Pause</button>
               : <button type="button" className="btn-primary" disabled={Boolean(work.busy) || Boolean(startBlockedReason)} onClick={() => void work.startTask(task.id).then((ok) => { if (ok) void onChanged(); })}>
-                  {work.busy === 'start' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}{task.status === 'revision_required' ? 'Start changes' : 'Start'}
+                  {work.startingId === task.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}{task.status === 'revision_required' ? 'Start changes' : 'Start'}
                 </button>)}
           </div>
           {canWork && !running && (startBlockedReason || runningElsewhere) && (
