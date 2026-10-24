@@ -27,8 +27,8 @@ function webglOk() {
  */
 export function Login3D({ scene, frameRef, formRef, above = false, onFail }: {
   scene: LoginScene;
-  frameRef: React.RefObject<HTMLElement>;
-  formRef: React.RefObject<HTMLElement>;
+  frameRef: React.RefObject<HTMLElement | null>;
+  formRef: React.RefObject<HTMLElement | null>;
   above?: boolean;
   onFail: () => void;
 }) {
