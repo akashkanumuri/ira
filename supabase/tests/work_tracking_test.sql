@@ -78,8 +78,11 @@ begin
   insert into _r values ('outsider cannot read day', ok, '');
   begin perform public.work_ask(t1, 'How is it?'); ok := false; exception when others then ok := sqlerrm like 'Only the manager%'; end;
   insert into _r values ('outsider cannot ask', ok, '');
-  begin update public.work_settings set daily_break_minutes = 120; get diagnostics n = row_count; ok := n = 0;
-  exception when others then ok := true; end;
+  begin
+    execute 'set local role authenticated';
+    update public.work_settings set daily_break_minutes = 120; get diagnostics n = row_count; ok := n = 0;
+    execute 'reset role';
+  exception when others then ok := true; execute 'reset role'; end;
   insert into _r values ('non-admin cannot change settings', ok and (select daily_break_minutes from public.work_settings) = 60, '');
 
   -- manager asks; employee answers into discussion; never counts as presence

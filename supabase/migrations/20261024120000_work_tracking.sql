@@ -161,7 +161,8 @@ begin
     values (p_emp, s.task_id, 'How’s “' || left(coalesce(v_title, 'your task'), 120) || '” going?', true, now() + make_interval(mins => c.check_answer_minutes))
     returning id into v_id;
     update public.work_presence set next_check_at = null where employee_id = p_emp;
-    perform private.notify_employee(p_emp, 'task', 'How’s “' || left(coalesce(v_title, 'your task'), 80) || '” going?',
+    -- notify directly: notify_employee skips the caller, and the heartbeat runs as the employee
+    perform private.notify((select profile_id from public.employees where id = p_emp), 'task', 'How’s “' || left(coalesce(v_title, 'your task'), 80) || '” going?',
       'Answer within ' || c.check_answer_minutes || ' minutes to keep your time counted.', '/emp-tasks', 'check_' || v_id);
   end if;
 end $$;
