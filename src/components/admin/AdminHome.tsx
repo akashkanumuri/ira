@@ -187,7 +187,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-      XLSX.writeFile(wb, `IRA_Attendance_${selectedDate}.xlsx`);
+      XLSX.writeFile(wb, `SIGMA1_Attendance_${selectedDate}.xlsx`);
       notify(`Exported attendance for ${dateLabel(selectedDate)}`, 'success');
     } catch {
       notify('Failed to export attendance.', 'error');

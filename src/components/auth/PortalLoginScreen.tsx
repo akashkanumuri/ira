@@ -138,10 +138,11 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     }
   };
 
+  // Staff sign-in (SIGMA 1) only switches between Employee and Admin; clients use their own IRA page at /client/login.
+  const isClient = activePortal === 'client';
   const portalTabs: Array<{ id: Portal; label: string }> = [
     { id: 'employee', label: 'Employee' },
     { id: 'admin', label: 'Admin' },
-    { id: 'client', label: 'Client' },
   ];
 
   const errorBox = (text: string) => (
@@ -152,7 +153,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   );
 
   return (
-    <AuthLayout eyebrow="IRA Hospitality · SIGMA 1" headline={meta.headline}>
+    <AuthLayout brand={isClient ? 'ira' : 'sigma'} eyebrow={isClient ? 'IRA Hospitality · Client portal' : 'SIGMA 1'} headline={meta.headline}>
       {screen === 'forgot' ? (
         <div className="space-y-6">
           <div>
@@ -220,7 +221,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             <p className="mt-2 text-sm text-ink-500">{meta.subtitle}</p>
           </div>
 
-          <PillTabs items={portalTabs} value={activePortal} onChange={switchPortal} className="w-full [&>button]:flex-1 [&>button]:justify-center" />
+          {!isClient && <PillTabs items={portalTabs} value={activePortal} onChange={switchPortal} className="w-full [&>button]:flex-1 [&>button]:justify-center" />}
 
           <form onSubmit={submit} className="space-y-4" noValidate>
             {error && errorBox(error)}

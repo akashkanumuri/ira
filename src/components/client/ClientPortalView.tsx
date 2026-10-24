@@ -320,6 +320,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
 
   return (
     <AppShell
+      brand="ira"
       groups={navGroups}
       active={page}
       onNavigate={id => setPage(id as ClientNavPage)}

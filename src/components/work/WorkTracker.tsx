@@ -154,7 +154,7 @@ export function WorkProvider({ employeeId, tasks, tasksReady = true, attendanceK
   const baseTitle = useRef<string>('');
   useEffect(() => {
     if (!baseTitle.current) baseTitle.current = document.title.replace(/^(▶|⏰|☕|●)[^|]*\|\s*/, '');
-    const base = baseTitle.current || 'IRA';
+    const base = baseTitle.current || 'SIGMA 1';
     if (state?.pending.length) {
       const flip = Math.floor(now / 1000) % 2 === 0;
       document.title = flip ? `⏰ Progress check waiting | ${base}` : base;

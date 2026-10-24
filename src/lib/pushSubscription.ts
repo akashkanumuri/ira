@@ -281,7 +281,7 @@ export async function unsubscribeFromPush(
  * Proves that the service worker notification lifecycle and click routing work on this device.
  */
 export async function sendLocalTestPushNotification(
-  title = 'IRA Presence - Notification Test',
+  title = 'SIGMA 1 · Notification test',
   body = 'Push notification channel is active and operating correctly on your device.',
   actionUrl = '/'
 ): Promise<boolean> {

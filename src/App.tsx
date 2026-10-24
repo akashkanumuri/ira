@@ -129,13 +129,16 @@ export default function App() {
   const clientPath = currentPath.startsWith('/client');
 
   useEffect(() => {
-    if (user?.role === 'client' || clientPath) {
+    const isClient = user?.role === 'client' || clientPath;
+    if (isClient) {
       document.title = 'IRA Client Portal';
     } else if (user ? user.role === 'admin' : adminPath) {
-      document.title = 'IRA Admin Portal';
+      document.title = 'SIGMA 1 · Admin';
     } else {
-      document.title = 'IRA Attendance';
+      document.title = 'SIGMA 1';
     }
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (icon) icon.href = isClient ? '/icon-192.png' : '/brand/sigma1-favicon-64.png';
   }, [user?.role, clientPath, adminPath]);
 
   useEffect(() => {
@@ -2739,7 +2742,7 @@ function NotificationBell({
                     <ol className="list-decimal list-inside text-[11px] space-y-0.5 pt-1 font-medium">
                       <li>Tap the Safari <b>Share</b> button (square with arrow up)</li>
                       <li>Scroll down and tap <b>Add to Home Screen</b></li>
-                      <li>Open IRA Attendance from your Home Screen to enable alerts</li>
+                      <li>Open SIGMA 1 from your Home Screen to enable alerts</li>
                     </ol>
                   </div>
                 )}
@@ -2791,7 +2794,7 @@ function NotificationBell({
   );
 }
 
-function LoadingScreen({ label = 'Loading IRA…' }: { label?: string }) { return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" />{label}</div></div> }
+function LoadingScreen({ label = 'Loading…' }: { label?: string }) { return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-sm text-slate-500 flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" />{label}</div></div> }
 
 
 function FormSection({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) { return <section className="ira-form-section"><div className="flex items-center gap-3 mb-4"><IconChip icon={icon} tone="brand" size="sm" /><h4 className="font-display text-base font-bold text-ink-950">{title}</h4></div>{children}</section> }

@@ -15,11 +15,11 @@ self.addEventListener('push', (event) => {
     try {
       payload = event.data.json();
     } catch {
-      payload = { title: 'IRA Presence', body: event.data.text() };
+      payload = { title: 'SIGMA 1', body: event.data.text() };
     }
   }
 
-  const title = payload.title || 'IRA Presence Update';
+  const title = payload.title || 'SIGMA 1';
   const body = payload.body || payload.message || 'You have a new work notification.';
   const icon = payload.icon || '/icon-192.png';
   const badge = payload.badge || '/icon-192.png';

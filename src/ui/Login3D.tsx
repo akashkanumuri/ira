@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-export type LoginScene = 'portal' | 'bot';
+export type LoginScene = 'portal' | 'bot' | 'sigma';
 
 /** Which sign-in look to show: `?login=portal|bot|aurora` (remembered on this device). */
 export function useLoginScene(): LoginScene | 'aurora' {
   const [v] = useState<LoginScene | 'aurora'>(() => {
     try {
       const q = new URLSearchParams(window.location.search).get('login');
-      if (q === 'portal' || q === 'bot' || q === 'aurora') { localStorage.setItem('ira-login-scene', q); return q; }
+      if (q === 'portal' || q === 'bot' || q === 'sigma' || q === 'aurora') { localStorage.setItem('ira-login-scene', q); return q; }
       const s = localStorage.getItem('ira-login-scene');
-      if (s === 'portal' || s === 'bot' || s === 'aurora') return s;
+      if (s === 'portal' || s === 'bot' || s === 'sigma') return s;
     } catch { /* storage blocked */ }
     return 'aurora';
   });
