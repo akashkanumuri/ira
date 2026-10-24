@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AuroraPanel } from './AuroraPanel';
+import { Login3D, useLoginScene } from './Login3D';
 
 export function AuthLayout({
   eyebrow,
@@ -12,6 +13,9 @@ export function AuthLayout({
   notice?: string;
   children: React.ReactNode;
 }) {
+  const scene = useLoginScene();
+  const [failed, setFailed] = useState(false);
+  if ((scene === 'portal' || scene === 'bot') && !failed) return <Scene3DLayout scene={scene} onFail={() => setFailed(true)}>{children}</Scene3DLayout>;
   return (
     <div className="min-h-dvh bg-[var(--app-bg)] p-3 lg:p-4 grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] gap-4">
       <aside className="hidden lg:flex relative overflow-hidden rounded-[32px] bg-[#06060f] text-white p-12 flex-col justify-between min-h-[calc(100dvh-2rem)]">
@@ -36,6 +40,32 @@ export function AuthLayout({
             <span className="relative z-[3] ml-auto text-[11px] font-semibold tracking-[0.2em] uppercase text-white/60">{eyebrow.split('·').pop()?.trim()}</span>
           </div>
           {children}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/** Sign-in page with a live 3D scene: the left panel is a window the scene breaks out of. */
+function Scene3DLayout({ scene, onFail, children }: { scene: 'portal' | 'bot'; onFail: () => void; children: React.ReactNode }) {
+  const deskQ = '(min-width: 1024px)';
+  const [desk, setDesk] = useState(() => window.matchMedia(deskQ).matches);
+  useEffect(() => { const m = window.matchMedia(deskQ); const on = () => setDesk(m.matches); m.addEventListener('change', on); return () => m.removeEventListener('change', on); }, []);
+  const panel = useRef<HTMLDivElement>(null), band = useRef<HTMLDivElement>(null), form = useRef<HTMLDivElement>(null);
+  const dark = scene === 'portal';
+  return (
+    <div className={`relative min-h-dvh p-3 lg:p-4 grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] gap-4 ${dark ? 'bg-[#07070d]' : 'bg-[var(--app-bg)]'}`}>
+      <Login3D key={`${scene}-${desk}`} scene={scene} frameRef={desk ? panel : band} formRef={form} above={scene === 'bot'} onFail={onFail} />
+      <aside ref={panel} className="hidden lg:block relative z-[1] rounded-[32px] min-h-[calc(100dvh-2rem)]">
+        {dark && <img src="/ira-logo-wordmark.png" alt="IRA Hospitality" className="absolute left-12 top-12 h-11 w-auto object-contain drop-shadow-[0_2px_12px_rgba(0,0,0,.6)]" />}
+      </aside>
+      <main className="relative z-[1] flex items-center justify-center px-2 py-8 sm:px-8">
+        <div className="w-full max-w-[420px] min-w-0">
+          <div ref={band} className={`lg:hidden relative rounded-[28px] ${scene === 'bot' ? 'h-44 mb-20' : 'h-48 mb-8'}`} />
+          <div ref={form} className={`relative rounded-[28px] p-6 sm:p-8 ${dark ? 'bg-white shadow-[0_30px_80px_-20px_rgba(0,0,0,.8),0_0_60px_-10px_rgba(139,92,246,.45)]' : 'bg-white shadow-[0_30px_80px_-30px_rgba(20,10,60,.35)] ring-1 ring-ink-100'}`}>
+            <img src="/ira-logo-wordmark.png" alt="IRA Hospitality" className="h-9 w-auto object-contain mb-6" />
+            {children}
+          </div>
         </div>
       </main>
     </div>

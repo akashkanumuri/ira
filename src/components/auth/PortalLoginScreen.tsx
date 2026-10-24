@@ -87,12 +87,16 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     }
   };
 
+  // Lets the animated sign-in scene react (robot shakes its head, portal flashes, etc.).
+  const announce = (detail: 'error' | 'success') => window.dispatchEvent(new CustomEvent('ira-login', { detail }));
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
     if (!identifier.trim() || !password) {
       setError(meta.emptyError);
+      announce('error');
       return;
     }
 
@@ -100,8 +104,10 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
     try {
       const result = await signIn(identifier.trim(), password, activePortal);
       if (result.error) setError(result.error);
+      announce(result.error ? 'error' : 'success');
     } catch {
       setError('Unable to sign in right now. Please try again.');
+      announce('error');
     } finally {
       setLoading(false);
     }
