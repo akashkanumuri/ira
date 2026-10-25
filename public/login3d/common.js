@@ -18,8 +18,11 @@ export const lowTier = () =>
  */
 export function createStage({ container, frameEl, transparent = false, bg = 0x07070d, frameColor = 0x020206, bloom = 0.8, threshold = 0.9, radius = 34 }) {
   const low = lowTier();
-  const renderer = new THREE.WebGLRenderer({ antialias: !low, alpha: transparent, stencil: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, low ? 1.25 : 1.75));
+  // Always antialiased and rendered at the screen's real sharpness (up to 2×). If a device can't hold a
+  // smooth frame rate, the loop below steps the resolution down gradually instead of starting blurry.
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: transparent, stencil: true, powerPreference: 'high-performance' });
+  const maxDpr = Math.min(devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(maxDpr);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
   container.appendChild(renderer.domElement);
@@ -98,10 +101,25 @@ export function createStage({ container, frameEl, transparent = false, bg = 0x07
     // run the simulation ahead so the first frame already looks "in motion"
     for (let i = 0, t0 = performance.now() / 1000 - warmup; i < warmup * 20; i++) fn(0.05, t0 + i * 0.05);
     if (still) { stage.render(); return; }
+    // adaptive resolution: watch ~1.5 s windows; below ~45 fps drop the pixel ratio a notch (never under 1),
+    // and if there is lots of headroom later, climb back toward the screen's native sharpness
+    let win = 0, frames = 0, settle = 1.5;
+    const tune = (dtRaw) => {
+      if (window.__login3dFixedRes) return; // test hook: keep full resolution for screenshots
+      win += dtRaw; frames++;
+      if (win < 1.5) return;
+      const fps = frames / win; win = 0; frames = 0;
+      if ((settle -= 1.5) > 0) return; // ignore start-up hitches
+      const pr = renderer.getPixelRatio();
+      let next = pr;
+      if (fps < 45 && pr > 1) next = Math.max(1, pr - 0.25);
+      else if (fps > 58 && pr < maxDpr) next = Math.min(maxDpr, pr + 0.25);
+      if (next !== pr) { renderer.setPixelRatio(next); renderer.setSize(stage.W, stage.H, false); composer?.setSize(stage.W, stage.H); settle = 3; }
+    };
     const tick = (t) => {
       if (!running) return;
-      const dt = Math.min(0.05, (t - last) / 1000); last = t;
-      if (!document.hidden) { fn(dt, t / 1000); stage.render(); }
+      const dtRaw = (t - last) / 1000, dt = Math.min(0.05, dtRaw); last = t;
+      if (!document.hidden) { fn(dt, t / 1000); stage.render(); if (dtRaw < 1) tune(dtRaw); }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

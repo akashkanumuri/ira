@@ -86,7 +86,10 @@ export function mount({ container, frameEl, reduced = false }) {
 
   world.add(new THREE.HemisphereLight(0xffffff, 0xb9b4d8, 1.2));
   const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-2, 6, 4); sun.castShadow = true;
-  sun.shadow.mapSize.set(S.low ? 1024 : 2048, S.low ? 1024 : 2048); Object.assign(sun.shadow.camera, { left: -5, right: 5, top: 4, bottom: -3, near: .5, far: 20 }); sun.shadow.radius = 5; sun.shadow.bias = -.0008;
+  // high-res shadow map fitted tightly around the logo and the robot's play area, soft filtered edges
+  const SM = Math.min(renderer.capabilities.maxTextureSize, S.low ? 2048 : 4096);
+  sun.shadow.mapSize.set(SM, SM); Object.assign(sun.shadow.camera, { left: -3.9, right: 4.1, top: 3.6, bottom: -1.6, near: 1, far: 14 });
+  sun.shadow.radius = 4; sun.shadow.blurSamples = 16; sun.shadow.bias = -.0003; sun.shadow.normalBias = .012;
   world.add(sun); world.add(sun.target);
   const fill = new THREE.DirectionalLight(0xffd2a8, .9); fill.position.set(4, 2, 3); world.add(fill);
 
@@ -115,7 +118,7 @@ export function mount({ container, frameEl, reduced = false }) {
   // a soft contact shadow, and sharper reflections on the helmet and face glass
   const rim = new THREE.DirectionalLight(0xbfd0ff, 2.6); rim.position.set(3, 3.5, -5); world.add(rim);
   const rim2 = new THREE.DirectionalLight(0xffc49a, 1.2); rim2.position.set(-4, 2, -3); world.add(rim2); world.add(rim.target); rim2.target = rim.target;
-  const eyeLight = new THREE.PointLight(0xff4f8b, 0, 0, 2); eyeLight.position.set(0, -.06, 1.5); R.head.add(eyeLight);
+  const eyeLight = new THREE.PointLight(0xff4f8b, 0, 0, 2); eyeLight.position.set(0, -.75, 1.1); R.head.add(eyeLight);
   const earLights = R.ears.map((e, i) => { const l = new THREE.PointLight(0xff9a2e, 0, 0, 2); l.position.set((i ? 1 : -1) * .45, 0, 0); e.add(l); return l; });
   R.root.traverse((o) => {
     const m = o.material; if (!m || !m.isMeshPhysicalMaterial) return;

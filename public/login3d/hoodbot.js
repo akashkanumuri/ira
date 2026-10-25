@@ -7,17 +7,19 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 const AMBER = 0xff9a2e, PINK = 0xff4f8b;
 
+const crisp = (t) => { t.anisotropy = 8; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; return t; };
 function fleeceTexture() {
-  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
-  g.fillStyle = '#808080'; g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 9000; i++) { const v = 90 + Math.random() * 80 | 0; g.fillStyle = `rgba(${v},${v},${v},.55)`; g.fillRect(Math.random() * 256, Math.random() * 256, 1.6, 1.6); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 4); return t;
+  const N = 512, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
+  g.fillStyle = '#808080'; g.fillRect(0, 0, N, N);
+  for (let i = 0; i < 36000; i++) { const v = 90 + Math.random() * 80 | 0; g.fillStyle = `rgba(${v},${v},${v},.5)`; g.beginPath(); g.arc(Math.random() * N, Math.random() * N, .7 + Math.random() * .9, 0, 7); g.fill(); }
+  const t = crisp(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 4); return t;
 }
 function scanTexture() {
-  const c = document.createElement('canvas'); c.width = 32; c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#7a1838'; g.fillRect(0, 0, 32, 64);
-  for (let y = 2; y < 64; y += 6) { g.fillStyle = '#ffd0df'; g.fillRect(2, y, 28, 3); }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  // drawn at 4× size with soft-edged scan lines so the eyes stay clean when magnified
+  const W = 128, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  g.fillStyle = '#7a1838'; g.fillRect(0, 0, W, H);
+  for (let y = 8; y < H; y += 24) { const gr = g.createLinearGradient(0, y, 0, y + 12); gr.addColorStop(0, 'rgba(255,208,223,.35)'); gr.addColorStop(.5, '#ffe2ec'); gr.addColorStop(1, 'rgba(255,208,223,.35)'); g.fillStyle = gr; g.beginPath(); g.roundRect(8, y, W - 16, 12, 6); g.fill(); }
+  const t = crisp(new THREE.CanvasTexture(c)); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 let glowTex;
 function glow(color, scale, opacity = .6) {
@@ -39,11 +41,11 @@ export function buildHoodbot() {
   const cuffMat = fleece.clone(); cuffMat.color = new THREE.Color(0x8e8e94);
   // micro-surface: fine speckle + faint brushed streaks so reflections break up like real painted metal
   const microTex = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
-    g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 5000; i++) { const v = 110 + Math.random() * 90 | 0; g.fillStyle = `rgba(${v},${v},${v},.5)`; g.fillRect(Math.random() * 256, Math.random() * 256, 1, 1); }
-    for (let i = 0; i < 60; i++) { g.strokeStyle = `rgba(${Math.random() < .5 ? '70,70,70' : '200,200,200'},.18)`; g.beginPath(); const y = Math.random() * 256; g.moveTo(0, y); g.lineTo(256, y + (Math.random() - .5) * 20); g.stroke(); }
-    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2); return t;
+    const N = 512, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
+    g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, N, N);
+    for (let i = 0; i < 20000; i++) { const v = 110 + Math.random() * 90 | 0; g.fillStyle = `rgba(${v},${v},${v},.45)`; g.fillRect(Math.random() * N, Math.random() * N, 1.2, 1.2); }
+    for (let i = 0; i < 120; i++) { g.strokeStyle = `rgba(${Math.random() < .5 ? '70,70,70' : '200,200,200'},.15)`; g.beginPath(); const y = Math.random() * N; g.moveTo(0, y); g.lineTo(N, y + (Math.random() - .5) * 40); g.stroke(); }
+    const t = crisp(new THREE.CanvasTexture(c)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2); return t;
   })();
   const shell = new THREE.MeshPhysicalMaterial({ color: 0x2a2b30, roughness: .42, roughnessMap: microTex, metalness: .55, clearcoat: .6, clearcoatRoughness: .25 });
   const shellDark = new THREE.MeshPhysicalMaterial({ color: 0x18191d, roughness: .45, metalness: .5, clearcoat: .4, flatShading: true });
