@@ -116,12 +116,13 @@ export function createStage({ container, frameEl, transparent = false, bg = 0x07
       if ((settle -= 1.5) > 0) return; // ignore start-up hitches
       const pr = renderer.getPixelRatio();
       if (trial) {
-        const helped = fps > trial.fps * 1.15;
+        const helped = fps > trial.fps * 1.25;
         if (!helped) { applyPr(trial.pr); noDrop = true; trial = null; settle = 3; return; }
         trial = null;
       }
-      if (fps < 45 && pr > 1 && !noDrop) { trial = { pr, fps }; applyPr(Math.max(1, pr - 0.25)); settle = 1.5; }
-      else if (fps > 58 && pr < maxDpr) { applyPr(Math.min(maxDpr, pr + 0.25)); settle = 3; }
+      // 30 fps (a common power-saving cap) still animates smoothly, so only genuinely poor rates trigger a step down
+      if (fps < 26 && pr > 1 && !noDrop) { trial = { pr, fps }; applyPr(Math.max(1, pr - 0.25)); settle = 3; }
+      else if (fps > 50 && pr < maxDpr) { applyPr(Math.min(maxDpr, pr + 0.25)); settle = 3; }
     };
     const tick = (t) => {
       if (!running) return;
