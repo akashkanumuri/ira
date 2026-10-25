@@ -37,10 +37,18 @@ export function buildHoodbot() {
   const fleeceDark = fleece.clone(); fleeceDark.color = new THREE.Color(0x2f2f34);
   const sweat = fleece.clone(); sweat.color = new THREE.Color(0x45454b);
   const cuffMat = fleece.clone(); cuffMat.color = new THREE.Color(0x8e8e94);
-  const shell = new THREE.MeshPhysicalMaterial({ color: 0x2a2b30, roughness: .38, metalness: .55, clearcoat: .6, clearcoatRoughness: .25 });
+  // micro-surface: fine speckle + faint brushed streaks so reflections break up like real painted metal
+  const microTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 5000; i++) { const v = 110 + Math.random() * 90 | 0; g.fillStyle = `rgba(${v},${v},${v},.5)`; g.fillRect(Math.random() * 256, Math.random() * 256, 1, 1); }
+    for (let i = 0; i < 60; i++) { g.strokeStyle = `rgba(${Math.random() < .5 ? '70,70,70' : '200,200,200'},.18)`; g.beginPath(); const y = Math.random() * 256; g.moveTo(0, y); g.lineTo(256, y + (Math.random() - .5) * 20); g.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2); return t;
+  })();
+  const shell = new THREE.MeshPhysicalMaterial({ color: 0x2a2b30, roughness: .42, roughnessMap: microTex, metalness: .55, clearcoat: .6, clearcoatRoughness: .25 });
   const shellDark = new THREE.MeshPhysicalMaterial({ color: 0x18191d, roughness: .45, metalness: .5, clearcoat: .4, flatShading: true });
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x050507, roughness: .06, metalness: .1, clearcoat: 1, clearcoatRoughness: .02 });
-  const robo = new THREE.MeshPhysicalMaterial({ color: 0x141418, roughness: .32, metalness: .65, clearcoat: .5 });
+  const robo = new THREE.MeshPhysicalMaterial({ color: 0x141418, roughness: .36, roughnessMap: microTex, metalness: .65, clearcoat: .5 });
   const silver = new THREE.MeshStandardMaterial({ color: 0xc9ccd2, metalness: 1, roughness: .25 });
   const cord = new THREE.MeshStandardMaterial({ color: 0xe9e9ec, roughness: .7 });
   const canvasBlack = new THREE.MeshStandardMaterial({ color: 0x232327, roughness: .85 });

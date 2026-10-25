@@ -111,6 +111,26 @@ export function mount({ container, frameEl, reduced = false }) {
   const r = R.root;
   const EYE = new THREE.Color(1.6, 1.15, 1.3), EYE_ERR = new THREE.Color(2.4, .35, .35);
 
+  // ---------- robot lighting: a cool rim from behind, light spilling from the eyes and ear rings,
+  // a soft contact shadow, and sharper reflections on the helmet and face glass
+  const rim = new THREE.DirectionalLight(0xbfd0ff, 2.6); rim.position.set(3, 3.5, -5); world.add(rim);
+  const rim2 = new THREE.DirectionalLight(0xffc49a, 1.2); rim2.position.set(-4, 2, -3); world.add(rim2); world.add(rim.target); rim2.target = rim.target;
+  const eyeLight = new THREE.PointLight(0xff4f8b, 0, 0, 2); eyeLight.position.set(0, -.06, 1.5); R.head.add(eyeLight);
+  const earLights = R.ears.map((e, i) => { const l = new THREE.PointLight(0xff9a2e, 0, 0, 2); l.position.set((i ? 1 : -1) * .45, 0, 0); e.add(l); return l; });
+  R.root.traverse((o) => {
+    const m = o.material; if (!m || !m.isMeshPhysicalMaterial) return;
+    if (m.flatShading === false && m.metalness >= .5 && m.roughness < .5) { m.roughness = Math.max(.18, m.roughness - .12); m.clearcoat = 1; m.clearcoatRoughness = .12; m.envMapIntensity = 1.4; }
+    if (m.roughness < .1) m.envMapIntensity = 1.8; // face glass
+  });
+  const contactTex = soft('rgba(10,8,20,1)');
+  const contact = new THREE.Mesh(new THREE.PlaneGeometry(.55, .38), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false, opacity: .5 }));
+  contact.rotation.x = -Math.PI / 2; contact.renderOrder = 1; world.add(contact);
+  const groundUnder = (x) => {
+    for (const k of ['I', 'G', 'M', 'A', 'one']) { const u = L[k].userData; if (Math.abs(x - u.home.x) < u.w / 2 && r.position.y > u.h - .08) return u.h; }
+    const u = hg.userData; if (Math.abs(x - u.home.x) < u.w / 2 && r.position.y > u.home.y + .42) return u.home.y + .5;
+    return 0;
+  };
+
   // effects: portal, confetti, sweat drop, dust/jet puffs, polish sparkle
   const portal = new THREE.Group(); world.add(portal); portal.visible = false;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(.62, .035, 16, 96), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x8b5cf6).multiplyScalar(2.2), toneMapped: false })); portal.add(ring);
@@ -155,7 +175,7 @@ export function mount({ container, frameEl, reduced = false }) {
     intro: reduced ? null : { t: 0, released: false },
     atOne: !!reduced, homing: false, lastActive: now(), nextGag: now() + 6,
     field: null, caret: null, hgK: 0, error: 0, success: 0, oneTip: 0, oneTipTarget: 0,
-    carry: !reduced, bob: 0, sit: false, gagging: false, playing: false,
+    carry: !reduced, bob: 0, sit: false, gagging: false, playing: false, sy: 1, svy: 0, syT: 1,
   };
   // the robot's pose targets; reset every frame, then whatever is running overrides them
   const P = {};
@@ -167,20 +187,54 @@ export function mount({ container, frameEl, reduced = false }) {
   const clearQ = () => { Q.length = 0; cur = null; st.gagging = false; st.playing = false; st.homing = false; };
   const call = (fn) => ({ update() { fn(); return true; } });
   const wait = (dur, pose) => ({ update(dt, T, t) { pose?.(T, t); return t >= dur; } });
-  const hopTo = (toFn, { h = .5, dur = .6, fly = false, spin = 0, sit = false, land = true, face = true } = {}) => {
-    let from, to;
+  // Jumps follow real ballistics: a crouch to load up, a parabola under gravity (constant sideways speed),
+  // stretch on the way up/down, legs tucked at the apex, then a springy squash sized by the impact speed.
+  // fly: true is the jet hop (eased thrust + banking) used to come back to the "1".
+  const G = 15;
+  const hopTo = (toFn, { h = .5, fly = false, spin = 0, sit = false, land = true, face = true, crouch = .12 } = {}) => {
+    let from, to, vy0, Tf, tDown, dirX;
     return {
-      spinning: !!spin,
-      init() { from = r.position.clone(); to = typeof toFn === 'function' ? toFn() : toFn.clone(); },
+      ownRigX: !!spin,
+      init() {
+        from = r.position.clone(); to = typeof toFn === 'function' ? toFn() : toFn.clone(); dirX = Math.sign(to.x - from.x) || 1;
+        const top = Math.max(from.y, to.y) + h;
+        vy0 = Math.sqrt(2 * G * Math.max(.001, top - from.y)); tDown = Math.sqrt(2 * Math.max(.001, top - to.y) / G); Tf = vy0 / G + tDown;
+        if (fly) Tf = .55 + Math.min(.5, from.distanceTo(to) * .18);
+      },
       update(dt, T, t) {
-        const k = Math.min(1, t / dur), e = fly ? 1 - Math.pow(1 - k, 2.2) : ease(k);
-        r.position.lerpVectors(from, to, e); r.position.y += Math.sin(Math.PI * k) * h;
-        if (face && Math.abs(to.x - from.x) > .05) P.ry = Math.sign(to.x - from.x) * (fly ? .9 : 1.1);
-        if (fly) { Object.assign(P, { rigX: .45, aLx: .7, aRx: .7, aLz: -.5, aRz: .5, lLx: .4, lRx: .2, k: 12 }); if (Math.random() < .7) emitPuff(new THREE.Vector3(r.position.x, r.position.y - .02, r.position.z - .05)); }
-        else Object.assign(P, { aLz: -2.5, aRz: 2.5, lLx: .5, lRx: -.4, rigX: .15, k: 14 });
-        if (spin) R.rig.rotation.x = spin * Math.PI * 2 * ease(k);
-        if (sit && k > .7) { P.lLx = P.lRx = -1.2; }
-        if (k >= 1) { if (spin) R.rig.rotation.x = 0; if (land) { R.rig.scale.set(1.15, .82, 1.15); if (!sit && to.y < .05) dust(5); } return true; }
+        if (face && Math.abs(to.x - from.x) > .05) P.ry = dirX * (fly ? .9 : 1.15);
+        if (fly) {
+          const k = Math.min(1, t / Tf), e = 1 - Math.pow(1 - k, 2.4);
+          r.position.lerpVectors(from, to, e); r.position.y += Math.sin(Math.PI * k) * h * .6;
+          Object.assign(P, { rigX: .45 * (1 - k * k), rigZ: -dirX * .35 * Math.sin(Math.PI * k), aLx: .7, aRx: .7, aLz: -.5, aRz: .5, lLx: .4, lRx: .2, k: 12 });
+          if (sit && k > .75) P.lLx = P.lRx = -1.2;
+          if (Math.random() < .75) emitPuff(new THREE.Vector3(r.position.x, r.position.y - .02, r.position.z - .05));
+          if (k >= 1) { if (land) st.svy -= 2.2; return true; }
+          return false;
+        }
+        if (t < crouch) { // anticipation: sink and swing the arms back
+          st.syT = .78; Object.assign(P, { aLx: .8, aRx: .8, aLz: -.25, aRz: .25, rigX: .3, lLx: .25, lRx: .25, k: 22 }); return false;
+        }
+        if (!this.went) { this.went = true; st.syT = 1; st.svy += 3.2; }
+        const tf = Math.min(Tf, t - crouch), k = tf / Tf;
+        r.position.x = from.x + (to.x - from.x) * k; r.position.z = from.z + (to.z - from.z) * k;
+        r.position.y = from.y + vy0 * tf - .5 * G * tf * tf;
+        const vy = vy0 - G * tf, apex = 1 - Math.min(1, Math.abs(vy) / Math.max(1, vy0));
+        st.syT = 1 + Math.min(.14, Math.abs(vy) * .022);
+        Object.assign(P, vy > 0
+          ? { aLz: -2.6, aRz: 2.6, aLx: -.2, aRx: -.2, lLx: -.9 * apex, lRx: -.5 * apex - .1, rigX: .12, k: 16 }
+          : { aLz: -1.4, aRz: 1.4, aLx: -.3, aRx: -.3, lLx: .15 - .5 * apex, lRx: -.1 - .4 * apex, rigX: -.08, k: 14 });
+        if (sit && k > .7) P.lLx = P.lRx = -1.2;
+        if (spin) R.rig.rotation.x = spin * Math.PI * 2 * (k < .1 ? 0 : k > .92 ? 1 : ease((k - .1) / .82));
+        if (tf >= Tf) {
+          r.position.copy(to);
+          if (spin) R.rig.rotation.x = 0;
+          if (this.landed === undefined) { this.landed = 0; if (land) { const impact = G * tDown; st.syT = 1; st.svy -= Math.min(5, impact * .55); if (!sit && to.y < .05) dust(Math.round(3 + impact)); } }
+          this.landed += dt;
+          if (sit || !land) return true;
+          Object.assign(P, { aLz: -.9, aRz: .9, rigX: .18, k: 18 }); // absorb the landing
+          return this.landed > .14;
+        }
         return false;
       },
     };
@@ -211,7 +265,7 @@ export function mount({ container, frameEl, reduced = false }) {
     if (st.homing) return;
     clearQ(); st.homing = true; st.atOne = false;
     const far = r.position.distanceTo(top1()) > .5;
-    push(hopTo(top1, { h: far ? .9 : .4, dur: far ? .75 : .45, fly: far, sit: true, land: false }), call(() => { st.atOne = true; st.homing = false; R.rig.scale.set(1.1, .88, 1.1); }));
+    push(hopTo(top1, { h: far ? .9 : .4, fly: far, sit: true, land: false }), call(() => { st.atOne = true; st.homing = false; st.svy -= 2; }));
   };
 
   // ---------- gags while you're idle on the page, antics when you're away
@@ -236,14 +290,32 @@ export function mount({ container, frameEl, reduced = false }) {
     call(() => { st.gagging = false; st.atOne = true; st.nextGag = now() + 7; }),
   ];
   const fromHome = () => (st.atOne ? [call(() => { st.atOne = false; }), hopTo(() => ground(xOf('one') + .5, .35), { h: .4, dur: .55 })] : []);
+  // trip: topple forward around the feet like an inverted pendulum, bounce, lie kicking, get up
+  const trip = () => ({
+    ownRigX: true,
+    init() { this.th = .15; this.w = 2.6; this.phase = 'fall'; this.lt = 0; this.dir = Math.sign(r.rotation.y) || -1; },
+    update(dt, T) {
+      if (this.phase === 'fall') {
+        this.w += (G / .6) * Math.sin(this.th) * dt; this.th += this.w * dt;
+        r.position.x += this.dir * .35 * dt * (1.6 - this.th);
+        Object.assign(P, { ry: this.dir * 1.45, aLz: -2.2, aRz: 2.2, aLx: -1.3, aRx: -1.3, k: 20 }); // arms out to break the fall
+        if (this.th >= 1.52) { this.th = 1.52; if (this.w > 2.5) { this.w = -this.w * .22; dust(10); st.svy -= 1.5; } else this.phase = 'lie'; }
+      } else if (this.phase === 'lie') {
+        this.lt += dt; this.th = 1.52;
+        Object.assign(P, { ry: this.dir * 1.45, lLx: Math.sin(T * 15) * .6, lRx: -Math.sin(T * 15) * .6, aLz: -2.4, aRz: 2.4, k: 22 });
+        if (this.lt > 1) { this.phase = 'up'; this.lt = 0; }
+      } else {
+        this.lt += dt; const k = Math.min(1, this.lt / .55); this.th = 1.52 * (1 - ease(k));
+        Object.assign(P, { ry: k > .8 ? 0 : this.dir * 1.45, aLx: -1.2 * (1 - k), aRx: -1.2 * (1 - k), headZ: k >= 1 ? Math.sin(T * 26) * .3 : 0, k: 12 });
+        if (this.lt > 1.1) { R.rig.rotation.x = 0; return true; }
+      }
+      R.rig.rotation.x = this.th; return false;
+    },
+  });
   const anticRunTrip = () => [
     ...fromHome(),
-    runTo(() => xOf('M') + .1), runTo(() => xOf('I') + .2, Z_FRONT, 1.9),
-    wait(1.9, (T, t) => {
-      if (t < .3) { Object.assign(P, { rigX: 1.55, aLz: -2.6, aRz: 2.6, ry: -1.45, k: 14 }); r.position.x -= .6 * (1 / 60); if (t < .05) dust(3); }
-      else if (t < 1.2) { Object.assign(P, { rigX: 1.55, ry: -1.45, aLz: -2.6, aRz: 2.6, lLx: Math.sin(T * 14) * .6, lRx: -Math.sin(T * 14) * .6, k: 20 }); if (t > .3 && t < .35) dust(8); }
-      else Object.assign(P, { ry: 0, headZ: Math.sin(T * 24) * .3, k: 8 });
-    }),
+    runTo(() => xOf('M') + .1), runTo(() => xOf('I') + .25, Z_FRONT, 1.9),
+    call(() => dust(3)), trip(),
   ];
   const anticPlatform = () => [
     ...fromHome(),
@@ -254,17 +326,39 @@ export function mount({ container, frameEl, reduced = false }) {
   ];
   const anticFallOff = () => [
     ...(st.atOne ? [call(() => { st.atOne = false; })] : [runTo(() => xOf('one') + .55, .3), hopTo(() => topOf('one'), { h: .6, dur: .55 })]),
-    hopTo(() => topOf('one'), { h: .15, dur: .3 }),
+    hopTo(() => topOf('one'), { h: .12 }),
     wait(.5, () => Object.assign(P, { ry: 1.45, lLx: Math.sin(now() * 14) * .5, lRx: -Math.sin(now() * 14) * .5 })),
-    call(() => { r.position.x = topOf('one').x; }),
-    { init() { this.x0 = r.position.x; }, update(dt, T, t) { r.position.x = this.x0 + Math.min(.2, t * .5); Object.assign(P, { ry: 1.45, aLz: -1.5 + Math.sin(T * 18) * 1.1, aRz: 1.5 + Math.sin(T * 18 + 3) * 1.1, rigZ: -.25 + Math.sin(T * 10) * .18, k: 24 }); return t > 1.4; } },
-    hopTo(() => ground(xOf('one') + .75, .25), { h: .15, dur: .55, face: false }),
-    wait(1.4, (T, t) => { Object.assign(P, { rigZ: t < 1 ? -1.5 : 0, ry: 0, lLx: t < 1 ? Math.sin(T * 16) * .5 : 0, lRx: t < 1 ? -Math.sin(T * 16) * .5 : 0, headZ: t > 1 ? Math.sin(T * 24) * .3 : 0, k: t < .2 ? 18 : 8 }); if (t < .03) dust(10); }),
+    { ownRigX: true, init() { this.x0 = r.position.x; }, update(dt, T, t) { // teeter on the edge, arms windmilling
+      r.position.x = this.x0 + Math.min(.19, t * .5);
+      R.rig.rotation.x = .2 + Math.sin(T * 10) * .16;
+      Object.assign(P, { ry: 1.45, aLz: -1.5 + Math.sin(T * 18) * 1.1, aRz: 1.5 + Math.sin(T * 18 + 3) * 1.1, k: 24 });
+      return t > 1.4; } },
+    { ownRigX: true, init() { this.th = .3; this.w = .8; this.vx = 0; this.vy = 0; this.phase = 'tip'; this.lt = 0; }, update(dt, T) {
+      // tip over the edge (pendulum), then real free fall while still rotating, bounce once, lie on the side, get up
+      if (this.phase === 'tip') { this.w += (G / .6) * Math.sin(this.th) * dt; this.th += this.w * dt; if (this.th > .85) { this.phase = 'air'; this.vx = .9; this.vy = .4; } }
+      else if (this.phase === 'air') {
+        this.th = Math.min(1.54, this.th + this.w * dt); this.vy -= G * dt; r.position.x += this.vx * dt; r.position.z = damp(r.position.z, .25, 3, dt);
+        r.position.y = Math.max(0, r.position.y + this.vy * dt);
+        if (r.position.y === 0) { this.phase = 'bounce'; this.vy = -this.vy * .18; dust(12); }
+      } else if (this.phase === 'bounce') {
+        this.vy -= G * dt; r.position.y = Math.max(0, r.position.y + this.vy * dt); this.th = damp(this.th, 1.54, 10, dt);
+        if (r.position.y === 0 && this.vy < 0) this.phase = 'lie';
+      } else if (this.phase === 'lie') {
+        this.lt += dt; Object.assign(P, { lLx: Math.sin(T * 16) * .5, lRx: -Math.sin(T * 16) * .5, k: 22 });
+        if (this.lt > 1) { this.phase = 'up'; this.lt = 0; }
+      } else {
+        this.lt += dt; const k = Math.min(1, this.lt / .55); this.th = 1.54 * (1 - ease(k)); P.headZ = k >= 1 ? Math.sin(T * 26) * .3 : 0;
+        if (this.lt > 1.1) { R.rig.rotation.x = 0; return true; }
+      }
+      R.rig.rotation.x = this.th; // tips forward, off the edge it is facing
+      const up = this.phase === 'up' ? Math.min(1, this.lt / .55) : 0;
+      Object.assign(P, { ry: up > .8 ? 0 : 1.45, aLz: P.aLz === -.12 ? -2.4 * (1 - up) : P.aLz, aRz: P.aRz === .12 ? 2.4 * (1 - up) : P.aRz, aLx: -1.1 * (1 - up), aRx: -1.1 * (1 - up), k: P.k === 10 ? 18 : P.k });
+      return false; } },
   ];
   const anticTrampoline = () => [
     ...fromHome(),
     runTo(() => xOf('M') + .65), hopTo(() => topOf('M'), { h: .5, dur: .5 }),
-    ...[.35, .65, 1.0].flatMap((h, i) => [call(() => { L.M.userData.sq = .3; }), hopTo(() => topOf('M'), { h, dur: .45 + h * .3, spin: i === 2 ? 1 : 0, face: false })]),
+    ...[.35, .65, 1.0].flatMap((h, i) => [call(() => { L.M.userData.sq = .3; }), hopTo(() => topOf('M'), { h, spin: i === 2 ? 1 : 0, face: false, crouch: .07 })]),
     call(() => { L.M.userData.sq = .35; }),
     wait(.7, () => Object.assign(P, { ry: 0, aLz: -2.7, aRz: 2.7, k: 14 })),
     hopTo(() => ground(xOf('M') + .1, Z_FRONT), { h: .4, dur: .5 }),
@@ -361,7 +455,7 @@ export function mount({ container, frameEl, reduced = false }) {
         if (Math.random() < .8) emitPuff(new THREE.Vector3(r.position.x + .05, r.position.y, r.position.z - .05));
       } else if (!it.released) {
         it.released = true; st.carry = false; one.userData.y = r.position.y + 3.95 * RS + .02; one.userData.vy = 0;
-        push(hopTo(() => ground(xOf('one') + .72, .3), { h: .25, dur: .4 }), wait(.55, () => Object.assign(P, { ry: -.9, aLz: -.6, aRz: .6, headZ: .2 })), hopTo(top1, { h: .5, dur: .55, sit: true, land: false }), call(() => { st.atOne = true; st.intro = null; st.lastActive = now(); st.nextGag = now() + 5; }));
+        push(hopTo(() => ground(xOf('one') + .72, .3), { h: .25, crouch: 0 }), wait(.55, () => Object.assign(P, { ry: -.9, aLz: -.6, aRz: .6, headZ: .2 })), hopTo(top1, { h: .5, dur: .55, sit: true, land: false }), call(() => { st.atOne = true; st.intro = null; st.lastActive = now(); st.nextGag = now() + 5; }));
       }
       if (st.carry) Object.assign(P, { aLz: -2.85, aRz: 2.85, aLx: 0, aRx: 0 });
     }
@@ -421,10 +515,16 @@ export function mount({ container, frameEl, reduced = false }) {
     R.armL.rotation.x = damp(R.armL.rotation.x, P.aLx, k, dt); R.armL.rotation.z = damp(R.armL.rotation.z, P.aLz, k, dt);
     R.armR.rotation.x = damp(R.armR.rotation.x, P.aRx, k, dt); R.armR.rotation.z = damp(R.armR.rotation.z, P.aRz, k, dt);
     R.legL.rotation.x = damp(R.legL.rotation.x, P.lLx, k, dt); R.legR.rotation.x = damp(R.legR.rotation.x, P.lRx, k, dt);
-    if (!(cur && cur.spinning)) R.rig.rotation.x = damp(R.rig.rotation.x, P.rigX, k * .8, dt);
-    R.rig.rotation.z = damp(R.rig.rotation.z, P.rigZ, k * .8, dt);
+    if (!cur?.ownRigX) R.rig.rotation.x = damp(R.rig.rotation.x, P.rigX, k * .8, dt);
+    if (!cur?.ownRigZ) R.rig.rotation.z = damp(R.rig.rotation.z, P.rigZ, k * .8, dt);
     if (P.ry !== null) r.rotation.y = damp(r.rotation.y, P.ry, 9, dt);
-    R.rig.scale.x = damp(R.rig.scale.x, 1, 10, dt); R.rig.scale.y = damp(R.rig.scale.y, 1, 10, dt); R.rig.scale.z = damp(R.rig.scale.z, 1, 10, dt);
+    // squash & stretch on an underdamped spring (volume-preserving)
+    for (let i = 0, n = Math.max(1, Math.ceil(dt / .008)), h = dt / n; i < n; i++) { st.svy += (-260 * (st.sy - st.syT) - 15 * st.svy) * h; st.sy += st.svy * h; }
+    st.sy = THREE.MathUtils.clamp(st.sy, .6, 1.3); st.syT = damp(st.syT, 1, 6, dt);
+    R.rig.scale.set(1 / Math.sqrt(st.sy), st.sy, 1 / Math.sqrt(st.sy));
+    // contact shadow: tight and dark on the ground, fading and spreading as the robot leaves it
+    { const hgt = Math.max(0, r.position.y - groundUnder(r.position.x)); contact.position.set(r.position.x, groundUnder(r.position.x) + .004, r.position.z + .02);
+      const f = Math.exp(-hgt * 2.2); contact.material.opacity = .55 * f * r.scale.x; contact.scale.setScalar((1 + hgt * .9) * Math.max(.3, 1 - Math.abs(R.rig.rotation.z) * .1)); }
     R.rig.position.y = damp(R.rig.position.y, st.bob + (st.sit ? Math.sin(T * 2.2) * .02 : 0), 20, dt);
 
     // head: look at the cursor / caret
@@ -439,6 +539,10 @@ export function mount({ container, frameEl, reduced = false }) {
     const blink = (T % 3.7) < .12;
     R.eyeL.scale.y = R.eyeR.scale.y = damp(R.eyeL.scale.y, blink ? .12 : st.error ? 1.25 : 1, 30, dt);
     R.eyeMat.color.lerp(st.error ? EYE_ERR : EYE, 1 - Math.exp(-10 * dt));
+    // point lights work in scene units, so their reach scales with the logo; the eye light blinks and turns red too
+    { const K = world.scale.x * r.scale.x;
+      eyeLight.distance = 1.6 * K; eyeLight.intensity = 2.4 * K * K * R.eyeL.scale.y * (st.hgK > .5 ? .5 : 1); eyeLight.color.setHex(st.error ? 0xff2a2a : 0xff4f8b);
+      earLights.forEach((l) => { l.distance = .9 * K; l.intensity = 1.0 * K * K; }); }
 
     // puffs, sweat drop, confetti
     puffs.forEach((q) => { if (q.life <= 0) { q.m.material.opacity = 0; return; } q.life -= dt * 1.6; q.m.material.opacity = q.life * .75; q.m.scale.multiplyScalar(1 + dt * 1.5); q.m.position.addScaledVector(q.v, dt); q.m.position.y -= dt * .2; });
