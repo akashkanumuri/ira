@@ -103,7 +103,11 @@ export function createStage({ container, frameEl, transparent = false, bg = 0x07
     if (still) { stage.render(); return; }
     // adaptive resolution: watch ~1.5 s windows; below ~45 fps drop the pixel ratio a notch (never under 1),
     // and if there is lots of headroom later, climb back toward the screen's native sharpness
-    let win = 0, frames = 0, settle = 1.5;
+    // Every step down is a trial: if rendering fewer pixels doesn't actually make frames faster (the browser
+    // is capping the frame rate, e.g. battery saver at 30 fps), the resolution goes straight back up and
+    // we stop stepping down — so a capped browser never gets a blurry picture for nothing.
+    let win = 0, frames = 0, settle = 1.5, trial = null, noDrop = false;
+    const applyPr = (v) => { renderer.setPixelRatio(v); renderer.setSize(stage.W, stage.H, false); composer?.setSize(stage.W, stage.H); };
     const tune = (dtRaw) => {
       if (window.__login3dFixedRes) return; // test hook: keep full resolution for screenshots
       win += dtRaw; frames++;
@@ -111,10 +115,13 @@ export function createStage({ container, frameEl, transparent = false, bg = 0x07
       const fps = frames / win; win = 0; frames = 0;
       if ((settle -= 1.5) > 0) return; // ignore start-up hitches
       const pr = renderer.getPixelRatio();
-      let next = pr;
-      if (fps < 45 && pr > 1) next = Math.max(1, pr - 0.25);
-      else if (fps > 58 && pr < maxDpr) next = Math.min(maxDpr, pr + 0.25);
-      if (next !== pr) { renderer.setPixelRatio(next); renderer.setSize(stage.W, stage.H, false); composer?.setSize(stage.W, stage.H); settle = 3; }
+      if (trial) {
+        const helped = fps > trial.fps * 1.15;
+        if (!helped) { applyPr(trial.pr); noDrop = true; trial = null; settle = 3; return; }
+        trial = null;
+      }
+      if (fps < 45 && pr > 1 && !noDrop) { trial = { pr, fps }; applyPr(Math.max(1, pr - 0.25)); settle = 1.5; }
+      else if (fps > 58 && pr < maxDpr) { applyPr(Math.min(maxDpr, pr + 0.25)); settle = 3; }
     };
     const tick = (t) => {
       if (!running) return;
