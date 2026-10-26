@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { forgetThisDevice } from '../lib/pushSubscription';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getKolkataDateString } from '../lib/workingDays';
 import type { UserRole } from '../types/attendance';
@@ -66,6 +67,14 @@ function formatSessionDuration(seconds: number): string {
   return `${Math.floor(safe / 3600)}h ${Math.floor((safe % 3600) / 60)}m`;
 }
 
+/** Ends a login session row, recording why ('logout' = the person signed out; 'replaced' = a newer sign-in closed it). */
+async function closeSessionRow(id: string, now: Date, duration: number, reason: 'logout' | 'replaced') {
+  const base = { logout_at: now.toISOString(), session_duration_seconds: duration, status: 'ended' };
+  const { error } = await (supabase as any).from('auth_sessions').update({ ...base, end_reason: reason }).eq('id', id);
+  // Older databases without the end_reason column: still close the session.
+  if (error) await (supabase as any).from('auth_sessions').update(base).eq('id', id);
+}
+
 async function startApplicationSession(user: AuthUser): Promise<void> {
   if (!isSupabaseConfigured) return;
   const now = new Date();
@@ -78,10 +87,7 @@ async function startApplicationSession(user: AuthUser): Promise<void> {
 
   for (const row of activeRows ?? []) {
     const duration = Math.max(0, Math.floor((now.getTime() - new Date(row.login_at).getTime()) / 1000));
-    await (supabase as any)
-      .from('auth_sessions')
-      .update({ logout_at: now.toISOString(), session_duration_seconds: duration, status: 'ended' })
-      .eq('id', row.id);
+    await closeSessionRow(row.id, now, duration, 'replaced');
   }
 
   const { data, error } = await (supabase as any)
@@ -116,10 +122,7 @@ async function endApplicationSession(userId: string): Promise<void> {
   const { data } = await query;
   for (const row of data ?? []) {
     const duration = Math.max(0, Math.floor((now.getTime() - new Date(row.login_at).getTime()) / 1000));
-    await (supabase as any)
-      .from('auth_sessions')
-      .update({ logout_at: now.toISOString(), session_duration_seconds: duration, status: 'ended' })
-      .eq('id', row.id);
+    await closeSessionRow(row.id, now, duration, 'logout');
   }
   if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACTIVE_SESSION_ID_KEY);
 }
@@ -457,6 +460,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (user?.id) await endApplicationSession(user.id);
+    // Stop this computer receiving the signed-out person's notifications (shared desks, shared Macs).
+    // The browser keeps its push channel; the next person who signs in here claims it for themselves.
+    await forgetThisDevice();
     if (isSupabaseConfigured) await supabase.auth.signOut({ scope: 'local' });
     setUser(null);
     setSession(null);

@@ -2474,6 +2474,8 @@ function NotificationBell({
         return <Sparkles className="w-3.5 h-3.5 text-purple-600" />;
       case 'payroll':
         return <WalletCards className="w-3.5 h-3.5 text-emerald-600" />;
+      case 'activity':
+        return <Activity className="w-3.5 h-3.5 text-sky-600" />;
       default:
         return <Bell className="w-3.5 h-3.5 text-slate-600" />;
     }
@@ -2493,6 +2495,8 @@ function NotificationBell({
         return 'bg-purple-50 border-purple-200';
       case 'payroll':
         return 'bg-emerald-50 border-emerald-200';
+      case 'activity':
+        return 'bg-sky-50 border-sky-200';
       default:
         return 'bg-slate-50 border-slate-200';
     }

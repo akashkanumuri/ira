@@ -3,7 +3,9 @@ import { supabase, isSupabaseConfigured } from './supabase';
 import { notify } from './toast';
 import type { Database } from './database.types';
 
-export type NotificationType = 'attendance' | 'leave' | 'wfh' | 'task' | 'holiday' | 'payroll' | 'system';
+export type NotificationType =
+  | 'attendance' | 'leave' | 'wfh' | 'task' | 'holiday' | 'payroll' | 'system'
+  | 'contract' | 'deliverable' | 'dependency' | 'modification' | 'billing' | 'client' | 'activity';
 
 export interface NotificationRecord {
   id: string;
@@ -214,34 +216,16 @@ export async function deleteNotification(notificationId: string): Promise<boolea
  * Calls the trusted backend / Edge Function or logs delivery intent.
  */
 export async function dispatchPushToRecipient(
-  recipientId: string,
-  title: string,
-  body: string,
-  actionUrl = '/',
-  notificationId?: string,
-  idempotencyKey?: string
+  _recipientId: string,
+  _title: string,
+  _body: string,
+  _actionUrl = '/',
+  _notificationId?: string,
+  _idempotencyKey?: string
 ) {
-  if (!isSupabaseConfigured || !recipientId) return;
-
-  try {
-    // Attempt Supabase Edge Function invoke for secure server-side push dispatch
-    const { error } = await supabase.functions.invoke('send-push', {
-      body: {
-        recipientId,
-        title,
-        body,
-        actionUrl,
-        notificationId,
-        idempotencyKey,
-      },
-    });
-
-    if (error) {
-      console.debug('[Notifications] Edge function push dispatch notice:', error.message);
-    }
-  } catch (e) {
-    console.debug('[Notifications] Push dispatch exception:', e);
-  }
+  // Phone/desktop delivery now happens on the server: every row saved in `notifications` is pushed to the
+  // recipient's devices by the push-worker function (with retries). Sending from the browser as well
+  // would only produce duplicates, so this is intentionally a no-op kept for existing callers.
 }
 
 /**

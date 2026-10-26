@@ -1,4 +1,4 @@
-// IRA Presence V2 - Web Push Service Worker
+// SIGMA 1 - Web Push Service Worker
 // Standards-based Push API and Notification Handling
 
 self.addEventListener('install', (event) => {
@@ -18,13 +18,17 @@ self.addEventListener('push', (event) => {
       payload = { title: 'SIGMA 1', body: event.data.text() };
     }
   }
-
-  const title = payload.title || 'SIGMA 1';
-  const body = payload.body || payload.message || 'You have a new work notification.';
-  const icon = payload.icon || '/icon-192.png';
-  const badge = payload.badge || '/icon-192.png';
-  const url = payload.action_url || payload.url || '/';
-  const tag = payload.tag || (payload.id ? `ira-${payload.id}` : 'ira-presence-push');
+  // Server sends both the Declarative Web Push shape (payload.notification) and flat fields.
+  const decl = payload.notification || {};
+  const title = payload.title || decl.title || 'SIGMA 1';
+  const body = payload.body || decl.body || payload.message || 'You have a new update.';
+  const icon = payload.icon || '/brand/sigma1-icon-192.png';
+  const badge = payload.badge_icon || payload.badge || icon;
+  let url = payload.action_url || payload.url || '/';
+  if (!url.startsWith('/') && decl.navigate) {
+    try { url = new URL(decl.navigate).pathname + new URL(decl.navigate).search; } catch { url = '/'; }
+  }
+  const tag = payload.tag || decl.tag || (payload.id ? `sigma-${payload.id}` : 'sigma-push');
 
   const options = {
     body,
@@ -32,32 +36,23 @@ self.addEventListener('push', (event) => {
     badge,
     tag,
     renotify: true,
-    data: {
-      url,
-      id: payload.id,
-      timestamp: Date.now(),
-    },
+    timestamp: Date.now(),
+    data: { url, id: payload.id, type: payload.type, timestamp: Date.now() },
   };
+  if (Array.isArray(payload.actions) && payload.actions.length > 0) options.actions = payload.actions;
 
-  // Safe checks for vibration and actions to prevent iOS WebKit errors
-  if ('vibrate' in navigator) {
-    options.vibrate = [120, 60, 120];
-  }
-  if (Array.isArray(payload.actions) && payload.actions.length > 0) {
-    options.actions = payload.actions;
-  }
+  const unread = typeof payload.unread === 'number' ? payload.unread : decl.app_badge;
+  const badgeWork = typeof unread === 'number' && self.navigator && 'setAppBadge' in self.navigator
+    ? (unread > 0 ? self.navigator.setAppBadge(unread) : self.navigator.clearAppBadge()).catch(() => {})
+    : Promise.resolve();
 
-  event.waitUntil(
+  event.waitUntil(Promise.all([
+    badgeWork,
     self.registration.showNotification(title, options).catch((err) => {
-      // Fallback for browsers (such as iOS WebKit) that reject extended options
       console.warn('[SW] showNotification failed with full options, retrying basic:', err);
-      return self.registration.showNotification(title, {
-        body,
-        icon: '/icon-192.png',
-        data: { url },
-      });
-    })
-  );
+      return self.registration.showNotification(title, { body, icon, data: { url } });
+    }),
+  ]));
 });
 
 self.addEventListener('notificationclick', (event) => {

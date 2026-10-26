@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BriefcaseBusiness, CalendarDays, CheckCheck, Clock3, Home, RefreshCw, Sparkles, Trash2, WalletCards } from 'lucide-react';
+import { Activity, Bell, BriefcaseBusiness, Building2, CalendarDays, CheckCheck, Clock3, FileText, Home, Package, Paperclip, Pencil, Receipt, RefreshCw, Sparkles, Trash2, WalletCards } from 'lucide-react';
+import { AlertSettings } from './AlertSettings';
 import type { AuthUser } from '../../contexts/AuthContext';
 import { deleteNotification, fetchUserNotifications, markAllNotificationsAsRead, markNotificationAsRead, type NotificationRecord, type NotificationType } from '../../lib/notifications';
 import { notify } from '../../lib/toast';
@@ -13,6 +14,13 @@ const TYPE_META: Record<NotificationType, { label: string; icon: React.ReactNode
   holiday: { label: 'Holidays', icon: <Sparkles className="w-4 h-4" />, tone: 'brand' },
   payroll: { label: 'Payroll', icon: <WalletCards className="w-4 h-4" />, tone: 'mint' },
   system: { label: 'System', icon: <Bell className="w-4 h-4" />, tone: 'ink' },
+  activity: { label: 'Team activity', icon: <Activity className="w-4 h-4" />, tone: 'sky' },
+  contract: { label: 'Contracts', icon: <FileText className="w-4 h-4" />, tone: 'ink' },
+  deliverable: { label: 'Deliverables', icon: <Package className="w-4 h-4" />, tone: 'brand' },
+  dependency: { label: 'Client files', icon: <Paperclip className="w-4 h-4" />, tone: 'amber' },
+  modification: { label: 'Changes', icon: <Pencil className="w-4 h-4" />, tone: 'amber' },
+  billing: { label: 'Billing', icon: <Receipt className="w-4 h-4" />, tone: 'mint' },
+  client: { label: 'Clients', icon: <Building2 className="w-4 h-4" />, tone: 'sky' },
 };
 const TONE_BG: Record<Tone, string> = {
   brand: 'bg-brand-50 text-brand-600', mint: 'bg-mint-50 text-mint-600', amber: 'bg-amber-50 text-amber-600', rose: 'bg-rose-50 text-rose-600', sky: 'bg-sky-50 text-sky-600', ink: 'bg-ink-100 text-ink-600', dark: 'bg-ink-900 text-white',
@@ -82,6 +90,7 @@ export function NotificationsPage({ user, onOpen }: { user: AuthUser; onOpen: (u
           <button type="button" className="btn-primary" disabled={!unread} onClick={() => void markAll()}><CheckCheck className="w-4 h-4" /> Mark all read</button>
         </>}
       />
+      <AlertSettings user={user} />
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <PillTabs value={filter} onChange={setFilter} items={[{ id: 'all', label: 'All', count: items.length }, { id: 'unread', label: 'Unread', count: unread || undefined }]} />
         {types.length > 1 && (

@@ -305,3 +305,18 @@ export async function sendLocalTestPushNotification(
     return false;
   }
 }
+
+/**
+ * On sign-out: unlink this browser's push channel from the account in the database so the next person
+ * using this computer never sees the previous person's alerts. The browser subscription itself is kept
+ * and is re-linked to whoever signs in next (see syncExistingPushSubscription).
+ */
+export async function forgetThisDevice(): Promise<void> {
+  try {
+    const subscription = await getExistingSubscription();
+    if (!subscription?.endpoint) return;
+    await (supabase as any).from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+  } catch {
+    /* best effort — never block sign-out */
+  }
+}
