@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { forgetThisDevice } from '../lib/pushSubscription';
+import { blockedMessage, claimDevice, releaseDevice, setSignOutNotice } from '../lib/deviceLock';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getKolkataDateString } from '../lib/workingDays';
 import type { UserRole } from '../types/attendance';
@@ -380,6 +381,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     channel.subscribe();
 
+    // One device per employee login: if another device holds it now (or an admin released this one), sign out here.
+    const checkDevice = async () => {
+      const lock = await claimDevice(false);
+      if (!active || !lock || lock.ok) return;
+      setSignOutNotice(lock.released
+        ? 'Your admin signed this device out. Sign in again to continue here.'
+        : `You were signed out because this account is now signed in on ${lock.device || 'another device'}.`);
+      await supabase.auth.signOut({ scope: 'local' });
+      if (active) { setUser(null); setSession(null); }
+    };
+    void checkDevice();
+    const deviceTimer = window.setInterval(() => void checkDevice(), 60000);
+
     const timer = window.setInterval(async () => {
       const { data } = await supabase.auth.getUser();
       if (!active) return;
@@ -403,6 +417,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
       window.clearInterval(timer);
+      window.clearInterval(deviceTimer);
       (supabase as any).removeChannel(channel);
     };
   }, [user?.id, user?.role, user?.employeeDbId]);
@@ -448,6 +463,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: `This account is not enabled for the ${portal} portal.` };
       }
 
+      // One device per employee login: refuse a second device until they sign out on the first.
+      if (authUser.role === 'employee') {
+        const lock = await claimDevice(true);
+        if (lock && !lock.ok) {
+          await supabase.auth.signOut({ scope: 'local' });
+          return { error: blockedMessage(lock) };
+        }
+      }
+
       await startApplicationSession(authUser);
       setSession(data.session);
       setUser(authUser);
@@ -459,6 +483,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (user?.role === 'employee') await releaseDevice();
     if (user?.id) await endApplicationSession(user.id);
     // Stop this computer receiving the signed-out person's notifications (shared desks, shared Macs).
     // The browser keeps its push channel; the next person who signs in here claims it for themselves.
@@ -466,7 +491,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isSupabaseConfigured) await supabase.auth.signOut({ scope: 'local' });
     setUser(null);
     setSession(null);
-  }, [user?.id]);
+  }, [user?.id, user?.role]);
 
   const changePassword = useCallback(async (newPassword: string, currentPassword = '') => {
     if (!isSupabaseConfigured) return { error: 'Unable to change password right now.' };

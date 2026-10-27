@@ -1293,7 +1293,28 @@ function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssigne
   </table></div></div>;
 }
 
+/** Which device each employee's login is held by (one device per employee), with an admin release. */
+function useDeviceLocks() {
+  const [locks, setLocks] = useState<Record<string, { device_label: string | null; locked_at: string; last_seen_at: string; released_at: string | null }>>({});
+  const load = useCallback(async () => {
+    const { data, error } = await (supabase as any).from('employee_device_locks').select('profile_id, device_label, locked_at, last_seen_at, released_at');
+    if (error) return;
+    setLocks(Object.fromEntries((data ?? []).map((r: any) => [r.profile_id, r])));
+  }, []);
+  useEffect(() => { void load(); const t = window.setInterval(() => void load(), 60000); return () => window.clearInterval(t); }, [load]);
+  return { locks, reload: load };
+}
+
 function EmployeesAdmin({ employees, departments, designations, onRefresh }: any) {
+  const { locks, reload: reloadLocks } = useDeviceLocks();
+  async function releaseDevice(e: Employee) {
+    if (!e.profileId) return;
+    if (!(await confirmDialog({ title: `Release ${e.name}'s device?`, message: 'They will be signed out on that device within a minute and can then sign in on any one device.', confirmLabel: 'Release device' }))) return;
+    const { error } = await (supabase as any).rpc('admin_release_device', { p_profile_id: e.profileId });
+    if (error) { notify(error.message || 'Couldn’t release the device.', 'error'); return; }
+    notify(`${e.name} can now sign in on another device.`, 'success');
+    void reloadLocks();
+  }
   const [search, setSearch] = useState(''); const [status, setStatus] = useState('all'); const [modal, setModal] = useState<'create' | 'edit' | null>(null); const [editing, setEditing] = useState<Employee | null>(null); const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   // Deep link from search: /admin-employees?employee=<id> opens that profile once.
   const deepEmployee = useRef<string | null>(typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('employee') : null);
@@ -1341,7 +1362,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
         <SearchInput value={search} onChange={setSearch} placeholder="Search name, ID or login" className="w-full md:w-72" />
       </div>
       <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
-        <thead><tr><Th>Employee</Th><Th>Login ID</Th><Th>Role</Th><Th>Work mode</Th><Th>Salary</Th><Th>Status</Th><Th> </Th></tr></thead>
+        <thead><tr><Th>Employee</Th><Th>Login ID</Th><Th>Role</Th><Th>Work mode</Th><Th>Salary</Th><Th>Signed in on</Th><Th>Status</Th><Th> </Th></tr></thead>
         <tbody>{filtered.map(e => (
           <tr key={e.id}>
             <td>
@@ -1354,6 +1375,19 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
             <td><p className="text-ink-800 font-semibold">{e.designation || '—'}</p><p className="text-[11px] text-ink-400">{e.department || '—'}</p></td>
             <Td>{e.workMode === 'remote' ? 'Remote' : 'Office'}</Td>
             <Td mono>{money(e.currentSalary)}</Td>
+            <td>{(() => {
+              const l = e.profileId ? locks[e.profileId] : undefined;
+              if (!l || l.released_at) return <span className="text-[12px] text-ink-400">{l?.released_at ? 'Released' : 'Not signed in'}</span>;
+              return (
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-semibold text-ink-800 truncate">{l.device_label || 'A device'}</p>
+                    <p className="text-[11px] text-ink-400">since {new Date(l.locked_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}</p>
+                  </div>
+                  <button type="button" onClick={() => void releaseDevice(e)} className="btn-ghost btn-sm shrink-0" title="Sign them out there so they can use another device">Release</button>
+                </div>
+              );
+            })()}</td>
             <Td><StatusBadge label={e.status} /></Td>
             <td>
               <div className="flex items-center justify-end gap-1">
@@ -1364,7 +1398,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
               </div>
             </td>
           </tr>
-        ))}{!filtered.length && <EmptyRow colSpan={7} text={all.length ? 'Nobody matches this search.' : 'No employees yet. Add the first employee to create their login.'} />}</tbody>
+        ))}{!filtered.length && <EmptyRow colSpan={8} text={all.length ? 'Nobody matches this search.' : 'No employees yet. Add the first employee to create their login.'} />}</tbody>
       </table></div></div>
       {modal && <EmployeeModal mode={modal} employee={editing} departments={departments} designations={designations} employees={employees} onClose={() => setModal(null)} onSaved={onRefresh} />}
     </PageShell>

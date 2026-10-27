@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { takeSignOutNotice } from '../../lib/deviceLock';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, Mail, ArrowLeft, ArrowRight } from 'lucide-react';
@@ -53,7 +54,8 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // A notice left by the one-device rule (e.g. "signed in on another device") shows as the first message.
+  const [error, setError] = useState(() => takeSignOutNotice() ?? '');
 
   // Password reset state
   const [resetEmail, setResetEmail] = useState('');
