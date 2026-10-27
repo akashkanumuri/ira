@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BellRing, Coffee, Laptop, ListChecks, LogIn, MonitorCheck, Play, UserCheck } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getExistingSubscription, getPushPermissionState, isPushSupported, sendLocalTestPushNotification, subscribeToPush } from '../../lib/pushSubscription';
+import { PUSH_ORIGIN, getExistingSubscription, getPushPermissionState, isPushOrigin, isPushSupported, sendLocalTestPushNotification, subscribeToPush } from '../../lib/pushSubscription';
 import { notify } from '../../lib/toast';
 import { Card, CardHeader, cx } from '../../ui';
 
@@ -30,13 +30,14 @@ export function AlertSettings({ user }: { user: AuthUser }) {
   const isAdmin = user.role === 'admin';
   const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
   const [prefsAvailable, setPrefsAvailable] = useState(true);
-  const [device, setDevice] = useState<'unsupported' | 'off' | 'blocked' | 'on' | 'checking'>('checking');
+  const [device, setDevice] = useState<'unsupported' | 'off' | 'blocked' | 'on' | 'checking' | 'elsewhere'>('checking');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       if (!isPushSupported()) { if (alive) setDevice('unsupported'); return; }
+      if (!isPushOrigin()) { if (alive) setDevice('elsewhere'); return; }
       const perm = getPushPermissionState();
       if (perm === 'denied') { if (alive) setDevice('blocked'); return; }
       const sub = await getExistingSubscription();
@@ -87,6 +88,7 @@ export function AlertSettings({ user }: { user: AuthUser }) {
             {device === 'blocked' && 'Blocked in this browser. Click the lock icon next to the address, allow Notifications for this site, then reload.'}
             {device === 'unsupported' && 'This browser can’t show desktop alerts. Use Chrome, Edge, Safari or Firefox.'}
             {device === 'checking' && 'Checking…'}
+            {device === 'elsewhere' && <>Desktop alerts work on the live address only, so you never get the same alert twice. Open <a className="text-brand-600 font-semibold underline" href={`${PUSH_ORIGIN}/admin-notifications`}>{PUSH_ORIGIN.replace('https://', '')}</a> to turn them on.</>}
           </p>
         </div>
         {device === 'off' && <button type="button" className="btn-primary btn-sm shrink-0" disabled={busy} onClick={() => void enableDevice()}><BellRing className="w-4 h-4" /> Turn on</button>}

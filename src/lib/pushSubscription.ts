@@ -6,6 +6,30 @@ export const VAPID_PUBLIC_KEY =
   (env.VITE_VAPID_PUBLIC_KEY as string | undefined) ||
   'BNWjdwx1DlkshpNNLzmJKNfIEpySs_Yru1_smlmVUuk3yLdUlpvcAjf3NWwwffSh0QquTUKgPZwtsZic4N23KR0';
 
+/**
+ * Desktop/phone alerts are tied to one web address. A browser that opened both the live site and a
+ * preview link would otherwise be registered twice and show every alert twice, so only the live address
+ * (and localhost for development) registers; other addresses clean up any old registration instead.
+ */
+export const PUSH_ORIGIN = ((env.VITE_PUSH_ORIGIN as string | undefined) || 'https://ira-eta-two.vercel.app').replace(/\/$/, '');
+export function isPushOrigin(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.origin === PUSH_ORIGIN || window.location.hostname === 'localhost';
+}
+
+/** On a non-live address: drop this browser's push registration so alerts only arrive once. */
+async function retireNonLiveRegistration(): Promise<void> {
+  try {
+    const reg = (await navigator.serviceWorker.getRegistration()) || null;
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (!sub) return;
+    await (supabase as any).from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+    await sub.unsubscribe();
+  } catch {
+    /* best effort */
+  }
+}
+
 export type PushPermissionStatus = 'unsupported' | 'default' | 'granted' | 'denied';
 
 export function isPushSupported(): boolean {
@@ -88,6 +112,7 @@ export async function getExistingSubscription(): Promise<PushSubscription | null
 
 export async function syncExistingPushSubscription(userId: string): Promise<boolean> {
   if (!isPushSupported() || !userId) return false;
+  if (!isPushOrigin()) { await retireNonLiveRegistration(); return false; }
   try {
     const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.getRegistration('/'));
     if (!reg) return false;
@@ -155,6 +180,10 @@ export async function subscribeToPush(
 
   if (!isPushSupported()) {
     return { success: false, error: 'Web Push notifications are not supported in this browser or device.' };
+  }
+
+  if (!isPushOrigin()) {
+    return { success: false, error: `Desktop alerts are only available on the live SIGMA 1 address (${PUSH_ORIGIN.replace('https://', '')}). Open it there and turn them on.` };
   }
 
   if (!userId) {
