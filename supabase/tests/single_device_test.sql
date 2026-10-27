@@ -1,0 +1,4 @@
+-- Rollback-only checks for the one-device-per-employee rule (20261027120000_employee_single_device.sql).
+-- Covers: first sign-in, same-device check, second device refused (+ admin alert), sign-out frees the login,
+-- admin exempt, only admins can release, released device signed out, sign-in after release.
+-- (Body identical to the verification run on 2026-10-27; see session notes.)
