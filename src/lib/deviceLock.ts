@@ -17,7 +17,7 @@ export function getDeviceId(): string {
   }
 }
 
-export interface DeviceClaim { ok: boolean; exempt?: boolean; released?: boolean; device?: string; since?: string; last_seen?: string }
+export interface DeviceClaim { ok: boolean; exempt?: boolean; released?: boolean; device?: string; since?: string; last_seen?: string; free_at?: string }
 
 /** Ask the server whether this device holds the login. Returns null if the check itself failed (never blocks on errors). */
 export async function claimDevice(isSignIn: boolean): Promise<DeviceClaim | null> {
@@ -38,13 +38,9 @@ export async function releaseDevice(): Promise<void> {
   try { await (supabase as any).rpc('device_release', { p_device_id: getDeviceId() }); } catch { /* best effort */ }
 }
 
-const when = (iso?: string) => {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
-};
-
 export function blockedMessage(c: DeviceClaim): string {
-  return `This account is already signed in on ${c.device || 'another device'}${c.since ? ` (since ${when(c.since)})` : ''}. Sign out there first, or ask your admin to release that device.`;
+  const freeAt = c.free_at ? new Date(c.free_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : null;
+  return `This account is in use on ${c.device || 'another device'}. Sign out there first${freeAt ? `, or try again after ${freeAt} (a device that’s been inactive for an hour is signed out automatically)` : ''}, or ask your admin to release it.`;
 }
 
 /** Message shown on the sign-in page after this device was signed out by the one-device rule. */
