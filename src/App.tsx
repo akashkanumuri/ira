@@ -21,6 +21,8 @@ import { TASK_STATUS, TASK_STATUS_ORDER, fmtMinutes, isTaskClosed, isTaskOpen, i
 import { RolesMatrix } from './components/admin/RolesMatrix';
 import { TeamApprovals } from './components/employee/TeamApprovals';
 import { LeavePolicySettings } from './components/admin/LeavePolicySettings';
+import { OfficeLocationSettings } from './components/admin/OfficeLocationSettings';
+import { AdminCheckInModal } from './components/admin/AdminCheckInModal';
 import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
 import { leaveApi } from './lib/leave';
@@ -1491,8 +1493,9 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
   </Modal>;
 }
 
-function AttendanceAdmin({ attendance, employees, leaveRequests, holidays }: any) {
+function AttendanceAdmin({ attendance, employees, leaveRequests, holidays, onRefresh }: any) {
   const [date, setDate] = useState(today());
+  const [checkInFor, setCheckInFor] = useState<Employee | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'working' | 'break' | 'done' | 'out' | 'leave'>('all');
   const cl = classifyDay(date, holidays);
@@ -1551,12 +1554,20 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, holidays }: any
               <Td mono>{r.record ? duration(r.record.breakSeconds) : '—'}</Td>
               <Td mono>{r.record?.checkOut ?? (r.record ? (r.state === 'break' ? 'On break' : 'Open') : '—')}</Td>
               <Td mono>{r.record ? r.record.workingHours || duration(r.record.workingSeconds) : '—'}</Td>
-              <Td><StatusBadge label={statusOf(r)} /></Td>
+              <Td>
+                <div className="flex items-center gap-2">
+                  <StatusBadge label={statusOf(r)} />
+                  {isToday && cl.isWorkingDay && r.state === 'out' && !(r.e.joinDate && date < r.e.joinDate) && (
+                    <button type="button" className="btn-ghost btn-sm !min-h-[30px] !px-2.5 text-brand-700" onClick={() => setCheckInFor(r.e)}>Check in</button>
+                  )}
+                </div>
+              </Td>
             </tr>
           ))}
           {!rows.length && <EmptyRow colSpan={7} text={base.length ? 'Nobody in this group.' : 'No active employees.'} />}
         </tbody>
       </table></div></div>
+      {checkInFor && <AdminCheckInModal employee={checkInFor} onClose={() => setCheckInFor(null)} onDone={() => onRefresh?.()} />}
     </PageShell>
   );
 }
@@ -2168,7 +2179,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
 }
 
 function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
-  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles'>('rules');
+  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles' | 'office'>('rules');
   const [name, setName] = useState(''); const [canAssign, setCanAssign] = useState(false);
   const [deptName, setDeptName] = useState('');
   const [payrollDivisor, setPayrollDivisor] = useState<'calendar_days' | 'working_days'>('calendar_days');
@@ -2186,12 +2197,14 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
   async function savePayroll() { if (payrollPolicyStatus !== 'ready') { notify('Load the current payroll policy before saving.', 'error'); return } await run('payroll', async () => { try { const { data, error } = await (supabase as any).from('payroll_settings').update({ divisor_mode: payrollDivisor }).eq('id', true).select('id').maybeSingle(); if (error) throw error; if (!data) throw new Error('Payroll policy could not be found. Refresh and try again.'); setSavedDivisor(payrollDivisor); notify('Payroll policy saved.', 'success') } catch (error) { notify(error instanceof Error ? error.message : 'Unable to save payroll policy.', 'error') } }) }
 
   return (
-    <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments and the payroll policy.">
-      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
+    <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments, the office location and the payroll policy.">
+      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'office', label: 'Office location' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
 
       {tab === 'leave' && <section className="anim-fade" key="leave"><LeavePolicySettings /></section>}
 
       {tab === 'roles' && <section className="anim-fade" key="roles"><RolesMatrix /></section>}
+
+      {tab === 'office' && <section className="anim-fade" key="office"><OfficeLocationSettings /></section>}
 
       {tab === 'rules' && (
         <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="rules">

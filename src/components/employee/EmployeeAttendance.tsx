@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Coffee, Home, LogOut, Play, TriangleAlert } from 'lucide-react';
+import { Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Coffee, Home, LogOut, MapPin, Play, TriangleAlert } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
 import type { AttendanceRecord, Holiday, LeaveRequest, WfhRequest } from '../../types/attendance';
 import { performCheckIn, performCheckOut, performResumeWork, performStartBreak, fetchAttendanceRecord } from '../../lib/attendance';
+import { GeoError, fetchOffice, fmtDistance, getFix, locationHelp, type Fix, type OfficeLocation } from '../../lib/officeLocation';
 import { classifyDay, formatKolkataTime, getKolkataDateString } from '../../lib/workingDays';
 import { dateLabel, duration } from '../../lib/v2';
 import { notify } from '../../lib/toast';
@@ -67,6 +68,15 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
   const [message, setMessage] = useState('');
   const [now, setNow] = useState(new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [office, setOffice] = useState<OfficeLocation | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [geoIssue, setGeoIssue] = useState<{ title: string; text: string; steps: string[] } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchOffice().then((o) => { if (alive) setOffice(o); });
+    return () => { alive = false; };
+  }, []);
 
   const isRemote = user.workMode === 'remote';
   const approvedWfhToday = wfhRequests.find((r) => r.date === today() && r.status === 'approved');
@@ -117,6 +127,7 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
         notify(m, 'error');
         return;
       }
+      if (result.silent) return;
       notify(ok, 'success', 4200, 'attendance');
       await onRefresh();
       window.dispatchEvent(new Event('ira:attendance'));
@@ -127,6 +138,49 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
     } finally {
       setBusy(false);
     }
+  };
+
+  const fenceOn = Boolean(office?.enabled);
+  useEffect(() => { setGeoIssue(null); }, [effectiveMode]);
+
+  /** Office check-in reads this laptop's location first (only when the admin has switched the office fence on). */
+  const checkIn = async () => {
+    if (busy) return;
+    setGeoIssue(null);
+    const mode = effectiveMode;
+    const locate = async (): Promise<Fix | null> => {
+      setLocating(true);
+      try {
+        return await getFix();
+      } catch (e) {
+        const g = e instanceof GeoError ? e : new GeoError('unavailable', 'Your computer couldn’t work out its location.');
+        setGeoIssue({ title: g.message, text: 'Office check-in needs your location once, to confirm you’re at the office. Check-out works from anywhere.', steps: locationHelp(g.kind) });
+        return null;
+      } finally {
+        setLocating(false);
+      }
+    };
+    let fix: Fix | null = null;
+    if (mode === 'office' && fenceOn) {
+      fix = await locate();
+      if (!fix) return;
+    }
+    await run(async () => {
+      let res = await performCheckIn({ employeeId, mode, fix });
+      if (!res.success && res.geo?.reason === 'location_required' && !fix) {
+        fix = await locate();
+        if (!fix) return { success: true, silent: true };
+        res = await performCheckIn({ employeeId, mode, fix });
+      }
+      if (!res.success && res.geo) {
+        const g = res.geo;
+        setGeoIssue(g.reason === 'outside'
+          ? { title: `You’re not at ${g.office || 'the office'} yet`, text: `${res.error} Try again once you’re there, or ask your admin if this looks wrong.`, steps: [] }
+          : { title: 'Your location isn’t precise enough', text: res.error ?? '', steps: locationHelp('imprecise') });
+        return { success: true, silent: true };
+      }
+      return res;
+    }, `Checked in · ${mode === 'wfh' ? 'WFH' : 'Office'}`);
   };
 
   const live = liveSeconds(current, now);
@@ -212,13 +266,37 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
               <Button
                 className="sm:ml-auto !min-h-[48px] !px-7"
                 icon={<Play className="w-4 h-4 fill-current" />}
-                loading={busy}
-                onClick={() => void run(() => performCheckIn({ employeeId, mode: effectiveMode }), `Checked in · ${effectiveMode === 'wfh' ? 'WFH' : 'Office'}`)}
+                loading={busy || locating}
+                onClick={() => void checkIn()}
               >
-                Check in{effectiveMode === 'wfh' ? ' · WFH' : ''}
+                {locating ? 'Finding your location…' : `Check in${effectiveMode === 'wfh' ? ' · WFH' : ''}`}
               </Button>
             </div>
-          ) : state === 'working' ? (
+          ) : null}
+
+          {!current && !previousOpen && !blockedReason && effectiveMode === 'office' && fenceOn && !geoIssue && (
+            <p className="text-xs text-ink-500 flex items-center gap-1.5 -mt-2">
+              <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+              Office check-in works within {fmtDistance(office?.radius_m)} of {office?.name || 'the office'}. Your location is checked once, at check-in only.
+            </p>
+          )}
+
+          {!current && geoIssue && (
+            <div className="rounded-2xl bg-amber-50 p-4 text-[13px] text-amber-900 flex gap-3">
+              <MapPin className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="min-w-0 space-y-1.5">
+                <p className="font-bold">{geoIssue.title}</p>
+                {geoIssue.text && <p>{geoIssue.text}</p>}
+                {geoIssue.steps.length > 0 && (
+                  <ol className="list-decimal pl-4 space-y-0.5 text-amber-800">
+                    {geoIssue.steps.map((st) => <li key={st}>{st}</li>)}
+                  </ol>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!current ? null : state === 'working' ? (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-3">
                 <Button variant="secondary" className="!min-h-[48px] flex-1 sm:flex-none" icon={<Coffee className="w-4 h-4" />} loading={busy} onClick={() => void run(() => performStartBreak(current), 'Break started.')}>

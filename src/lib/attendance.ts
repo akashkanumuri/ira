@@ -1,11 +1,13 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import type { AttendanceMode, AttendanceRecord, BreakEvent, AttendanceState } from '../types/attendance';
 import { formatKolkataTime, getKolkataDateString } from './workingDays';
+import { fmtDistance, type Fix, type GeoFail } from './officeLocation';
 
 interface Result {
   success: boolean;
   error?: string;
   attendanceRecord?: AttendanceRecord;
+  geo?: GeoFail;
 }
 
 function toBreak(row: any): BreakEvent {
@@ -143,18 +145,42 @@ export async function recoverTodayAttendance(
 }
 
 /**
- * Check-in is intentionally a single database insert. The database trigger
- * sets the authoritative IST date/time, validates Sunday/holiday/leave/WFH,
- * enforces remote employees as WFH and writes the event trail.
+ * Check-in goes through public.attendance_check_in(): the database sets the authoritative IST date/time,
+ * validates Sunday/holiday/leave/WFH, enforces remote employees as WFH, checks the office geofence (when the
+ * admin has switched it on) and writes the event trail. Older databases without that function fall back to
+ * the plain insert, which runs the same trigger.
  */
 export async function performCheckIn(params: {
   employeeId: string;
   mode: AttendanceMode;
+  fix?: Fix | null;
 }): Promise<Result> {
   const unavailable = emptyResult();
   if (unavailable) return unavailable;
 
   const db = supabase as any;
+  const { data: rpc, error: rpcError } = await db.rpc('attendance_check_in', {
+    p_mode: params.mode,
+    p_lat: params.fix?.lat ?? null,
+    p_lng: params.fix?.lng ?? null,
+    p_accuracy: params.fix?.accuracy ?? null,
+  });
+
+  const missing = rpcError && (rpcError.code === 'PGRST202' || rpcError.code === '42883');
+  if (!missing) {
+    if (rpcError) {
+      console.error('[Attendance] Check-in failed', rpcError);
+      if (rpcError.code === '23505') return { success: false, error: 'You have already checked in for today.' };
+      return { success: false, error: rpcError.message ?? 'Unable to record check-in.' };
+    }
+    if (!rpc?.ok) {
+      const geo = rpc as GeoFail;
+      return { success: false, error: geoMessage(geo), geo };
+    }
+    const record = await recoverTodayAttendance(params.employeeId, '', '', '');
+    return { success: true, attendanceRecord: record ?? undefined };
+  }
+
   const { data, error } = await db
     .from('attendance')
     .insert({
@@ -173,6 +199,13 @@ export async function performCheckIn(params: {
 
   const record = await recoverTodayAttendance(params.employeeId, '', '', '');
   return { success: true, attendanceRecord: record ?? buildRecord(data, '', '', '') };
+}
+
+export function geoMessage(g: GeoFail): string {
+  const office = g.office || 'the office';
+  if (g.reason === 'location_required') return `Office check-in needs your location so we know you’re at ${office}.`;
+  if (g.reason === 'imprecise') return `Your laptop could only place you within ±${fmtDistance(g.accuracy)}, which isn’t precise enough to confirm you’re at ${office}.`;
+  return `You’re about ${fmtDistance(g.distance)} from ${office}. Office check-in works within ${fmtDistance(g.radius)}.`;
 }
 
 export async function performStartBreak(record: AttendanceRecord): Promise<Result> {
