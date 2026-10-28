@@ -154,19 +154,24 @@ export async function performCheckIn(params: {
   employeeId: string;
   mode: AttendanceMode;
   fix?: Fix | null;
+  fieldReason?: string | null;
 }): Promise<Result> {
   const unavailable = emptyResult();
   if (unavailable) return unavailable;
 
   const db = supabase as any;
-  const { data: rpc, error: rpcError } = await db.rpc('attendance_check_in', {
+  const args: Record<string, unknown> = {
     p_mode: params.mode,
     p_lat: params.fix?.lat ?? null,
     p_lng: params.fix?.lng ?? null,
     p_accuracy: params.fix?.accuracy ?? null,
-  });
+  };
+  // only sent when used, so this keeps working against a database without client visits
+  if (params.fieldReason) args.p_field_reason = params.fieldReason;
+  const { data: rpc, error: rpcError } = await db.rpc('attendance_check_in', args);
 
   const missing = rpcError && (rpcError.code === 'PGRST202' || rpcError.code === '42883');
+  if (missing && params.fieldReason) return { success: false, error: 'Client visits aren’t switched on yet.' };
   if (!missing) {
     if (rpcError) {
       console.error('[Attendance] Check-in failed', rpcError);

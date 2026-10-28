@@ -6,6 +6,7 @@ import { getKolkataDateString } from '../../lib/workingDays';
 import { dateLabel, money } from '../../lib/v2';
 import { Badge, Card, CardHeader, EmptyState, Page, PageHeader, Stat, cx } from '../../ui';
 import { greeting } from '../../ui/motion';
+import { featureOn, useWorkContext } from '../../lib/workContext';
 import { AttendanceMonth, AttendanceRecent, AttendanceToday, LoginSessions } from './EmployeeAttendance';
 import { CorrectionRequestDialog, MyCorrections } from './CorrectionRequests';
 import type { CorrectionRequest } from '../../types/attendance';
@@ -30,6 +31,10 @@ export function EmployeeHome(props: Common & {
   onSelectTab: (tab: string) => void;
 }) {
   const { user, attendance, ledgers, payrollPeriods, payrollRecords, tasks, employees, onSelectTab } = props;
+  const workCtx = useWorkContext(user.id);
+  const showAttendance = featureOn(workCtx, 'attendance');
+  const showLeave = featureOn(workCtx, 'leave');
+  const showPay = featureOn(workCtx, 'payroll');
   const [focus, setFocus] = useState<{ date: string; at: number } | null>(null);
   const [correctionFor, setCorrectionFor] = useState<string | null | undefined>(undefined);
 
@@ -77,7 +82,7 @@ export function EmployeeHome(props: Common & {
       <AttendanceToday {...props} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
+        {showLeave && <Stat
           index={1}
           icon={<CalendarDays className="w-5 h-5" />}
           tone="sky"
@@ -86,7 +91,7 @@ export function EmployeeHome(props: Common & {
           format={(n) => (Number.isInteger(n) ? String(n) : n.toFixed(1))}
           caption={ledger ? <>{ledger.openingBalance} carried forward · +{ledger.accrual} this month · {ledger.paidUsed} used</> : 'Balance updates monthly'}
           onClick={() => onSelectTab('emp-leave')}
-        />
+        />}
         <Stat
           index={2}
           icon={<BriefcaseBusiness className="w-5 h-5" />}
@@ -96,7 +101,7 @@ export function EmployeeHome(props: Common & {
           caption={myOpen.length ? <>{overdue ? <span className="text-rose-700 font-semibold">{overdue} overdue</span> : 'None overdue'}{dueSoon[0] ? <> · next due {dateLabel(dueSoon[0].dueDate)}</> : null}</> : 'You’re all caught up'}
           onClick={() => onSelectTab('emp-tasks')}
         />
-        <Stat
+        {showAttendance && <Stat
           index={3}
           icon={<Clock3 className="w-5 h-5" />}
           tone="mint"
@@ -104,8 +109,8 @@ export function EmployeeHome(props: Common & {
           value={monthRecords.length}
           caption={monthRecords.length ? <>{avgHours.toFixed(1)}h average{late ? <> · <span className="text-amber-700 font-semibold">{late} late</span></> : ' · never late'}</> : 'No check-ins yet this month'}
           onClick={() => onSelectTab('emp-attendance')}
-        />
-        <Stat
+        />}
+        {showPay && <Stat
           index={4}
           icon={<Wallet className="w-5 h-5" />}
           tone="dark"
@@ -115,11 +120,11 @@ export function EmployeeHome(props: Common & {
             ? <>{new Date(`${latestPay.month}T12:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })} · base {money(monthlySalary)}/month</>
             : `Base ${money(monthlySalary)}/month · no finalized payslip yet`}
           onClick={() => onSelectTab('emp-payroll')}
-        />
+        />}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <AttendanceMonth {...props} focusDate={focus} onRequestCorrection={(d) => setCorrectionFor(d)} />
+        {showAttendance && <AttendanceMonth {...props} focusDate={focus} onRequestCorrection={(d) => setCorrectionFor(d)} />}
         <Card index={5} className="p-5 sm:p-6 flex flex-col">
           <CardHeader
             title="Up next"

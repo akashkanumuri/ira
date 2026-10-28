@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Coffee, Home, LogOut, MapPin, Play, TriangleAlert } from 'lucide-react';
+import { Briefcase, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Coffee, Home, LogOut, MapPin, Play, TriangleAlert } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
 import type { AttendanceRecord, Holiday, LeaveRequest, WfhRequest } from '../../types/attendance';
 import { performCheckIn, performCheckOut, performResumeWork, performStartBreak, fetchAttendanceRecord } from '../../lib/attendance';
+import { OFF_REASON_TEXT, useWorkContext } from '../../lib/workContext';
 import { GeoError, fetchOffice, fmtDistance, getFix, locationHelp, type Fix, type OfficeLocation } from '../../lib/officeLocation';
 import { classifyDay, formatKolkataTime, getKolkataDateString } from '../../lib/workingDays';
 import { dateLabel, duration } from '../../lib/v2';
@@ -78,9 +79,15 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
     return () => { alive = false; };
   }, []);
 
-  const isRemote = user.workMode === 'remote';
+  // Today's rules from the person's work pattern (null on an older database → previous behaviour).
+  const ctx = useWorkContext(user.id);
+  const rules = ctx?.rules ?? null;
+  const isRemote = rules ? rules.location === 'home' : user.workMode === 'remote';
   const approvedWfhToday = wfhRequests.find((r) => r.date === today() && r.status === 'approved');
-  const [checkInMode, setCheckInMode] = useState<'office' | 'wfh'>(isRemote || approvedWfhToday ? 'wfh' : 'office');
+  const wfhOffered = isRemote || !ctx || ctx.wfh.allowed || Boolean(approvedWfhToday);
+  const visitOffered = Boolean(rules?.field_visit) && !isRemote;
+  const [checkInMode, setCheckInMode] = useState<'office' | 'wfh' | 'visit'>(isRemote || approvedWfhToday ? 'wfh' : 'office');
+  const [visitReason, setVisitReason] = useState('');
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000);
@@ -89,10 +96,11 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
   useEffect(() => {
     setCheckInMode(isRemote || Boolean(approvedWfhToday) ? 'wfh' : 'office');
   }, [isRemote, approvedWfhToday?.id]);
+  useEffect(() => { if (checkInMode === 'wfh' && !wfhOffered) setCheckInMode('office'); }, [checkInMode, wfhOffered]);
 
   const current = attendance.find((a) => a.date === today());
   const state = current?.attendanceState ?? 'not_checked_in';
-  const effectiveMode: 'office' | 'wfh' = current ? (current.mode === 'wfh' ? 'wfh' : 'office') : isRemote ? 'wfh' : checkInMode;
+  const effectiveMode: 'office' | 'wfh' | 'visit' = current ? (current.mode === 'wfh' ? 'wfh' : 'office') : isRemote ? 'wfh' : checkInMode;
 
   const previousOpen = useMemo(
     () =>
@@ -109,6 +117,10 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
     leaveRequests.find((l) => l.employeeId === employeeId && l.status === 'approved' && l.startDate <= today() && l.endDate >= today()) ?? null;
   const blockedReason = todayLeave
     ? `You're on approved leave until ${dateLabel(todayLeave.endDate)}. No check-in is needed today.`
+    : rules && !rules.attendance
+      ? 'Attendance isn’t tracked for your account.'
+    : rules
+      ? (!rules.working_day ? (rules.off_reason === 'holiday' && todayClass.type === 'holiday' ? `Today is a company holiday (${todayClass.label}). Attendance isn't recorded today.` : OFF_REASON_TEXT[rules.off_reason ?? ''] ?? 'Today is not a working day for you.') : null)
     : todayClass.type === 'holiday'
       ? `Today is a company holiday (${todayClass.label}). Attendance isn't recorded today.`
       : todayClass.type === 'sunday_off'
@@ -140,14 +152,16 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
     }
   };
 
-  const fenceOn = Boolean(office?.enabled);
+  const fenceOn = Boolean(office?.enabled) && (rules ? rules.geofence : true);
   useEffect(() => { setGeoIssue(null); }, [effectiveMode]);
 
   /** Office check-in reads this laptop's location first (only when the admin has switched the office fence on). */
   const checkIn = async () => {
     if (busy) return;
     setGeoIssue(null);
-    const mode = effectiveMode;
+    const mode: 'office' | 'wfh' = effectiveMode === 'wfh' ? 'wfh' : 'office';
+    const fieldReason = effectiveMode === 'visit' ? visitReason.trim() : null;
+    if (effectiveMode === 'visit' && (fieldReason ?? '').length < 3) { setMessage('Say where you’re going for the client visit.'); return; }
     const locate = async (): Promise<Fix | null> => {
       setLocating(true);
       try {
@@ -161,30 +175,30 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
       }
     };
     let fix: Fix | null = null;
-    if (mode === 'office' && fenceOn) {
+    if (mode === 'office' && fenceOn && !fieldReason) {
       fix = await locate();
       if (!fix) return;
     }
     await run(async () => {
-      let res = await performCheckIn({ employeeId, mode, fix });
+      let res = await performCheckIn({ employeeId, mode, fix, fieldReason });
       if (!res.success && res.geo?.reason === 'location_required' && !fix) {
         fix = await locate();
         if (!fix) return { success: true, silent: true };
-        res = await performCheckIn({ employeeId, mode, fix });
+        res = await performCheckIn({ employeeId, mode, fix, fieldReason });
       }
       if (!res.success && res.geo) {
         const g = res.geo;
         setGeoIssue(g.reason === 'outside'
-          ? { title: `You’re not at ${g.office || 'the office'} yet`, text: `${res.error} Try again once you’re there, or ask your admin if this looks wrong.`, steps: [] }
+          ? { title: `You’re not at ${g.office || 'the office'} yet`, text: `${res.error} ${visitOffered ? 'Out on a client visit? Choose “Client visit” instead.' : 'Try again once you’re there, or ask your admin if this looks wrong.'}`, steps: [] }
           : { title: 'Your location isn’t precise enough', text: res.error ?? '', steps: locationHelp('imprecise') });
         return { success: true, silent: true };
       }
       return res;
-    }, `Checked in · ${mode === 'wfh' ? 'WFH' : 'Office'}`);
+    }, `Checked in · ${fieldReason ? 'Client visit' : mode === 'wfh' ? 'WFH' : 'Office'}`);
   };
 
   const live = liveSeconds(current, now);
-  const target = shiftSeconds(user.shift, user.shiftEnd);
+  const target = rules?.full_day_minutes ? rules.full_day_minutes * 60 : shiftSeconds(user.shift, user.shiftEnd);
   const pct = current ? Math.min(100, (live.working / target) * 100) : 0;
   const ringTone: Tone = state === 'on_break' ? 'amber' : state === 'completed' ? 'mint' : 'brand';
 
@@ -195,6 +209,8 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
     : todayLeave ? <Badge tone="sky" dot>On leave</Badge>
     : blockedReason ? <Badge tone="sky" dot>{todayClass.label}</Badge>
     : <Badge tone="brand" dot>Not checked in</Badge>;
+
+  if (rules && !rules.attendance) return null;
 
   return (
     <Card className={cx('p-5 sm:p-7', compact ? '' : '')}>
@@ -215,8 +231,8 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
               <p className="eyebrow">Today</p>
               <h2 className="font-display text-2xl font-bold text-ink-950 mt-1">{dateLabel(today(), { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
               <p className="text-[13px] text-ink-500 mt-1">
-                {isRemote ? 'Permanent remote · WFH check-in' : approvedWfhToday ? 'Approved WFH today' : todayClass.isWorkingDay ? 'Working day' : todayClass.label}
-                {user.shift ? ` · Shift ${user.shift.slice(0, 5)}–${(user.shiftEnd ?? '').slice(0, 5)}` : ''}
+                {isRemote ? 'Remote · WFH check-in' : approvedWfhToday ? 'Approved WFH today' : rules?.location === 'either' ? 'Hybrid · office or home today' : rules?.location_mode === 'hybrid' ? 'Office day' : (rules ? rules.working_day : todayClass.isWorkingDay) ? 'Working day' : todayClass.label}
+                {rules && (rules.schedule === 'flexible' || rules.schedule === 'flexible_core') ? ` · Flexible hours · ${Math.round(rules.full_day_minutes / 6) / 10} h a day` : user.shift ? ` · Shift ${user.shift.slice(0, 5)}–${(user.shiftEnd ?? '').slice(0, 5)}` : ''}
               </p>
             </div>
             {statusChip}
@@ -256,12 +272,19 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
             </div>
           ) : !current ? (
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-              {!isRemote && (
+              {!isRemote && (wfhOffered || visitOffered) && (
                 <PillTabs
-                  items={[{ id: 'office', label: <><Building2 className="w-4 h-4" /> Office</> }, { id: 'wfh', label: <><Home className="w-4 h-4" /> Work from home</> }]}
+                  items={[
+                    { id: 'office', label: <><Building2 className="w-4 h-4" /> Office</> },
+                    ...(wfhOffered ? [{ id: 'wfh', label: <><Home className="w-4 h-4" /> Work from home</> }] : []),
+                    ...(visitOffered ? [{ id: 'visit', label: <><Briefcase className="w-4 h-4" /> Client visit</> }] : []),
+                  ]}
                   value={effectiveMode}
-                  onChange={(v) => setCheckInMode(v as 'office' | 'wfh')}
+                  onChange={(v) => setCheckInMode(v as 'office' | 'wfh' | 'visit')}
                 />
+              )}
+              {effectiveMode === 'visit' && (
+                <input className="input !min-h-[44px] sm:max-w-[260px]" value={visitReason} maxLength={200} onChange={(e) => setVisitReason(e.target.value)} placeholder="Where? e.g. Delta Spaces site" aria-label="Client visit details" />
               )}
               <Button
                 className="sm:ml-auto !min-h-[48px] !px-7"
@@ -269,10 +292,25 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
                 loading={busy || locating}
                 onClick={() => void checkIn()}
               >
-                {locating ? 'Finding your location…' : `Check in${effectiveMode === 'wfh' ? ' · WFH' : ''}`}
+                {locating ? 'Finding your location…' : `Check in${effectiveMode === 'wfh' ? ' · WFH' : effectiveMode === 'visit' ? ' · Client visit' : ''}`}
               </Button>
             </div>
           ) : null}
+
+          {!previousOpen && !blockedReason && ctx?.hybrid && (
+            <div className="rounded-2xl bg-brand-50/60 px-4 py-3 text-[13px] text-ink-700 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span className="font-bold text-ink-900">Office days this {ctx.hybrid.period}: {ctx.hybrid.office_done} of {ctx.hybrid.required}</span>
+              <span>{ctx.hybrid.home_left > 0 ? `${ctx.hybrid.home_left} home day${ctx.hybrid.home_left === 1 ? '' : 's'} left` : 'No home days left'}</span>
+              {ctx.hybrid.required < ctx.hybrid.configured && <span className="text-ink-500">target lowered for holidays / leave</span>}
+            </div>
+          )}
+
+          {!current && !previousOpen && !blockedReason && !isRemote && ctx && !wfhOffered && ctx.wfh.reason && (
+            <p className="text-xs text-ink-500 flex items-center gap-1.5 -mt-2">
+              <Home className="w-3.5 h-3.5 shrink-0" />
+              {ctx.wfh.request === 'pending' ? 'Your WFH request for today is waiting for approval.' : ctx.wfh.reason}
+            </p>
+          )}
 
           {!current && !previousOpen && !blockedReason && effectiveMode === 'office' && fenceOn && !geoIssue && (
             <p className="text-xs text-ink-500 flex items-center gap-1.5 -mt-2">

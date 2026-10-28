@@ -25,7 +25,8 @@ import { OfficeLocationSettings } from './components/admin/OfficeLocationSetting
 import { AdminCheckInModal } from './components/admin/AdminCheckInModal';
 import { WorkRulesEditor } from './components/admin/WorkRulesEditor';
 import { WorkTemplatesSettings } from './components/admin/WorkTemplatesSettings';
-import { DEFAULT_RULES, currentOf, fetchCurrentRulesMap, fetchProjectsLite, rulesBadge, fetchRulesHistory, fetchTemplates, legacyFields, normalizeRules, saveRules, validateRules, type WorkRules, type WorkRulesRow, type WorkTemplate } from './lib/workRules';
+import { featureOn, useWorkContext } from './lib/workContext';
+import { DEFAULT_RULES, currentOf, fetchCurrentRulesMap, fetchProjectsLite, rulesBadge, fetchRulesHistory, fetchTemplates, legacyFields, normalizeRules, saveRules, validateRules, type FeatureKey, type WorkRules, type WorkRulesRow, type WorkTemplate } from './lib/workRules';
 import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
 import { leaveApi } from './lib/leave';
@@ -202,6 +203,11 @@ const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-ta
 
 /** The page a path resolves to for this role; links meant for the other role land on the closest equivalent. */
 /** Older notification links that pre-date the current routes. */
+// Employee sections tied to a work-pattern feature (see lib/workRules FeatureKey).
+const TAB_FEATURE: Record<string, FeatureKey> = {
+  'emp-attendance': 'attendance', 'emp-time': 'my_time', 'emp-leave': 'leave', 'emp-wfh': 'wfh',
+  'emp-holidays': 'holidays', 'emp-payroll': 'payroll', 'emp-client-work': 'client_projects',
+};
 const LEGACY_ROUTES: Record<string, string> = {
   'admin/clients': 'admin-clients', 'my-deliverables': 'emp-client-work', 'admin/tasks': 'admin-tasks', 'admin/leave': 'admin-requests',
 };
@@ -606,6 +612,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const pendingWfhCount = wfhRequests.filter(x => x.status === 'pending').length;
   const employeeOpenTasksCount = tasks.filter(t => !t.archivedAt && ((t.assignedTo === user.employeeDbId && (t.status === 'assigned' || t.status === 'revision_required')) || (t.assignedBy === user.employeeDbId && t.status === 'awaiting_review'))).length;
 
+  const workCtx = useWorkContext(user.role === 'employee' ? user.id : null);
   const managesPeople = user.role !== 'admin' && employees.some(e => e.managerId === user.employeeDbId && e.status === 'active');
 
   const navGroups: NavGroup[] = user.role === 'admin'
@@ -666,9 +673,15 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         ]
       },
     ];
-  const mobilePrimary = user.role === 'admin'
+  // Sections that don't apply to this person's work pattern (e.g. WFH for remote staff, attendance for project-based).
+  const hiddenTabs = new Set<string>(Object.entries(TAB_FEATURE)
+    .filter(([, f]) => user.role !== 'admin' && !featureOn(workCtx, f))
+    .map(([t]) => t));
+  const visibleNav = navGroups.map((g) => ({ ...g, items: g.items.filter((i) => !hiddenTabs.has(i.id)) })).filter((g) => g.items.length);
+  const mobilePrimary = (user.role === 'admin'
     ? ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-requests']
-    : ['emp-dashboard', 'emp-attendance', 'emp-tasks', 'emp-leave'];
+    : ['emp-dashboard', 'emp-attendance', 'emp-tasks', 'emp-leave']).filter((t) => !hiddenTabs.has(t));
+  useEffect(() => { if (hiddenTabs.has(activeTab)) setActiveTab(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard'); }, [activeTab, workCtx]);
 
 
   const navigate = (target: string) => {
@@ -714,7 +727,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     <WorkProvider employeeId={trackingId} tasks={tasks} tasksReady={!loadingData} attendanceKey={attendanceKey} onAttendanceChanged={reload}
       onOpenTask={(id) => navigate(`emp-tasks?task=${id}`)}>
       <AppShell
-        groups={navGroups}
+        groups={visibleNav}
         active={activeTab}
         onNavigate={navigate}
         mobilePrimary={mobilePrimary}
