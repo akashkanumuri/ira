@@ -23,6 +23,9 @@ import { TeamApprovals } from './components/employee/TeamApprovals';
 import { LeavePolicySettings } from './components/admin/LeavePolicySettings';
 import { OfficeLocationSettings } from './components/admin/OfficeLocationSettings';
 import { AdminCheckInModal } from './components/admin/AdminCheckInModal';
+import { WorkRulesEditor } from './components/admin/WorkRulesEditor';
+import { WorkTemplatesSettings } from './components/admin/WorkTemplatesSettings';
+import { DEFAULT_RULES, currentOf, fetchCurrentRulesMap, fetchProjectsLite, rulesBadge, fetchRulesHistory, fetchTemplates, legacyFields, normalizeRules, saveRules, validateRules, type WorkRules, type WorkRulesRow, type WorkTemplate } from './lib/workRules';
 import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
 import { leaveApi } from './lib/leave';
@@ -1318,6 +1321,8 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
     void reloadLocks();
   }
   const [search, setSearch] = useState(''); const [status, setStatus] = useState('all'); const [modal, setModal] = useState<'create' | 'edit' | null>(null); const [editing, setEditing] = useState<Employee | null>(null); const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [rulesMap, setRulesMap] = useState<Map<string, WorkRulesRow> | null>(null);
+  useEffect(() => { let alive = true; void fetchCurrentRulesMap(today()).then((m) => { if (alive) setRulesMap(m); }); return () => { alive = false; }; }, [employees, modal]);
   // Deep link from search: /admin-employees?employee=<id> opens that profile once.
   const deepEmployee = useRef<string | null>(typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('employee') : null);
   useEffect(() => {
@@ -1331,7 +1336,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
   const filtered = (employees as Employee[]).filter(e => (status === 'all' || e.status === status) && (!search.trim() || `${e.name} ${e.empId} ${e.loginId} ${e.workEmail}`.toLowerCase().includes(search.toLowerCase())));
   const all = employees as Employee[];
   const activeCount = all.filter((e) => e.status === 'active').length;
-  const remoteCount = all.filter((e) => e.status === 'active' && e.workMode === 'remote').length;
+  const remoteCount = all.filter((e) => e.status === 'active' && (rulesMap?.get(e.id)?.location_mode ?? e.workMode) === 'remote').length;
   const deptCount = new Set(all.filter((e) => e.status === 'active').map((e) => e.department).filter(Boolean)).size;
   const toggleStatus = async (e: Employee) => {
     if (statusBusyId) return;
@@ -1375,7 +1380,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
             </td>
             <Td mono>{e.loginId}</Td>
             <td><p className="text-ink-800 font-semibold">{e.designation || '—'}</p><p className="text-[11px] text-ink-400">{e.department || '—'}</p></td>
-            <Td>{e.workMode === 'remote' ? 'Remote' : 'Office'}</Td>
+            <Td>{rulesMap?.get(e.id) ? rulesBadge(rulesMap.get(e.id)!) : e.workMode === 'remote' ? 'Remote' : 'Office'}</Td>
             <Td mono>{money(e.currentSalary)}</Td>
             <td>{(() => {
               const l = e.profileId ? locks[e.profileId] : undefined;
@@ -1419,6 +1424,35 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
     departmentId: employee?.departmentId ?? '', departmentName: employee?.department ?? '', managerId: employee?.managerId ?? '', managerName: employee?.manager ?? '', joinDate: employee?.joinDate ?? today(), shiftStart: employee?.shift ?? '09:00', shiftEnd: employee?.shiftEnd ?? '18:00', monthlySalary: String(employee?.currentSalary ?? 0)
   });
   const [employeeDocs, setEmployeeDocs] = useState<EmployeeDocument[]>([]);
+  // How they work (work patterns). rulesReady=false → the database update isn't installed: fall back to the old fields.
+  const [rulesReady, setRulesReady] = useState<boolean | null>(null);
+  const [rules, setRules] = useState<WorkRules>(() => normalizeRules({ ...DEFAULT_RULES, shift_start: employee?.shift ?? '09:00', shift_end: employee?.shiftEnd ?? '18:00', location_mode: employee?.workMode === 'remote' ? 'remote' : 'office' }));
+  const [savedRules, setSavedRules] = useState<WorkRulesRow | null>(null);
+  const [scheduledRules, setScheduledRules] = useState<WorkRulesRow | null>(null);
+  const [rulesFrom, setRulesFrom] = useState<string>(mode === 'create' ? (employee?.joinDate ?? today()) : today());
+  const [templates, setTemplates] = useState<WorkTemplate[]>([]);
+  const [projectsLite, setProjectsLite] = useState<{ id: string; name: string }[]>([]);
+  const loadTemplates = useCallback(() => { void fetchTemplates().then((t) => setTemplates(t ?? [])); }, []);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const [tpl, projs] = await Promise.all([fetchTemplates(), fetchProjectsLite()]);
+      if (!alive) return;
+      if (tpl === null) { setRulesReady(false); return; }
+      setTemplates(tpl); setProjectsLite(projs);
+      if (mode === 'edit' && employee) {
+        const rows = await fetchRulesHistory(employee.id);
+        if (!alive) return;
+        if (rows === null) { setRulesReady(false); return; }
+        const cur = currentOf(rows, today());
+        if (cur) { setRules(normalizeRules(cur)); setSavedRules(cur); }
+        setScheduledRules(rows.find((r) => r.effective_from > today()) ?? null);
+      }
+      setRulesReady(true);
+    })();
+    return () => { alive = false; };
+  }, [mode, employee?.id]);
+  useEffect(() => { if (mode === 'create') setRulesFrom(form.joinDate || today()); }, [mode, form.joinDate]);
   useEffect(() => {
     // The parent already loads these reference rows with the authenticated session.
     // Do not make a second table request from the modal: that request can fail under
@@ -1460,16 +1494,21 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
         liveDepartments.find((d: Department) => d.id === form.departmentId)
         : null;
       if (form.departmentName && !currentDepartment) throw new Error('Please select a valid department.');
+      if (rulesReady) { const problem = validateRules(rules, rulesFrom); if (problem) throw new Error(problem); }
+      const legacy = rulesReady ? legacyFields(rules) : { workMode: form.workMode, shiftStart: form.shiftStart, shiftEnd: form.shiftEnd };
+      const rulesChanged = rulesReady && (mode === 'create' || !savedRules || rulesFrom !== today() || JSON.stringify(normalizeRules(savedRules)) !== JSON.stringify(normalizeRules(rules)));
 
       if (mode === 'create') {
         if (form.password !== form.confirmPassword) throw new Error('Passwords do not match.');
-        const result = await invokeEmployeeAdmin({ action: 'create_employee', name: form.name, workEmail: form.workEmail || null, phone: form.phone || null, loginId: form.loginId, password: form.password, workMode: form.workMode, designationId: currentDesignation.id, designationName: currentDesignation.name, departmentId: currentDepartment?.id || null, departmentName: currentDepartment?.name || null, managerId: form.managerId || null, managerName: form.managerName || null, joinDate: form.joinDate, shiftStart: form.shiftStart, shiftEnd: form.shiftEnd, monthlySalary: salary });
+        const result = await invokeEmployeeAdmin({ action: 'create_employee', name: form.name, workEmail: form.workEmail || null, phone: form.phone || null, loginId: form.loginId, password: form.password, workMode: legacy.workMode, designationId: currentDesignation.id, designationName: currentDesignation.name, departmentId: currentDepartment?.id || null, departmentName: currentDepartment?.name || null, managerId: form.managerId || null, managerName: form.managerName || null, joinDate: form.joinDate, shiftStart: legacy.shiftStart, shiftEnd: legacy.shiftEnd, monthlySalary: salary });
+        if (rulesChanged) { try { await saveRules(result.employeeId, rules, rulesFrom) } catch (ruleError) { notify(`Employee created, but “How they work” wasn’t saved: ${ruleError instanceof Error ? ruleError.message : 'error'}. Open Edit to set it.`, 'error', 9000) } }
         const failedDocs: string[] = [];
         for (const doc of docs) { if (!doc.file) continue; try { await uploadEmployeeDocument(result.employeeId, doc.file, doc.type) } catch (docError) { failedDocs.push(doc.type) } }
         if (failedDocs.length) { setError(`Employee created. Some HR documents still need uploading: ${failedDocs.join(', ')}.`); notify('Employee created; some HR documents need attention.', 'info') } else { notify('Employee created successfully.', 'success') }
         setSuccess({ loginId: result.loginId }); await onSaved();
       } else {
-        await invokeEmployeeAdmin({ action: 'update_employee', employeeId: employee!.id, name: form.name, workEmail: form.workEmail || null, phone: form.phone || null, workMode: form.workMode, designationId: currentDesignation.id, designationName: currentDesignation.name, departmentId: currentDepartment?.id || null, departmentName: currentDepartment?.name || null, managerId: form.managerId || null, managerName: form.managerName || null, joinDate: form.joinDate, shiftStart: form.shiftStart, shiftEnd: form.shiftEnd, monthlySalary: salary });
+        await invokeEmployeeAdmin({ action: 'update_employee', employeeId: employee!.id, name: form.name, workEmail: form.workEmail || null, phone: form.phone || null, workMode: legacy.workMode, designationId: currentDesignation.id, designationName: currentDesignation.name, departmentId: currentDepartment?.id || null, departmentName: currentDepartment?.name || null, managerId: form.managerId || null, managerName: form.managerName || null, joinDate: form.joinDate, shiftStart: legacy.shiftStart, shiftEnd: legacy.shiftEnd, monthlySalary: salary });
+        if (rulesChanged) await saveRules(employee!.id, rules, rulesFrom);
         const failedDocs: string[] = [];
         for (const doc of docs) { if (!doc.file) continue; try { await uploadEmployeeDocument(employee!.id, doc.file, doc.type) } catch { failedDocs.push(doc.type) } }
         if (failedDocs.length) notify(`Employee updated; failed document uploads: ${failedDocs.join(', ')}`, 'info'); else notify('Employee details updated.', 'success');
@@ -1484,7 +1523,12 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
     {error && <Notice type="error" text={error} />}
     <form onSubmit={save} className="space-y-6">
       <FormSection title="Personal details" icon={<UserRound className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-4"><Field label="Full name"><input value={form.name} onChange={e => set('name', e.target.value)} className="input" required /></Field><Field label="Work email"><input type="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} className="input" /></Field><Field label="Phone"><input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" /></Field><Field label="Join date"><input type="date" value={form.joinDate} onChange={e => set('joinDate', e.target.value)} className="input" required /></Field></div></FormSection>
-      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-4"><Field label="Designation"><select disabled={refsLoading || !liveDesignations.length} value={form.designationName} onChange={e => { const name = e.target.value; const d = liveDesignations.find(x => x.name === name); setForm(f => ({ ...f, designationName: name, designationId: d?.id ?? '' })) }} className="input" required><option value="">Select designation</option>{liveDesignations.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Department"><select disabled={refsLoading} value={form.departmentName} onChange={e => { const name = e.target.value; const d = liveDepartments.find(x => x.name === name); setForm(f => ({ ...f, departmentName: name, departmentId: d?.id ?? '' })) }} className="input"><option value="">No department</option>{liveDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e => set('managerId', e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e: Employee) => e.status === 'active' && e.id !== employee?.id).map((e: Employee) => <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field><Field label="Work mode"><select value={form.workMode} onChange={e => set('workMode', e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e => set('shiftStart', e.target.value)} className="input" required /></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e => set('shiftEnd', e.target.value)} className="input" required /></Field><Field label="Monthly salary"><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e => set('monthlySalary', e.target.value)} className="input" required /></Field></div></FormSection>
+      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-4"><Field label="Designation"><select disabled={refsLoading || !liveDesignations.length} value={form.designationName} onChange={e => { const name = e.target.value; const d = liveDesignations.find(x => x.name === name); setForm(f => ({ ...f, designationName: name, designationId: d?.id ?? '' })) }} className="input" required><option value="">Select designation</option>{liveDesignations.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Department"><select disabled={refsLoading} value={form.departmentName} onChange={e => { const name = e.target.value; const d = liveDepartments.find(x => x.name === name); setForm(f => ({ ...f, departmentName: name, departmentId: d?.id ?? '' })) }} className="input"><option value="">No department</option>{liveDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e => set('managerId', e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e: Employee) => e.status === 'active' && e.id !== employee?.id).map((e: Employee) => <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field>{rulesReady === false && <><Field label="Work mode"><select value={form.workMode} onChange={e => set('workMode', e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e => set('shiftStart', e.target.value)} className="input" required /></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e => set('shiftEnd', e.target.value)} className="input" required /></Field></>}<Field label={rules.pay_type === 'stipend' ? 'Monthly stipend' : rules.pay_type === 'monthly' ? 'Monthly salary' : 'Monthly salary (0 if paid per rate)'}><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e => set('monthlySalary', e.target.value)} className="input" required /></Field></div></FormSection>
+      {rulesReady && <FormSection title="How they work" icon={<Clock3 className="w-4 h-4" />}>
+        {scheduledRules && <p className="mb-3 text-[12.5px] text-amber-800 bg-amber-50 rounded-xl px-3 py-2">A change is already scheduled from {dateLabel(scheduledRules.effective_from)}. Saving here sets the rules from the date below.</p>}
+        <WorkRulesEditor value={rules} onChange={setRules} effectiveFrom={rulesFrom} onEffectiveFrom={mode === 'edit' ? setRulesFrom : undefined} minEffective={today()} templates={templates} onTemplatesChanged={loadTemplates} projects={projectsLite} />
+      </FormSection>}
+      {rulesReady === null && <div className="rounded-2xl bg-ink-50 h-24 animate-pulse" />}
       {mode === 'create' && <FormSection title="Login" icon={<KeyRound className="w-4 h-4" />}><div className="grid md:grid-cols-3 gap-4"><Field label="Login ID"><input value={form.loginId} onChange={e => set('loginId', e.target.value)} className="input" autoComplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}" /></Field><Field label="Password"><input type="password" value={form.password} onChange={e => set('password', e.target.value)} className="input" autoComplete="new-password" minLength={12} required /></Field><Field label="Confirm password"><input type="password" value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} className="input" autoComplete="new-password" minLength={12} required /></Field></div></FormSection>}
       {mode === 'create' && <FormSection title="HR onboarding documents" icon={<Upload className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold text-slate-700">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
       {mode === 'edit' && <FormSection title="HR documents" icon={<FileText className="w-4 h-4" />}><div className="space-y-2">{employeeDocs.map(d => <button type="button" key={d.id} onClick={() => void viewDoc(d)} className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-left"><span><span className="block text-xs font-bold">{d.documentType}</span><span className="block text-[10px] text-slate-500">{d.fileName}</span></span><Eye className="w-4 h-4 text-slate-400" /></button>)}{!employeeDocs.length && <p className="text-xs text-slate-500">No documents uploaded yet.</p>}</div><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
@@ -2179,7 +2223,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
 }
 
 function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
-  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles' | 'office'>('rules');
+  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles' | 'office' | 'patterns'>('rules');
   const [name, setName] = useState(''); const [canAssign, setCanAssign] = useState(false);
   const [deptName, setDeptName] = useState('');
   const [payrollDivisor, setPayrollDivisor] = useState<'calendar_days' | 'working_days'>('calendar_days');
@@ -2198,13 +2242,15 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
 
   return (
     <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments, the office location and the payroll policy.">
-      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'office', label: 'Office location' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
+      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'patterns', label: 'Work patterns' }, { id: 'office', label: 'Office location' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
 
       {tab === 'leave' && <section className="anim-fade" key="leave"><LeavePolicySettings /></section>}
 
       {tab === 'roles' && <section className="anim-fade" key="roles"><RolesMatrix /></section>}
 
       {tab === 'office' && <section className="anim-fade" key="office"><OfficeLocationSettings /></section>}
+
+      {tab === 'patterns' && <section className="anim-fade" key="patterns"><WorkTemplatesSettings /></section>}
 
       {tab === 'rules' && (
         <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="rules">
