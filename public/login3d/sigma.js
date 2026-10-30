@@ -37,7 +37,10 @@ function gShape() {
 const ease = (t) => (t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-export function mount({ container, frameEl, reduced = false }) {
+//  Hidden    (option) the page opens with only this scene, centred on the screen. Clicking the robot calls
+//            onRobotClick; the app then reveals the sign-in form and the logo glides into its panel while the
+//            robot does a flip. setRevealed(false) sends it back to the centre.
+export function mount({ container, frameEl, reduced = false, startHidden = false, onRobotClick = null }) {
   const S = createStage({ container, frameEl, transparent: true });
   const { scene, renderer } = S;
   S.frameMesh.visible = false; S.mask.visible = false;
@@ -152,12 +155,22 @@ export function mount({ container, frameEl, reduced = false }) {
   const dust = (n = 6) => { for (let i = 0; i < n; i++) emitPuff(new THREE.Vector3(r.position.x + (Math.random() - .5) * .2, .03, r.position.z + (Math.random() - .5) * .1), 1.2); };
   const sparkle = new THREE.Sprite(new THREE.SpriteMaterial({ map: whiteTex, color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); world.add(sparkle);
 
-  // ---------- layout: fit the logo into the panel
+  // ---------- layout: fit the logo into the panel (revealed) or centre it on the whole screen (hidden)
+  const fit = { panelK: 1, panelPos: new THREE.Vector3(), centreK: 1, centrePos: new THREE.Vector3() };
+  let revealed = !startHidden, mix = revealed ? 1 : 0;
+  const placeWorld = () => {
+    const e = mix * mix * (3 - 2 * mix);
+    world.scale.setScalar(fit.centreK + (fit.panelK - fit.centreK) * e);
+    world.position.lerpVectors(fit.centrePos, fit.panelPos, e);
+  };
   S.onLayout(() => {
     const f = S.frame, logoW = (866 - 160) * U, wide = f.w > 480;
-    const K = (f.w * (wide ? .74 : .78) * S.u) / logoW;
-    world.scale.setScalar(K);
-    world.position.copy(S.px(f.x + f.w / 2, f.y + f.h * (wide ? .64 : .8)));
+    fit.panelK = (f.w * (wide ? .74 : .78) * S.u) / logoW;
+    fit.panelPos.copy(S.px(f.x + f.w / 2, f.y + f.h * (wide ? .64 : .8)));
+    const cw = Math.min(S.W * (S.W < 700 ? .6 : .56), S.H * 1.25);
+    fit.centreK = (cw * S.u) / logoW;
+    fit.centrePos.copy(S.px(S.W / 2, S.H * (S.W < 700 ? .6 : .62)));
+    placeWorld();
   });
   S.layout();
 
@@ -383,6 +396,40 @@ export function mount({ container, frameEl, reduced = false }) {
   addEventListener('pointermove', onMove, { passive: true });
   addEventListener('keydown', wake);
 
+  // clicking the robot (hit-tested in 3D, so it works wherever it is playing)
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  const box = new THREE.Box3(), bc = new THREE.Vector3(), bt = new THREE.Vector3();
+  // the robot's on-screen centre and height (px), for a finger-sized tap zone on small screens
+  const robotScreen = () => {
+    box.setFromObject(R.root); box.getCenter(bc); bt.set(bc.x, box.max.y, bc.z);
+    const c = container.getBoundingClientRect(), a = S.toScreen(bc), t = S.toScreen(bt);
+    return { x: a.x + c.left, y: a.y + c.top, h: Math.abs(a.y - t.y) * 2 };
+  };
+  const hitsRobot = (e) => {
+    const c = container.getBoundingClientRect();
+    ndc.set(((e.clientX - c.left) / c.width) * 2 - 1, -((e.clientY - c.top) / c.height) * 2 + 1);
+    ray.setFromCamera(ndc, S.camera);
+    if (ray.intersectObject(R.root, true).length > 0) return true;
+    const rs = robotScreen(), reach = Math.max(28, rs.h * .32);
+    return Math.hypot(e.clientX - rs.x, e.clientY - rs.y) < reach;
+  };
+  const onDown = (e) => {
+    if (revealed || !onRobotClick || st.success || e.button > 0) return;
+    if (hitsRobot(e)) onRobotClick();
+  };
+  addEventListener('pointerdown', onDown);
+  const flip = () => {
+    if (st.intro || st.success || st.error) return;
+    clearQ(); st.atOne = false;
+    push(hopTo(top1, { h: .9, spin: 1, sit: true, land: false, face: false }), call(() => { st.atOne = true; st.lastActive = now(); st.nextGag = now() + 6; }));
+  };
+  const setRevealed = (v) => {
+    if (v === revealed) return;
+    revealed = v; wake();
+    if (reduced) { mix = v ? 1 : 0; placeWorld(); S.render(); return; }
+    if (v) flip(); else if (!st.intro && !st.success) { clearQ(); goHome(); }
+  };
+
   const endIntro = () => {
     if (!st.intro) return;
     if (st.carry) { st.carry = false; one.userData.y = Math.max(0, one.position.y); one.userData.vy = 0; }
@@ -428,6 +475,7 @@ export function mount({ container, frameEl, reduced = false }) {
   S.loop((dt, t) => {
     const T = now(); clock += dt;
     restPose(); st.sit = false; st.bob = 0;
+    { const m0 = mix; mix = damp(mix, revealed ? 1 : 0, 3.2, dt); if (Math.abs(mix - (revealed ? 1 : 0)) < .002) mix = revealed ? 1 : 0; if (mix !== m0) placeWorld(); }
 
     // background drift + parallax
     floaters.forEach((m, i) => {
@@ -557,5 +605,5 @@ export function mount({ container, frameEl, reduced = false }) {
     }
   }, reduced, 1);
 
-  return { dispose: () => { stopForm(); removeEventListener('pointermove', onMove); removeEventListener('keydown', wake); S.dispose(); } };
+  return { setRevealed, robotScreen, dispose: () => { stopForm(); removeEventListener('pointermove', onMove); removeEventListener('keydown', wake); removeEventListener('pointerdown', onDown); S.dispose(); } };
 }

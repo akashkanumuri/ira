@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { takeSignOutNotice } from '../../lib/deviceLock';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -56,6 +56,9 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const [loading, setLoading] = useState(false);
   // A notice left by the one-device rule (e.g. "signed in on another device") shows as the first message.
   const [error, setError] = useState(() => takeSignOutNotice() ?? '');
+  // With a notice to show, the staff page opens with the form visible instead of hidden behind the robot.
+  const [startWithNotice] = useState(() => Boolean(error));
+  const firstPortalRun = useRef(true);
 
   // Password reset state
   const [resetEmail, setResetEmail] = useState('');
@@ -66,6 +69,8 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const meta = PORTAL_META[activePortal] || PORTAL_META.employee;
 
   useEffect(() => {
+    // keep a sign-out notice on first load; clear everything when switching portals afterwards
+    if (firstPortalRun.current) { firstPortalRun.current = false; setActivePortal(portal); return; }
     setActivePortal(portal);
     setIdentifier('');
     setPassword('');
@@ -88,6 +93,13 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
       window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
+
+  // When the hidden staff sign-in closes itself after 30 s idle, don't leave a typed password behind.
+  useEffect(() => {
+    const onHidden = () => { setPassword(''); setShowPassword(false); setError(''); setScreen('login'); };
+    window.addEventListener('sigma1-login-hidden', onHidden);
+    return () => window.removeEventListener('sigma1-login-hidden', onHidden);
+  }, []);
 
   // Lets the animated sign-in scene react (robot shakes its head, portal flashes, etc.).
   const announce = (detail: 'error' | 'success') => window.dispatchEvent(new CustomEvent('ira-login', { detail }));
@@ -155,7 +167,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   );
 
   return (
-    <AuthLayout brand={isClient ? 'ira' : 'sigma'} eyebrow={isClient ? 'IRA Hospitality · Client portal' : 'SIGMA 1'} headline={meta.headline}>
+    <AuthLayout brand={isClient ? 'ira' : 'sigma'} secret={!isClient && !startWithNotice} eyebrow={isClient ? 'IRA Hospitality · Client portal' : 'SIGMA 1'} headline={meta.headline}>
       {screen === 'forgot' ? (
         <div className="space-y-6">
           <div>

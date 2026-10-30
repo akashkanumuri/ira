@@ -25,23 +25,34 @@ function webglOk() {
  * `frameRef` is the panel that becomes the 3D window; `formRef` is the sign-in card.
  * Calls `onFail` if WebGL or the scene can't load, so the caller can fall back.
  */
-export function Login3D({ scene, frameRef, formRef, above = false, onFail }: {
+export interface Login3DApi { setRevealed?: (v: boolean) => void; dispose: () => void }
+
+export function Login3D({ scene, frameRef, formRef, above = false, onFail, startHidden = false, onRobotClick, onReady }: {
   scene: LoginScene;
   frameRef: React.RefObject<HTMLElement | null>;
   formRef: React.RefObject<HTMLElement | null>;
   above?: boolean;
   onFail: () => void;
+  /** sigma scene only: start centred with the form hidden; clicking the robot calls onRobotClick */
+  startHidden?: boolean;
+  onRobotClick?: () => void;
+  onReady?: (api: Login3DApi) => void;
 }) {
+  const clickRef = useRef(onRobotClick); clickRef.current = onRobotClick;
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    let api: { dispose: () => void } | null = null;
+    let api: Login3DApi | null = null;
     let cancelled = false;
     const el = host.current, frameEl = frameRef.current, formEl = formRef.current;
     if (!el || !frameEl || !formEl || !webglOk()) { onFail(); return undefined; }
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const url = `/login3d/${scene}.js`;
     import(/* @vite-ignore */ url)
-      .then((mod: any) => { if (!cancelled) api = mod.mount({ container: el, frameEl, formEl, reduced }); })
+      .then((mod: any) => {
+        if (cancelled) return;
+        api = mod.mount({ container: el, frameEl, formEl, reduced, startHidden, onRobotClick: () => clickRef.current?.() });
+        onReady?.(api!);
+      })
       .catch((e) => { console.warn('[login3d] falling back', e); if (!cancelled) onFail(); });
     return () => { cancelled = true; api?.dispose(); };
   }, [scene]); // eslint-disable-line react-hooks/exhaustive-deps
