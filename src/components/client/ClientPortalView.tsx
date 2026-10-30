@@ -34,6 +34,7 @@ import {
   Tabs,
   ToastProvider,
   useToast,
+  PasswordInput,
 } from './ClientUI';
 import {
   ClientContracts,
@@ -560,16 +561,14 @@ function ClientSettingsView({
             />
             <div className="space-y-4">
               <Field label="New password">
-                <Input
-                  type="password"
+                <PasswordInput
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
                   placeholder="Enter new password"
                 />
               </Field>
               <Field label="Confirm new password">
-                <Input
-                  type="password"
+                <PasswordInput
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   placeholder="Repeat new password"
