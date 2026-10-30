@@ -136,6 +136,37 @@ function cleanText(value?: string | null) {
   return v ? v : null
 }
 
+function validEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)
+}
+
+/** Database / Auth errors come back as plain objects; turn them into a sentence an admin can act on. */
+function friendlyError(error: unknown): string {
+  const e = error as { code?: string; message?: string; details?: string } | null
+  const text = `${e?.message ?? ''} ${e?.details ?? ''}`.toLowerCase()
+  if (e?.code === '23505') {
+    if (text.includes('work_email')) return 'This work email is already used by another employee. Use a different email or leave it blank.'
+    if (text.includes('login_id')) return 'This Login ID is already in use. Choose a different one.'
+    if (text.includes('emp_id')) return 'Couldn’t allocate an employee ID. Please try again.'
+    return 'This record already exists.'
+  }
+  if (e?.code === '23503') return 'A selected designation, department or manager no longer exists. Reopen the form and try again.'
+  if (e?.code === '23514' || e?.code === 'P0001') return e?.message || 'Some details are not valid.'
+  if (text.includes('already been registered') || text.includes('already registered')) return 'This Login ID was used before. Choose a different Login ID.'
+  if (error instanceof Error) return error.message
+  return e?.message || 'Request failed'
+}
+
+async function assertWorkEmailFree(admin: ReturnType<typeof createClient>, email: string | null, exceptEmployeeId?: string) {
+  if (!email) return
+  if (!validEmail(email)) throw new Error('Enter a valid work email (for example name@company.com), or leave it blank.')
+  let q = admin.from('employees').select('id,name').ilike('work_email', escapeLikePattern(email))
+  if (exceptEmployeeId) q = q.neq('id', exceptEmployeeId)
+  const { data, error } = await q.limit(1)
+  if (error) throw new Error(`Unable to verify work email: ${error.message}`)
+  if (data?.length) throw new Error(`This work email is already used by ${data[0].name}. Use a different email or leave it blank.`)
+}
+
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, character => `\\${character}`)
 }
@@ -192,7 +223,9 @@ async function ensureEmployeeLedgers(
 
 async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<typeof createClient>, actorId: string) {
   const loginId = normalizeLoginId(input.loginId)
-  if (!validateLoginId(loginId)) throw new Error('Login ID must be 3-32 characters using letters, numbers, dot, underscore or hyphen.')
+  if (!validateLoginId(loginId)) throw new Error('Login ID must be 3–32 characters: letters, numbers, dot, underscore or hyphen, starting with a letter or number (no spaces or @).')
+  if (!input.name?.trim()) throw new Error('Employee name is required.')
+  await assertWorkEmailFree(admin, cleanText(input.workEmail))
   await assertPasswordSafe(input.password)
   if (!input.name.trim()) throw new Error('Employee name is required.')
   if (!input.designationId) throw new Error('Designation is required.')
@@ -342,6 +375,7 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
 
   if (!input.name.trim()) throw new Error('Employee name is required.')
   if (!input.designationId && !input.designationName) throw new Error('Designation is required.')
+  await assertWorkEmailFree(admin, cleanText(input.workEmail), input.employeeId)
   if (!Number.isFinite(input.monthlySalary) || input.monthlySalary < 0) throw new Error('Monthly salary is invalid.')
 
   let manager = null
@@ -572,6 +606,6 @@ Deno.serve(async (req: Request) => {
     }
   } catch (error) {
     console.error('[employee-admin]', error)
-    return json({ error: error instanceof Error ? error.message : 'Request failed' }, 400, origin)
+    return json({ error: friendlyError(error) }, 400, origin)
   }
 })

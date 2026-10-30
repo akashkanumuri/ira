@@ -1509,10 +1509,17 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
         : null;
       if (form.departmentName && !currentDepartment) throw new Error('Please select a valid department.');
       if (rulesReady) { const problem = validateRules(rules, rulesFrom); if (problem) throw new Error(problem); }
+      if (rulesReady && rules.probation_end && form.joinDate && rules.probation_end < form.joinDate) throw new Error('Probation can’t end before the join date.');
       const legacy = rulesReady ? legacyFields(rules) : { workMode: form.workMode, shiftStart: form.shiftStart, shiftEnd: form.shiftEnd };
       const rulesChanged = rulesReady && (mode === 'create' || !savedRules || rulesFrom !== today() || JSON.stringify(normalizeRules(savedRules)) !== JSON.stringify(normalizeRules(rules)));
 
+      if (!form.name.trim()) throw new Error('Enter the employee’s full name.');
+      if (form.workEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.workEmail.trim())) throw new Error('Enter a valid work email, or leave it blank.');
+      if (!form.joinDate) throw new Error('Pick the join date.');
       if (mode === 'create') {
+        if (!LOGIN_ID_RE.test(form.loginId.trim())) throw new Error('Login ID must be 3–32 characters: letters, numbers, dot, underscore or hyphen, starting with a letter or number (no spaces or @).');
+        const weak = passwordProblems(form.password);
+        if (weak.length) throw new Error(`Password needs ${weak.join(', ')}.`);
         if (form.password !== form.confirmPassword) throw new Error('Passwords do not match.');
         const result = await invokeEmployeeAdmin({ action: 'create_employee', name: form.name, workEmail: form.workEmail || null, phone: form.phone || null, loginId: form.loginId, password: form.password, workMode: legacy.workMode, designationId: currentDesignation.id, designationName: currentDesignation.name, departmentId: currentDepartment?.id || null, departmentName: currentDepartment?.name || null, managerId: form.managerId || null, managerName: form.managerName || null, joinDate: form.joinDate, shiftStart: legacy.shiftStart, shiftEnd: legacy.shiftEnd, monthlySalary: salary });
         if (rulesChanged) { try { await saveRules(result.employeeId, rules, rulesFrom) } catch (ruleError) { notify(`Employee created, but “How they work” wasn’t saved: ${ruleError instanceof Error ? ruleError.message : 'error'}. Open Edit to set it.`, 'error', 9000) } }
@@ -1543,7 +1550,7 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
         <WorkRulesEditor value={rules} onChange={setRules} effectiveFrom={rulesFrom} onEffectiveFrom={mode === 'edit' ? setRulesFrom : undefined} minEffective={today()} templates={templates} onTemplatesChanged={loadTemplates} projects={projectsLite} />
       </FormSection>}
       {rulesReady === null && <div className="rounded-2xl bg-ink-50 h-24 animate-pulse" />}
-      {mode === 'create' && <FormSection title="Login" icon={<KeyRound className="w-4 h-4" />}><div className="grid md:grid-cols-3 gap-4"><Field label="Login ID"><input value={form.loginId} onChange={e => set('loginId', e.target.value)} className="input" autoComplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}" /></Field><Field label="Password"><PasswordField value={form.password} onChange={e => set('password', e.target.value)} autoComplete="new-password" minLength={12} required /></Field><Field label="Confirm password"><PasswordField value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} autoComplete="new-password" minLength={12} required /></Field></div></FormSection>}
+      {mode === 'create' && <FormSection title="Login" icon={<KeyRound className="w-4 h-4" />}><div className="grid md:grid-cols-3 gap-4"><Field label="Login ID"><input value={form.loginId} onChange={e => set('loginId', e.target.value)} className="input" autoComplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,31}" title="3–32 characters: letters, numbers, dot, underscore or hyphen" /></Field><Field label="Password"><PasswordField value={form.password} onChange={e => set('password', e.target.value)} autoComplete="new-password" minLength={12} required /></Field><Field label="Confirm password"><PasswordField value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} autoComplete="new-password" minLength={12} required /></Field></div><PasswordChecklist password={form.password} confirm={form.confirmPassword} /></FormSection>}
       {mode === 'create' && <FormSection title="HR onboarding documents" icon={<Upload className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold text-slate-700">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
       {mode === 'edit' && <FormSection title="HR documents" icon={<FileText className="w-4 h-4" />}><div className="space-y-2">{employeeDocs.map(d => <button type="button" key={d.id} onClick={() => void viewDoc(d)} className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-left"><span><span className="block text-xs font-bold">{d.documentType}</span><span className="block text-[10px] text-slate-500">{d.fileName}</span></span><Eye className="w-4 h-4 text-slate-400" /></button>)}{!employeeDocs.length && <p className="text-xs text-slate-500">No documents uploaded yet.</p>}</div><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
       <div className="flex flex-col sm:flex-row justify-between gap-2 pt-2">{mode === 'edit' ? <button type="button" onClick={() => void resetPassword()} className="btn-secondary"><KeyRound className="w-4 h-4" />Reset password</button> : <span />}<div className="flex justify-end gap-2"><button type="button" disabled={busy || resetBusy} onClick={onClose} className="btn-secondary disabled:opacity-50">Cancel</button><button disabled={busy} className="btn-primary">{busy ? 'Saving…' : mode === 'create' ? 'Create employee' : 'Save changes'}</button></div></div>
@@ -2909,6 +2916,24 @@ function LoadingScreen({ label = 'Loading…' }: { label?: string }) { return <d
 
 
 function FormSection({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) { return <section className="ira-form-section"><div className="flex items-center gap-3 mb-4"><IconChip icon={icon} tone="brand" size="sm" /><h4 className="font-display text-base font-bold text-ink-950">{title}</h4></div>{children}</section> }
+const LOGIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$/;
+const PASSWORD_RULES: Array<[string, (p: string) => boolean]> = [
+  ['at least 12 characters', (p) => p.length >= 12],
+  ['an uppercase letter', (p) => /[A-Z]/.test(p)],
+  ['a lowercase letter', (p) => /[a-z]/.test(p)],
+  ['a number', (p) => /\d/.test(p)],
+  ['a symbol (e.g. @ # !)', (p) => /[^A-Za-z0-9]/.test(p)],
+];
+const passwordProblems = (p: string) => PASSWORD_RULES.filter(([, ok]) => !ok(p)).map(([t]) => t);
+function PasswordChecklist({ password, confirm }: { password: string; confirm: string }) {
+  if (!password) return <p className="mt-2 text-[12px] text-ink-500">Password: 12+ characters with an uppercase letter, a lowercase letter, a number and a symbol. Passwords found in known data breaches are refused.</p>;
+  return (
+    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+      {PASSWORD_RULES.map(([t, ok]) => <li key={t} className={ok(password) ? 'text-mint-700' : 'text-ink-400'}>{ok(password) ? '✓' : '○'} {t}</li>)}
+      {confirm && <li className={confirm === password ? 'text-mint-700' : 'text-rose-600'}>{confirm === password ? '✓ passwords match' : '✗ passwords don’t match'}</li>}
+    </ul>
+  );
+}
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="block"><span className="label">{label}{hint && <span className="font-normal text-ink-400 ml-1">{hint}</span>}</span>{children}</label> }
 function FilterInput({ label, children }: { label: string; children: React.ReactNode }) { return <div><span className="label">{label}</span>{children}</div> }
 function InfoRow({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between gap-3 py-2.5 border-b border-ink-100 last:border-0 text-[13px]"><span className="text-ink-500">{label}</span><b className="text-ink-900 text-right font-semibold">{value}</b></div> }
