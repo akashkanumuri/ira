@@ -224,6 +224,8 @@ export interface PayrollRecord {
   unpaidLeaveDays: number;
   dailyRate: number;
   leaveDeduction: number;
+  absentDays: number;
+  absentDeduction: number;
   finalPay: number;
   finalizedAt?: string | null;
 }

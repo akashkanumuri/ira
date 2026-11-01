@@ -275,7 +275,7 @@ export function LeavePage({ user, leaveRequests, ledgers, employees = [], onRefr
             </div>
             {leaveDuration === 'full' && span > 0 && (
               <p className="text-xs text-ink-500 -mt-2">
-                {span} calendar day{span === 1 ? '' : 's'} — Sundays and company holidays in this range aren’t counted as leave.
+                {span} calendar day{span === 1 ? '' : 's'} — your days off and holidays in this range aren’t counted as leave.
               </p>
             )}
             <label className="block">

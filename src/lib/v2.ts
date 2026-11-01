@@ -362,6 +362,8 @@ export function mapPayrollRecord(row: any, employees: Map<string, Employee>): Pa
     unpaidLeaveDays: Number(row.unpaid_leave_days ?? 0),
     dailyRate: Number(row.daily_rate ?? 0),
     leaveDeduction: Number(row.leave_deduction ?? 0),
+    absentDays: Number(row.absent_days ?? 0),
+    absentDeduction: Number(row.absent_deduction ?? 0),
     finalPay: Number(row.final_pay ?? 0),
     finalizedAt: row.finalized_at,
   };

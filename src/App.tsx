@@ -871,6 +871,7 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
                 <InfoRow label="Paid leave used" value={`${r.paidLeaveDays} day(s)`} />
                 <InfoRow label="Unpaid leave" value={`${r.unpaidLeaveDays} day(s)`} />
                 <InfoRow label="Leave deduction" value={r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)} />
+                {r.absentDays > 0 && <InfoRow label={`Absent (${r.absentDays} day${r.absentDays === 1 ? '' : 's'})`} value={`− ${money(r.absentDeduction)}`} />}
               </div>
               <p className="text-[11px] text-ink-400 mt-3">Finalized {r.finalizedAt ? new Date(r.finalizedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</p>
             </section>
@@ -1852,8 +1853,9 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
   }
 
   const totalPay = records.reduce((sum, r) => sum + r.finalPay, 0);
-  const totalDeduction = records.reduce((sum, r) => sum + r.leaveDeduction, 0);
+  const totalDeduction = records.reduce((sum, r) => sum + r.leaveDeduction + (r.absentDeduction || 0), 0);
   const unpaidDays = records.reduce((sum, r) => sum + Number(r.unpaidLeaveDays || 0), 0);
+  const absentDays = records.reduce((sum, r) => sum + Number(r.absentDays || 0), 0);
   const step = !period ? 1 : period.status === 'draft' ? 2 : 3;
   const monthName = new Date(`${month}-01T12:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const steps = [
@@ -1893,19 +1895,19 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Stat index={1} icon={<WalletCards className="w-5 h-5" />} tone="brand" label="Total payout" value={records.length ? money(totalPay) : '—'} caption={`${records.length} employee${records.length === 1 ? '' : 's'}`} />
-        <Stat index={2} label="Leave deductions" value={records.length ? money(totalDeduction) : '—'} caption={`${unpaidDays} unpaid day${unpaidDays === 1 ? '' : 's'} in total`} />
+        <Stat index={2} label="Deductions" value={records.length ? money(totalDeduction) : '—'} caption={`${unpaidDays} unpaid leave · ${absentDays} absent day${absentDays === 1 ? '' : 's'}`} />
         <Stat index={3} label="Paid leave used" value={records.reduce((sum, r) => sum + Number(r.paidLeaveDays || 0), 0)} caption="Days across the team" />
         <Stat index={4} label="Status" value={period ? (period.status === 'draft' ? 'Draft' : 'Locked') : '—'} caption={period?.finalizedAt ? `Finalized ${new Date(period.finalizedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })}` : 'Not finalized'} />
       </div>
 
       <section className="card overflow-hidden">
-        <div className="p-5 sm:p-6"><h2 className="font-display text-lg font-bold text-ink-950">Payroll records</h2><p className="text-[13px] text-ink-500 mt-1">Salary is the snapshot taken when the draft was generated.</p></div>
+        <div className="p-5 sm:p-6"><h2 className="font-display text-lg font-bold text-ink-950">Payroll records</h2><p className="text-[13px] text-ink-500 mt-1">Salary is the snapshot taken when the draft was generated. Absent = a working day with no check-in and no approved leave (half a day when worked hours are under the half-day mark), counted up to yesterday.</p></div>
         <div className="overflow-x-auto">
           <table className="data-table">
-            <thead><tr><Th>Employee</Th><Th>Salary</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Deduction</Th><Th>Final pay</Th></tr></thead>
+            <thead><tr><Th>Employee</Th><Th>Salary</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Leave deduction</Th><Th>Absent</Th><Th>Final pay</Th></tr></thead>
             <tbody>
-              {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td mono>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td mono>{r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
-              {!records.length && <EmptyRow colSpan={6} text={period ? 'No records for this period. Regenerate the draft.' : 'Generate the draft for this month to see records.'} />}
+              {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td mono>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td mono>{r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)}</Td><Td mono>{r.absentDays ? `${r.absentDays} d · − ${money(r.absentDeduction)}` : '—'}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
+              {!records.length && <EmptyRow colSpan={7} text={period ? 'No records for this period. Regenerate the draft.' : 'Generate the draft for this month to see records.'} />}
             </tbody>
           </table>
         </div>

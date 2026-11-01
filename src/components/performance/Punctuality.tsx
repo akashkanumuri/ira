@@ -7,7 +7,7 @@ import { Modal } from '../../ui/Modal';
 
 export interface PunctualityDay { date: string; in: string | null; out: string | null; late: number; early: number }
 export interface Punctuality {
-  from: string; to: string; shift_start: string; shift_end: string;
+  from: string; to: string; shift_start: string; shift_end: string; late_after?: string | null; flexible?: boolean;
   days_present: number; on_time_days: number; late_days: number; on_time_rate: number | null;
   avg_late_minutes: number | null; total_late_minutes: number; early_leave_days: number; avg_early_minutes: number | null;
   missed_checkout_days: number; avg_check_in: string | null; avg_break_minutes: number | null; days: PunctualityDay[];
@@ -110,7 +110,7 @@ export function PunctualityCard({ employeeId, title = 'Punctuality', embedded = 
             {p.days_present === 0 ? <p className="text-[13px] text-ink-500">No check-ins in this period.</p> : (
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <Tile icon={<CalendarCheck2 className="w-3.5 h-3.5" />} label="On-time check-ins" value={pct(p.on_time_rate)} hint={`${p.on_time_days} of ${p.days_present} days by ${p.shift_start}`} cls={tone(p.on_time_rate)} />
+                  <Tile icon={<CalendarCheck2 className="w-3.5 h-3.5" />} label="On-time check-ins" value={pct(p.on_time_rate)} hint={p.flexible ? `${p.on_time_days} of ${p.days_present} days · flexible hours, never late` : `${p.on_time_days} of ${p.days_present} days by ${p.late_after ?? p.shift_start}`} cls={tone(p.on_time_rate)} />
                   <Tile icon={<AlarmClock className="w-3.5 h-3.5" />} label="Late days" value={String(p.late_days)} hint={p.late_days ? `Average ${mins(p.avg_late_minutes)} late · ${mins(p.total_late_minutes)} in total` : 'Never late'} cls={p.late_days ? 'text-rose-600' : 'text-mint-700'} />
                   <Tile icon={<LogOut className="w-3.5 h-3.5" />} label="Left early" value={String(p.early_leave_days)} hint={p.early_leave_days ? `Average ${mins(p.avg_early_minutes)} before ${p.shift_end}` : `Stayed till ${p.shift_end}`} cls={p.early_leave_days ? 'text-amber-700' : 'text-mint-700'} />
                   <Tile icon={<Timer className="w-3.5 h-3.5" />} label="Average check-in" value={p.avg_check_in ?? '—'} hint={`Shift starts ${p.shift_start}${p.missed_checkout_days ? ` · ${p.missed_checkout_days} day${p.missed_checkout_days === 1 ? '' : 's'} without check-out` : ''}`} />
