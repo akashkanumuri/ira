@@ -233,7 +233,7 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
         </Row>
         <Row label="Timing *">
           <div className="space-y-2">
-            <Seg value={scheduleMain} onChange={setSchedule} options={[{ id: 'fixed', label: 'Fixed shift' }, { id: 'flexible', label: 'Flexible hours' }]} />
+            {type === 'hybrid' ? <p className="text-[12.5px] font-semibold text-ink-800">Fixed shift</p> : <Seg value={scheduleMain} onChange={setSchedule} options={[{ id: 'fixed', label: 'Fixed shift' }, { id: 'flexible', label: 'Flexible hours' }]} />}
             {r.schedule_type === 'fixed' && (
               <span className="inline-flex items-center gap-2 text-[13px] text-ink-600"><Time label="Shift start" value={r.shift_start} onChange={(v) => set('shift_start', v)} /> to <Time label="Shift end" value={r.shift_end} onChange={(v) => set('shift_end', v)} />{r.shift_end && r.shift_start && r.shift_end <= r.shift_start && <span className="text-[11.5px] text-ink-400">ends next day</span>}</span>
             )}
@@ -380,7 +380,7 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
                   shift2_end: v === 'split' ? (r.shift2_end ?? '21:00') : r.shift2_end,
                   core_start: v === 'flexible_core' ? (r.core_start ?? '11:00') : r.core_start,
                   core_end: v === 'flexible_core' ? (r.core_end ?? '16:00') : r.core_end,
-                })} options={(Object.keys(SCHEDULE_LABEL) as WorkRules['schedule_type'][]).map((id) => ({ id, label: SCHEDULE_LABEL[id] }))} />
+                })} options={(Object.keys(SCHEDULE_LABEL) as WorkRules['schedule_type'][]).filter((id) => type !== 'hybrid' || id === 'fixed' || id === 'split').map((id) => ({ id, label: SCHEDULE_LABEL[id] }))} />
               </Row>
               {r.schedule_type === 'split' && (
                 <>
