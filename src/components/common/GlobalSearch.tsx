@@ -34,12 +34,12 @@ export function GlobalSearch({ role, clientWork = true, onNavigate }: { role: st
         <kbd className="text-[11px] font-semibold text-ink-400 bg-ink-50 border border-ink-100 rounded-md px-1.5 py-0.5">{isMac ? '⌘' : 'Ctrl'} K</kbd>
       </button>
       <span className="sm:hidden"><button type="button" onClick={() => setOpen(true)} className="icon-btn icon-btn-surface" aria-label="Search"><Search className="w-4 h-4" /></button></span>
-      {open && <Palette role={role} onClose={() => setOpen(false)} onNavigate={(to) => { setOpen(false); onNavigate(to); }} />}
+      {open && <Palette role={role} clientWork={clientWork} onClose={() => setOpen(false)} onNavigate={(to) => { setOpen(false); onNavigate(to); }} />}
     </>
   );
 }
 
-function Palette({ role, onClose, onNavigate }: { role: string; onClose: () => void; onNavigate: (to: string) => void }) {
+function Palette({ role, clientWork, onClose, onNavigate }: { role: string; clientWork: boolean; onClose: () => void; onNavigate: (to: string) => void }) {
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,7 +62,7 @@ function Palette({ role, onClose, onNavigate }: { role: string; onClose: () => v
       setLoading(false);
     }, 220);
     return () => window.clearTimeout(t);
-  }, [q, role]);
+  }, [q, role, clientWork]);
 
   const grouped = useMemo(() => ORDER.map((k) => ({ kind: k, items: hits.filter((h) => h.kind === k) })).filter((g) => g.items.length), [hits]);
   const flat = useMemo(() => grouped.flatMap((g) => g.items), [grouped]);
