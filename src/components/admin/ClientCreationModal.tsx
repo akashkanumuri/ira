@@ -291,7 +291,7 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
               )}
 
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3">
-                {false && createdInfo.clientId ? (
+                {false ? (
                   <button
                     type="button"
                     onClick={handleRetryEmail}

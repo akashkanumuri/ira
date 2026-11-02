@@ -59,6 +59,67 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const [startWithNotice] = useState(() => Boolean(error));
   const firstPortalRun = useRef(true);
 
+  const meta = PORTAL_META[activePortal] || PORTAL_META.employee;
+
+  useEffect(() => {
+    // keep a sign-out notice on first load; clear everything when switching portals afterwards
+    if (firstPortalRun.current) { firstPortalRun.current = false; setActivePortal(portal); return; }
+    setActivePortal(portal);
+    setIdentifier('');
+    setPassword('');
+    setError('');
+    setShowPassword(false);
+    setScreen('login');
+  }, [portal]);
+
+  const switchPortal = (next: Portal) => {
+    if (next === activePortal || loading) return;
+    setActivePortal(next);
+    setIdentifier('');
+    setPassword('');
+    setError('');
+    setShowPassword(false);
+    setScreen('login');
+    const path = next === 'admin' ? '/admin/login' : next === 'client' ? '/client/login' : '/login';
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  };
+
+  // When the hidden staff sign-in closes itself after 30 s idle, don't leave a typed password behind.
+  useEffect(() => {
+    const onHidden = () => { setPassword(''); setShowPassword(false); setError(''); setScreen('login'); };
+    window.addEventListener('sigma1-login-hidden', onHidden);
+    return () => window.removeEventListener('sigma1-login-hidden', onHidden);
+  }, []);
+
+  // Lets the animated sign-in scene react (robot shakes its head, portal flashes, etc.).
+  const announce = (detail: 'error' | 'success') => window.dispatchEvent(new CustomEvent('ira-login', { detail }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+
+    if (!identifier.trim() || !password) {
+      setError(meta.emptyError);
+      announce('error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await signIn(identifier.trim(), password, activePortal);
+      if (result.error) setError(result.error);
+      announce(result.error ? 'error' : 'success');
+    } catch {
+      setError('Unable to sign in right now. Please try again.');
+      announce('error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Staff sign-in (SIGMA 1) only switches between Employee and Admin; clients use their own IRA page at /client/login.
   const isClient = activePortal === 'client';
   const portalTabs: Array<{ id: Portal; label: string }> = [
