@@ -72,7 +72,7 @@ export function Buddy({ mood = 'idle', size = 72, follow = true, className }: { 
           <stop offset="0" stopColor="#4a4a52" />
           <stop offset="1" stopColor="#2f2f34" />
         </linearGradient>
-        <filter id="bd-glow" x="-50%" y="-50%" width="200%" height="200%">
+        <filter id="bd-glow" filterUnits="userSpaceOnUse" x="0" y="0" width="120" height="120">
           <feGaussianBlur stdDeviation="1.6" result="b" />
           <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
