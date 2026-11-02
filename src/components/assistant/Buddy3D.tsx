@@ -36,7 +36,8 @@ export const Buddy3D = forwardRef<Buddy3DApi | null, { mood: BuddyMood; classNam
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     if (!el || !webglOk() || reduced) { setFailed(true); return undefined; }
     let cancelled = false;
-    import(/* @vite-ignore */ '/login3d/buddy3d.js')
+    const url = '/login3d/buddy3d.js';
+    import(/* @vite-ignore */ url)
       .then((mod: any) => {
         if (cancelled) return;
         api.current = mod.mount({ container: el, reduced: false });
