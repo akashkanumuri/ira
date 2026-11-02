@@ -12,6 +12,7 @@ import { GeoError, distanceM, fetchOffice, fmtDistance, getFix, locationHelp, ty
 import { isPushOrigin, isPushSupported, subscribeToPush } from '../../lib/pushSubscription';
 import { getKolkataDateString } from '../../lib/workingDays';
 import { cx } from '../../ui';
+import { supabase } from '../../lib/supabase';
 
 interface NavGroupLite { label?: string; items: Array<{ id: string; label: string }> }
 
@@ -77,6 +78,25 @@ export function Assistant(p: AssistantProps) {
     return () => { alive = false; window.removeEventListener('ira:attendance', load); };
   }, [role]);
 
+  // smart insights worked out in the database from this person's own history (and their team's, for managers/admins)
+  const [insights, setInsights] = useState<Nudge[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const { data, error } = await (supabase as any).rpc('assistant_insights');
+        if (!alive || error || !Array.isArray(data)) return;
+        setInsights(data.map((d: any) => ({ key: d.key, type: d.type, priority: Number(d.priority) as 1 | 2 | 3, mood: d.mood as BuddyMood, text: d.text,
+          action: d.to ? { label: d.label || 'Open', to: d.to } : undefined })));
+      } catch { /* older database: no insights yet */ }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 10 * 60000);
+    const on = () => void load();
+    window.addEventListener('ira:attendance', on);
+    return () => { alive = false; window.clearInterval(id); window.removeEventListener('ira:attendance', on); };
+  }, []);
+
   // react to attendance actions
   useEffect(() => {
     const on = () => { setFlash('wave'); window.setTimeout(() => setFlash(null), 3500); setTick((t) => t + 1); };
@@ -86,13 +106,13 @@ export function Assistant(p: AssistantProps) {
 
   const nudges = useMemo(() => {
     if (!p.ready) return [];
-    return computeNudges({
+    return [...insights, ...computeNudges({
       role, firstName, today, nowTime: nowIstTime(), myId: user.employeeDbId,
       attendance: p.attendance, tasks: p.tasks, leaveRequests: p.leaveRequests, wfhRequests: p.wfhRequests, holidays: p.holidays,
       ledgers: p.ledgers, payrollPeriods: p.payrollPeriods, payrollRecords: p.payrollRecords, employees: p.employees,
       rules: (ctx as any)?.rules ?? null, work: work?.state ?? null, late, notifyPermission: perm, managesPeople: p.managesPeople,
-    });
-  }, [p.ready, p.attendance, p.tasks, p.leaveRequests, p.wfhRequests, p.holidays, p.ledgers, p.payrollPeriods, p.payrollRecords, p.employees,
+    })].sort((a, b) => a.priority - b.priority);
+  }, [insights, p.ready, p.attendance, p.tasks, p.leaveRequests, p.wfhRequests, p.holidays, p.ledgers, p.payrollPeriods, p.payrollRecords, p.employees,
     ctx, work?.state, late, perm, p.managesPeople, tick, role, firstName, today, user.employeeDbId]);
 
   // first time on this laptop: run the setup
