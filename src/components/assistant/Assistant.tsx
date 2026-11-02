@@ -3,6 +3,7 @@ import { BellRing, Check, ChevronLeft, ChevronRight, Compass, Copy, MapPin, Moon
 import type { AuthUser } from '../../contexts/AuthContext';
 import type { AttendanceRecord, Employee, Holiday, LeaveLedger, LeaveRequest, PayrollPeriod, PayrollRecord, Task, WfhRequest } from '../../types/attendance';
 import { Buddy, type BuddyMood } from './Buddy';
+import { Buddy3D, type Buddy3DApi, type BuddyAction } from './Buddy3D';
 import { PAGE_HELP, canAutoShow, computeNudges, loadMemory, saveMemory, type BuddyLevel, type BuddyMemory, type Nudge } from '../../lib/assistant';
 import { useWork } from '../work/WorkTracker';
 import { useWorkContext } from '../../lib/workContext';
@@ -171,43 +172,151 @@ export function Assistant(p: AssistantProps) {
     : nudges.some((n) => n.priority === 1) ? 'alert' : 'idle');
   const urgentCount = nudges.filter((n) => n.priority <= 2 && !mem.neverTypes?.[n.type]).length;
 
+  /* ───── flying: the robot moves to what it is talking about, then flies home ───── */
+  const bot = useRef<Buddy3DApi | null>(null);
+  const RW = mem.minimized ? 76 : 112, RH = mem.minimized ? 90 : 132;
+  const homePos = useCallback(() => {
+    const mobile = window.innerWidth < 1024;
+    return { x: window.innerWidth - RW - (mobile ? 6 : 14), y: window.innerHeight - RH - (mobile ? 78 : 8) };
+  }, [RW, RH]);
+  const [pos, setPos] = useState(() => ({ x: typeof window === 'undefined' ? 0 : window.innerWidth - 126, y: typeof window === 'undefined' ? 0 : window.innerHeight - 140 }));
+  const [away, setAway] = useState(false);
+  const posRef = useRef(pos); posRef.current = pos;
+  const flyTimer = useRef(0);
+  const flyTo = useCallback((to: { x: number; y: number }, isHome = false) => {
+    const from = posRef.current;
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    setAway(!isHome);
+    if (dist < 4) return;
+    const dir = Math.abs(to.x - from.x) < 30 ? 0 : Math.sign(to.x - from.x);
+    bot.current?.fly(true, dir);
+    setPos(to);
+    window.clearTimeout(flyTimer.current);
+    flyTimer.current = window.setTimeout(() => bot.current?.fly(false), Math.min(1400, 500 + dist * .8));
+  }, []);
+  const flyHome = useCallback(() => flyTo(homePos(), true), [flyTo, homePos]);
+  useEffect(() => { if (!away) setPos(homePos()); }, [RW, RH]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const on = () => { if (!away) setPos(homePos()); };
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, [away, homePos]);
+  const nextTo = (r: DOMRect) => ({ x: Math.min(window.innerWidth - RW - 8, r.right + 6), y: Math.max(8, Math.min(window.innerHeight - RH - 8, r.top + r.height / 2 - RH * .55)) });
+
+  // a tip about another page: fly next to that page in the menu and point at it
+  useEffect(() => {
+    if (view === 'bubble' && bubble?.action?.to) {
+      const tab = bubble.action.to.split('?')[0];
+      const el = document.querySelector(`[data-tour="${tab}"]`) as HTMLElement | null;
+      if (el && el.offsetParent !== null && tab !== p.activeTab) { flyTo(nextTo(el.getBoundingClientRect())); return; }
+    }
+    if (view === 'none' || view === 'panel' || view === 'setup') { const t = window.setTimeout(flyHome, view === 'none' ? 700 : 0); return () => window.clearTimeout(t); }
+    return undefined;
+  }, [view, bubble?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // react with the body, not just the face
+  useEffect(() => {
+    if (view !== 'bubble' || !bubble) return;
+    const a: Record<string, BuddyAction> = { worried: 'worried', celebrate: 'dance', happy: 'wave', wave: 'wave', alert: 'knock', think: 'look' };
+    const act = a[bubble.mood];
+    if (act) window.setTimeout(() => bot.current?.play(act), 900);
+  }, [view, bubble?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (flash === 'wave') bot.current?.play('wave');
+    if (flash === 'celebrate') bot.current?.play('celebrate');
+  }, [flash]);
+
+  /* ───── gags: when nobody has touched the page for a while, it entertains itself ───── */
+  const lastInput = useRef(Date.now());
+  const lastGag = useRef(Date.now());
+  useEffect(() => {
+    const mark = () => { lastInput.current = Date.now(); };
+    window.addEventListener('pointermove', mark, { passive: true });
+    window.addEventListener('keydown', mark);
+    window.addEventListener('scroll', mark, { passive: true });
+    return () => { window.removeEventListener('pointermove', mark); window.removeEventListener('keydown', mark); window.removeEventListener('scroll', mark); };
+  }, []);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const quietMode = (mem.level ?? 'normal') === 'quiet' || mem.minimized;
+      if (quietMode || view !== 'none' || document.hidden || !bot.current || bot.current.isBusy()) return;
+      const idleFor = Date.now() - lastInput.current, since = Date.now() - lastGag.current;
+      if (idleFor < 20000 || since < 120000 + Math.random() * 90000) return;
+      lastGag.current = Date.now();
+      const gags = ['dance', 'juggle', 'spin', 'moonwalk', 'backflip', 'stretch', 'yawn', 'look', 'patrol', 'visit', 'peek'] as const;
+      const g = gags[Math.floor(Math.random() * gags.length)];
+      if (g === 'patrol') {
+        // zooms along the bottom of the screen, dances there, zooms back
+        flyTo({ x: Math.max(16, window.innerWidth * (.25 + Math.random() * .3)), y: posRef.current.y });
+        window.setTimeout(() => bot.current?.play('dance'), 1500);
+        window.setTimeout(() => flyHome(), 6200);
+      } else if (g === 'visit') {
+        // pops over to the menu, peeks at a random page, comes back
+        const items = Array.from(document.querySelectorAll('[data-tour]')).filter((e) => (e as HTMLElement).offsetParent !== null);
+        const el = items[Math.floor(Math.random() * items.length)] as HTMLElement | undefined;
+        if (!el) return;
+        flyTo(nextTo(el.getBoundingClientRect()));
+        window.setTimeout(() => bot.current?.play('peek'), 1400);
+        window.setTimeout(() => flyHome(), 5200);
+      } else bot.current.play(g);
+    }, 15000);
+    return () => window.clearInterval(id);
+  }, [mem.level, mem.minimized, view, flyTo, flyHome]);
+
+  // pop-ups sit next to the robot wherever it is
+  const leftHalf = pos.x + RW / 2 < (typeof window === 'undefined' ? 1200 : window.innerWidth) / 2;
+  const upperHalf = pos.y + RH / 2 < (typeof window === 'undefined' ? 800 : window.innerHeight) / 2;
+  const popStyle: React.CSSProperties = { position: 'absolute' };
+  if (!away) { popStyle.right = 4; popStyle.bottom = RH + 4; }
+  else {
+    if (leftHalf) popStyle.left = RW + 4; else popStyle.right = RW + 4;
+    if (upperHalf) popStyle.top = 8; else popStyle.bottom = 8;
+  }
+
   return (
-    <div className="buddy-fab print:hidden" data-buddy>
-      {view === 'bubble' && bubble && (
-        <TipBubble n={bubble} onAction={() => void doAction(bubble)} onLater={() => closeBubble('later')} onClose={() => closeBubble('close')} onNever={() => closeBubble('never')} />
+    <div className="buddy-fab print:hidden" data-buddy style={{ left: pos.x, top: pos.y, width: RW, height: RH }}>
+      <div style={popStyle} className="z-[1]">
+        {view === 'bubble' && bubble && (
+          <TipBubble n={bubble} onAction={() => void doAction(bubble)} onLater={() => closeBubble('later')} onClose={() => closeBubble('close')} onNever={() => closeBubble('never')} />
+        )}
+        {view === 'panel' && (
+          <Panel
+            firstName={firstName} role={role} nudges={nudges} activeTab={p.activeTab} mem={mem} perm={perm}
+            onClose={() => setView('none')} onAction={(n) => void doAction(n)}
+            onTour={() => setView('tour')} onSetup={() => setView('setup')}
+            onLevel={(level) => update((m) => ({ ...m, level, minimized: false }))}
+            onMinimize={() => { update((m) => ({ ...m, minimized: !m.minimized })); setView('none'); }}
+            onResetTips={() => update((m) => ({ ...m, neverTypes: {}, dismissedTypes: {}, snooze: {} }))}
+          />
+        )}
+        {view === 'setup' && (
+          <Setup
+            role={role} firstName={firstName} mem={mem} perm={perm} rules={(ctx as any)?.rules ?? null}
+            enableNotifications={enableNotifications}
+            onPatch={(patch) => update((m) => ({ ...m, ...patch }))}
+            onLater={() => { update((m) => ({ ...m, snooze: { ...(m.snooze ?? {}), setup: Date.now() + 4 * 3600000 } })); setView('none'); }}
+            onTour={() => { update((m) => ({ ...m, setupDone: m.setupDone ?? new Date().toISOString() })); setView('tour'); }}
+            onDone={() => { update((m) => ({ ...m, setupDone: new Date().toISOString() })); setView('none'); setFlash('celebrate'); window.setTimeout(() => setFlash(null), 3500); }}
+          />
+        )}
+      </div>
+      {view === 'tour' && (
+        <Tour groups={p.navGroups} robotW={RW}
+          onFocus={(r) => (r ? flyTo(nextTo(r)) : flyHome())}
+          onClose={() => { update((m) => ({ ...m, setupDone: m.setupDone ?? new Date().toISOString() })); setView('none'); }} />
       )}
-      {view === 'panel' && (
-        <Panel
-          firstName={firstName} role={role} nudges={nudges} activeTab={p.activeTab} mem={mem} perm={perm}
-          onClose={() => setView('none')} onAction={(n) => void doAction(n)}
-          onTour={() => setView('tour')} onSetup={() => setView('setup')}
-          onLevel={(level) => update((m) => ({ ...m, level, minimized: false }))}
-          onMinimize={() => { update((m) => ({ ...m, minimized: !m.minimized })); setView('none'); }}
-          onResetTips={() => update((m) => ({ ...m, neverTypes: {}, dismissedTypes: {}, snooze: {} }))}
-        />
-      )}
-      {view === 'setup' && (
-        <Setup
-          role={role} firstName={firstName} mem={mem} perm={perm} rules={(ctx as any)?.rules ?? null}
-          enableNotifications={enableNotifications}
-          onPatch={(patch) => update((m) => ({ ...m, ...patch }))}
-          onLater={() => { update((m) => ({ ...m, snooze: { ...(m.snooze ?? {}), setup: Date.now() + 4 * 3600000 } })); setView('none'); }}
-          onTour={() => { update((m) => ({ ...m, setupDone: m.setupDone ?? new Date().toISOString() })); setView('tour'); }}
-          onDone={() => { update((m) => ({ ...m, setupDone: new Date().toISOString() })); setView('none'); setFlash('celebrate'); window.setTimeout(() => setFlash(null), 3500); }}
-        />
-      )}
-      {view === 'tour' && <Tour groups={p.navGroups} onClose={() => { update((m) => ({ ...m, setupDone: m.setupDone ?? new Date().toISOString() })); setView('none'); }} />}
 
       <button
         type="button"
         onClick={() => setView((v) => (v === 'panel' ? 'none' : 'panel'))}
-        className={cx('buddy-btn relative grid place-items-center', mem.minimized ? 'w-12 h-12' : 'w-[68px] h-[68px]')}
+        className="relative block w-full h-full rounded-[28px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+        style={{ zIndex: view === 'tour' ? 75 : undefined }}
         aria-label={`SIGMA 1 helper${urgentCount ? ` — ${urgentCount} tip${urgentCount === 1 ? '' : 's'}` : ''}`}
         aria-expanded={view === 'panel'}
       >
-        <Buddy mood={mood} size={mem.minimized ? 44 : 64} />
+        <Buddy3D ref={bot} mood={mood} className="absolute inset-0" />
         {urgentCount > 0 && view !== 'panel' && (
-          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-bold grid place-items-center ring-2 ring-white">{urgentCount}</span>
+          <span className="absolute top-2 right-3 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-bold grid place-items-center ring-2 ring-white">{urgentCount}</span>
         )}
       </button>
     </div>
@@ -219,7 +328,7 @@ export function Assistant(p: AssistantProps) {
 function TipBubble({ n, onAction, onLater, onClose, onNever }: { n: Nudge; onAction: () => void; onLater: () => void; onClose: () => void; onNever: () => void }) {
   const [menu, setMenu] = useState(false);
   return (
-    <div role="status" className="buddy-bubble absolute bottom-[84px] right-0 w-[min(340px,calc(100vw-24px))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgb(30_10_80/0.45)] ring-1 ring-ink-100 p-4">
+    <div role="status" className="buddy-bubble relative w-[min(340px,calc(100vw-24px))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgb(30_10_80/0.45)] ring-1 ring-ink-100 p-4">
       <button type="button" onClick={onClose} className="absolute top-2.5 right-2.5 icon-btn !w-8 !h-8" aria-label="Close tip"><X className="w-4 h-4" /></button>
       <p className="pr-7 text-[14px] leading-snug text-ink-800">{n.text}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -233,7 +342,6 @@ function TipBubble({ n, onAction, onLater, onClose, onNever }: { n: Nudge; onAct
         )}
         {n.type === 'page' && <button type="button" onClick={onClose} className="btn-ghost btn-sm">Got it</button>}
       </div>
-      <span className="absolute -bottom-2 right-7 w-4 h-4 rotate-45 bg-white ring-1 ring-ink-100 [clip-path:polygon(100%_0,100%_100%,0_100%)]" />
     </div>
   );
 }
@@ -248,7 +356,7 @@ function Panel({ firstName, role, nudges, activeTab, mem, perm, onClose, onActio
   const level = mem.level ?? 'normal';
   const setupOk = perm === 'granted' && (role === 'admin' || mem.locationOk !== false);
   return (
-    <div role="dialog" aria-label="SIGMA 1 helper" className="buddy-bubble absolute bottom-[84px] right-0 w-[min(380px,calc(100vw-24px))] max-h-[min(640px,calc(100vh-140px))] overflow-y-auto rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgb(30_10_80/0.45)] ring-1 ring-ink-100">
+    <div role="dialog" aria-label="SIGMA 1 helper" className="buddy-bubble relative w-[min(380px,calc(100vw-24px))] max-h-[min(640px,calc(100vh-140px))] overflow-y-auto rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgb(30_10_80/0.45)] ring-1 ring-ink-100">
       <div className="sticky top-0 bg-gradient-to-br from-brand-600 to-violet-500 text-white px-5 py-4 flex items-center gap-3">
         <div className="w-12 h-12 rounded-full bg-white/95 grid place-items-center shrink-0"><Buddy mood="happy" size={44} follow={false} /></div>
         <div className="min-w-0 flex-1">
@@ -360,7 +468,7 @@ function Setup({ role, firstName, mem, perm, rules, enableNotifications, onPatch
   const pos = Math.min(i, total);
 
   return (
-    <div role="dialog" aria-label="Set up SIGMA 1 on this laptop" className="buddy-bubble absolute bottom-[84px] right-0 w-[min(400px,calc(100vw-24px))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgb(30_10_80/0.5)] ring-1 ring-ink-100 overflow-hidden">
+    <div role="dialog" aria-label="Set up SIGMA 1 on this laptop" className="buddy-bubble relative w-[min(400px,calc(100vw-24px))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgb(30_10_80/0.5)] ring-1 ring-ink-100 overflow-hidden">
       <div className="h-1.5 bg-ink-100"><div className="h-full bg-gradient-to-r from-brand-600 to-violet-400 transition-all" style={{ width: `${(pos / total) * 100}%` }} /></div>
       <div className="p-5">
         {step === 'welcome' && (<>
@@ -452,7 +560,7 @@ function CopySite() {
 
 /* ───────────────────────── tour: point at each menu item ───────────────────────── */
 
-function Tour({ groups, onClose }: { groups: NavGroupLite[]; onClose: () => void }) {
+function Tour({ groups, onClose, onFocus, robotW }: { groups: NavGroupLite[]; onClose: () => void; onFocus: (r: DOMRect | null) => void; robotW: number }) {
   const items = useMemo(() => groups.flatMap((g) => g.items).filter((it) => PAGE_HELP[it.id]), [groups]);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -462,7 +570,7 @@ function Tour({ groups, onClose }: { groups: NavGroupLite[]; onClose: () => void
   useEffect(() => {
     const measure = () => {
       const el = it ? document.querySelector(`[data-tour="${it.id}"]`) as HTMLElement | null : null;
-      if (el && el.offsetParent !== null) { el.scrollIntoView({ block: 'nearest' }); setRect(el.getBoundingClientRect()); } else setRect(null);
+      if (el && el.offsetParent !== null) { el.scrollIntoView({ block: 'nearest' }); const b = el.getBoundingClientRect(); setRect(b); onFocus(b); } else { setRect(null); onFocus(null); }
     };
     measure();
     const on = () => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(measure); };
@@ -480,7 +588,7 @@ function Tour({ groups, onClose }: { groups: NavGroupLite[]; onClose: () => void
   const help = PAGE_HELP[it.id];
   const last = i === items.length - 1;
   const cardStyle: React.CSSProperties = rect
-    ? { position: 'fixed', left: Math.min(rect.right + 18, window.innerWidth - 340), top: Math.max(12, Math.min(rect.top + rect.height / 2 - 70, window.innerHeight - 200)), zIndex: 71 }
+    ? { position: 'fixed', left: Math.min(rect.right + 18 + robotW, window.innerWidth - 340), top: Math.max(12, Math.min(rect.top + rect.height / 2 - 70, window.innerHeight - 200)), zIndex: 71 }
     : { position: 'fixed', left: '50%', top: '40%', transform: 'translate(-50%, -50%)', zIndex: 71 };
 
   return (
@@ -489,7 +597,6 @@ function Tour({ groups, onClose }: { groups: NavGroupLite[]; onClose: () => void
         : <div className="fixed inset-0 z-[70] bg-ink-950/40" />}
       <div role="dialog" aria-label="Tour" style={cardStyle} className="buddy-bubble w-[min(320px,calc(100vw-24px))] rounded-3xl bg-white shadow-2xl ring-1 ring-ink-100 p-4">
         <div className="flex items-start gap-3">
-          <Buddy mood="point" size={52} follow={false} />
           <div className="min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-wide text-brand-600">{i + 1} of {items.length}</p>
             <p className="font-display text-[16px] font-bold text-ink-950">{it.label}</p>
