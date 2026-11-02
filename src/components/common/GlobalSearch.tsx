@@ -13,7 +13,7 @@ const ORDER: SearchKind[] = ['client', 'project', 'deliverable', 'task', 'contra
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Search button for the top bar plus the ⌘K / Ctrl K palette. */
-export function GlobalSearch({ role, onNavigate }: { role: string; onNavigate: (to: string) => void }) {
+export function GlobalSearch({ role, clientWork = true, onNavigate }: { role: string; clientWork?: boolean; onNavigate: (to: string) => void }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -55,7 +55,7 @@ function Palette({ role, onClose, onNavigate }: { role: string; onClose: () => v
     setLoading(true);
     const id = ++seq.current;
     const t = window.setTimeout(async () => {
-      const r = await globalSearch(term, role);
+      const r = await globalSearch(term, role, clientWork);
       if (id !== seq.current) return; // a newer search started
       setHits(r);
       setActive(0);
@@ -83,7 +83,7 @@ function Palette({ role, onClose, onNavigate }: { role: string; onClose: () => v
       <div className="relative w-full max-w-2xl bg-white rounded-[28px] shadow-2xl border border-ink-100 overflow-hidden anim-slide" onKeyDown={onKeyDown}>
         <div className="flex items-center gap-3 px-5 h-16 border-b border-ink-100">
           <Search className="w-5 h-5 text-ink-400 shrink-0" />
-          <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder={role === 'admin' ? 'Search clients, projects, deliverables, tasks, invoices, people…' : 'Search your projects, deliverables and tasks…'}
+          <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder={role === 'admin' ? 'Search clients, projects, deliverables, tasks, invoices, people…' : (clientWork ? 'Search your projects, deliverables and tasks…' : 'Search your tasks…')}
             className="flex-1 h-full bg-transparent !outline-none focus-visible:!outline-none !shadow-none text-[15px] text-ink-900 placeholder:text-ink-400" aria-label="Search" aria-controls="search-results" aria-activedescendant={flat.length ? `search-hit-${active}` : undefined} />
           {loading && <span className="w-4 h-4 rounded-full border-2 border-ink-200 border-t-brand-500 animate-spin" aria-label="Searching" />}
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close search"><X className="w-4 h-4" /></button>

@@ -27,12 +27,13 @@ const LIMIT = 6;
 /** Characters that would break a PostgREST or() filter. */
 const clean = (q: string) => q.replace(/[,()*%\\:"']/g, ' ').replace(/\s+/g, ' ').trim();
 
-export async function globalSearch(raw: string, role: 'admin' | 'employee' | string): Promise<SearchHit[]> {
+export async function globalSearch(raw: string, role: 'admin' | 'employee' | string, clientWork = true): Promise<SearchHit[]> {
   const q = clean(raw);
   if (q.length < 2) return [];
   const like = `%${q}%`;
   const anyLike = `*${q}*`; // or() filters use * as the wildcard
   const admin = role === 'admin';
+  if (admin) clientWork = true;
   const projectLink = (projectId: string | null | undefined, view?: string) =>
     projectId ? (admin ? `admin-clients?project=${projectId}${view ? `&view=${view}` : ''}` : `emp-client-work?project=${projectId}${view ? `&view=${view}` : ''}`) : null;
 
@@ -41,18 +42,18 @@ export async function globalSearch(raw: string, role: 'admin' | 'employee' | str
   };
 
   const [clients, projects, contracts, deliverables, invoices, tasks, files, people] = await Promise.all([
-    settle<any>(db.from('clients').select('id, company_name, primary_contact, email').is('deleted_at', null)
+    !clientWork ? Promise.resolve([]) : settle<any>(db.from('clients').select('id, company_name, primary_contact, email').is('deleted_at', null)
       .or(`company_name.ilike.${anyLike},primary_contact.ilike.${anyLike},email.ilike.${anyLike}`).limit(LIMIT)),
-    settle<any>(db.from('projects').select('id, name, status, clients:client_id (company_name)').is('deleted_at', null)
+    !clientWork ? Promise.resolve([]) : settle<any>(db.from('projects').select('id, name, status, clients:client_id (company_name)').is('deleted_at', null)
       .ilike('name', like).limit(LIMIT)),
-    settle<any>(db.from('contracts').select('id, title, ref, status, project_id, projects:project_id (name)').is('deleted_at', null)
+    !clientWork ? Promise.resolve([]) : settle<any>(db.from('contracts').select('id, title, ref, status, project_id, projects:project_id (name)').is('deleted_at', null)
       .or(`title.ilike.${anyLike},ref.ilike.${anyLike}`).limit(LIMIT)),
-    settle<any>(db.from('deliverables').select('id, name, deliverable_number, status, project_id, projects:project_id (name)').is('deleted_at', null)
+    !clientWork ? Promise.resolve([]) : settle<any>(db.from('deliverables').select('id, name, deliverable_number, status, project_id, projects:project_id (name)').is('deleted_at', null)
       .or(`name.ilike.${anyLike},deliverable_number.ilike.${anyLike}`).limit(LIMIT)),
-    settle<any>(db.from('payment_installments').select('id, name, invoice_number, status, project_id, projects:project_id (name)').is('deleted_at', null)
+    !clientWork ? Promise.resolve([]) : settle<any>(db.from('payment_installments').select('id, name, invoice_number, status, project_id, projects:project_id (name)').is('deleted_at', null)
       .or(`name.ilike.${anyLike},invoice_number.ilike.${anyLike}`).limit(LIMIT)),
     settle<any>(db.from('tasks').select('id, title, status, due_date').is('archived_at', null).ilike('title', like).limit(LIMIT)),
-    settle<any>(db.from('files').select('id, name, parent_type, project_id, created_at').is('deleted_at', null).ilike('name', like).limit(LIMIT)),
+    !clientWork ? Promise.resolve([]) : settle<any>(db.from('files').select('id, name, parent_type, project_id, created_at').is('deleted_at', null).ilike('name', like).limit(LIMIT)),
     admin
       ? settle<any>(db.from('employees').select('id, name, emp_id, login_id, status').or(`name.ilike.${anyLike},emp_id.ilike.${anyLike},login_id.ilike.${anyLike}`).limit(LIMIT))
       : Promise.resolve([]),

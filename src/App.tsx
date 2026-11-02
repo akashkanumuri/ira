@@ -615,6 +615,17 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
 
   const workCtx = useWorkContext(user.role === 'employee' ? user.id : null);
   const managesPeople = user.role !== 'admin' && employees.some(e => e.managerId === user.employeeDbId && e.status === 'active');
+  // Client Projects in the employee login is for people who manage a team or a client project; plain employees don't see client work.
+  const [isProjectManager, setIsProjectManager] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (user.role === 'admin' || !user.employeeDbId) { setIsProjectManager(false); return; }
+    let alive = true;
+    void (supabase as any).from('project_managers').select('project_id', { count: 'exact', head: true }).eq('manager_id', user.employeeDbId)
+      .then(({ count, error }: any) => { if (alive) setIsProjectManager(error ? undefined : (count ?? 0) > 0); });
+    return () => { alive = false; };
+  }, [user.role, user.employeeDbId]);
+  const clientWorkKnown = user.role === 'admin' || managesPeople || (isProjectManager !== undefined && employees.length > 0);
+  const seesClientWork = user.role === 'admin' || managesPeople || isProjectManager === true;
 
   const navGroups: NavGroup[] = user.role === 'admin'
     ? [
@@ -678,11 +689,12 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const hiddenTabs = new Set<string>(Object.entries(TAB_FEATURE)
     .filter(([, f]) => user.role !== 'admin' && !featureOn(workCtx, f))
     .map(([t]) => t));
+  if (clientWorkKnown && !seesClientWork) hiddenTabs.add('emp-client-work');
   const visibleNav = navGroups.map((g) => ({ ...g, items: g.items.filter((i) => !hiddenTabs.has(i.id)) })).filter((g) => g.items.length);
   const mobilePrimary = (user.role === 'admin'
     ? ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-requests']
     : ['emp-dashboard', 'emp-attendance', 'emp-tasks', 'emp-leave']).filter((t) => !hiddenTabs.has(t));
-  useEffect(() => { if (hiddenTabs.has(activeTab)) setActiveTab(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard'); }, [activeTab, workCtx]);
+  useEffect(() => { if (hiddenTabs.has(activeTab)) setActiveTab(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard'); }, [activeTab, workCtx, clientWorkKnown, seesClientWork]);
 
 
   const navigate = (target: string) => {
@@ -740,7 +752,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         onSignOut={() => void (async () => { if (trackingId) { try { await workApi.pause('logout'); } catch { /* signing out anyway */ } } await onLogout(); })()}
         topRight={
           <>
-            <GlobalSearch role={user.role} onNavigate={navigate} />
+            <GlobalSearch role={user.role} clientWork={seesClientWork} onNavigate={navigate} />
             <LiveClockDisplay />
             <NotificationBell activeTab={activeTab} user={user} onSelectTab={navigate} />
           </>
@@ -923,8 +935,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   const overdueCount = mineOpen.filter((t) => t.dueDate < today()).length;
   const weekEnd = (() => { const d = new Date(`${today()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); })();
   const dueThisWeek = mineOpen.filter((t) => t.dueDate >= today() && t.dueDate <= weekEnd).length;
-  const linkable = useLinkableDeliverables(true);
-  const deliverableName = (id?: string | null) => { const d = id ? linkable.all.find((x) => x.id === id) : null; return d ? `${d.number ? d.number + ' · ' : ''}${d.name}` : null; };
+  // Client deliverables are handled from the admin login only; the employee login's task screens don't show them.
 
   const myRules = (rules as AssignmentRule[]).filter(r => r.assignerDesignationId === user.designationId);
   const hasDirectReportRules = myRules.some(r => r.scope === 'direct_reports');
@@ -981,13 +992,13 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
       <Modal title="Assign work" onClose={() => setAssignOpen(false)} closeDisabled={assignBusy} wide>
         <TaskAssignForm targets={targets} onSubmit={assignTask} onClose={() => setAssignOpen(false)} busy={assignBusy} isAdmin={false}
           userDesignation={user.designation || myDesignation?.name || 'Manager'} directReportDesignations={directReportDesignations}
-          hasDirectReportRules={hasDirectReportRules} deliverables={linkable.open} />
+          hasDirectReportRules={hasDirectReportRules} />
       </Modal>
     )}
-    <TaskTable tasks={visible} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee={view === 'given'} deliverableName={deliverableName} startable={view === 'open'}
+    <TaskTable tasks={visible} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee={view === 'given'} hideClient startable={view === 'open'}
       empty={view === 'open' ? 'Nothing to do right now.' : view === 'review' ? 'Nothing waiting for review.' : view === 'done' ? 'No finished tasks yet.' : 'You haven’t assigned any work yet.'} />
     {openTask && <TaskDetail task={openTask} tasks={tasks} employees={employees} viewer={{ employeeId: myId, isAdmin: false }} subtaskTargets={targets}
-      deliverableName={deliverableName} onClose={() => setOpenId(null)} onChanged={onRefresh} />}
+      onClose={() => setOpenId(null)} onChanged={onRefresh} />}
   </PageShell>;
 }
 
@@ -1239,7 +1250,7 @@ function TaskAssignForm({
   );
 }
 
-function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssignee, deliverableName, empty = 'No tasks.', startable }: { tasks: Task[]; allTasks: Task[]; onOpen: (task: Task) => void; onDelete?: (task: Task) => void; archivingId?: string | null; showAssignee?: boolean; deliverableName?: (id?: string | null) => string | null; empty?: string; startable?: boolean }) {
+function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssignee, deliverableName, hideClient, empty = 'No tasks.', startable }: { tasks: Task[]; allTasks: Task[]; onOpen: (task: Task) => void; onDelete?: (task: Task) => void; archivingId?: string | null; showAssignee?: boolean; deliverableName?: (id?: string | null) => string | null; hideClient?: boolean; empty?: string; startable?: boolean }) {
   const work = useWork();
   const runningId = work?.state?.current?.kind === 'task' ? work.state.current.task_id : null;
   const subCount = (id: string) => { const subs = allTasks.filter((s) => s.parentTaskId === id && !s.archivedAt); return subs.length ? `${subs.filter((s) => s.status === 'completed').length}/${subs.length}` : null; };
@@ -1269,7 +1280,7 @@ function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssigne
                 <span className={`text-[12px] tnum ${late ? 'text-rose-700 font-semibold' : 'text-ink-500'}`}>{late ? 'Overdue · ' : 'Due '}{dateLabel(t.dueDate)}</span>
               </div>
               {showAssignee && <p className="text-[12px] text-ink-500 mt-1 truncate">{t.assignedToName}</p>}
-              {t.deliverableId && <p className="text-[11px] font-semibold text-brand-700 mt-1 truncate">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</p>}
+              {!hideClient && t.deliverableId && <p className="text-[11px] font-semibold text-brand-700 mt-1 truncate">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</p>}
             </div>
             <div className="shrink-0 flex flex-col items-end gap-1.5" onClick={(e) => e.stopPropagation()}>
               {startBtn(t)}
@@ -1292,7 +1303,7 @@ function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssigne
           <td>
             <span className="block max-w-[340px] truncate font-bold text-ink-900">{t.parentTaskId && <CornerDownRight className="inline w-3.5 h-3.5 mr-1 text-ink-400 -mt-0.5" />}{t.title}</span>
             <span className="mt-1 flex flex-wrap gap-1.5">
-              {t.deliverableId && <span className="inline-flex max-w-[260px] truncate items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</span>}
+              {!hideClient && t.deliverableId && <span className="inline-flex max-w-[260px] truncate items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</span>}
               {subs && <span className="inline-flex items-center gap-1 rounded-full bg-ink-50 px-2 py-0.5 text-[11px] font-semibold text-ink-600"><ListChecks className="w-3 h-3" />{subs}</span>}
               {t.submittedLink && <span className="inline-flex items-center gap-1 rounded-full bg-mint-50 px-2 py-0.5 text-[11px] font-semibold text-mint-700"><Link2 className="w-3 h-3" />Work linked</span>}
             </span>

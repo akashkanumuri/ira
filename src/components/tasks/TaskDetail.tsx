@@ -256,7 +256,7 @@ export function TaskDetail({
         {/* brief */}
         <section className="space-y-2">
           <h4 className="flex items-center gap-2 text-[13px] font-bold text-ink-800"><FileText className="w-4 h-4 text-ink-400" />Brief</h4>
-          {task.deliverableId && <p className="text-[13px] text-ink-600">Client deliverable: <b className="text-brand-700">{deliverableName?.(task.deliverableId) ?? 'Linked deliverable'}</b></p>}
+          {viewer.isAdmin && task.deliverableId && <p className="text-[13px] text-ink-600">Client deliverable: <b className="text-brand-700">{deliverableName?.(task.deliverableId) ?? 'Linked deliverable'}</b></p>}
           {task.description
             ? <p className="text-[14px] text-ink-700 whitespace-pre-wrap leading-relaxed">{task.description}</p>
             : <p className="text-[13px] text-ink-400">No brief was added. Ask in the discussion below if anything is unclear.</p>}
@@ -394,7 +394,7 @@ export function TaskDetail({
         {drafts.length > 0 && <TaskScorecard drafts={drafts} rounds={isReviewer ? rounds : []} />}
 
         {/* client review (managers and admins only; the client never sees who did the work) */}
-        {isReviewer && task.deliverableId && (rounds.length > 0 || canSendToClient) && (
+        {viewer.isAdmin && isReviewer && task.deliverableId && (rounds.length > 0 || canSendToClient) && (
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h4 className="flex items-center gap-2 text-[13px] font-bold text-ink-800"><UserRound className="w-4 h-4 text-ink-400" />Client review</h4>
