@@ -320,10 +320,10 @@ export function Assistant(p: AssistantProps) {
     react(open === 0 ? 'dj' : 'cannon');
   }, [p.ready, p.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ───── idle: every ~30 s it does something crazy; after 2 min it falls asleep ───── */
+  /* ───── idle: every 15 s it does something crazy; after 2 min it falls asleep ───── */
   const lastInput = useRef(Date.now());
   const lastGag = useRef(Date.now());
-  const gap = useRef(30000);
+  const gap = useRef(15000);
   const bag = useRef<string[]>([]);
   const sleepingRef = useRef(false); sleepingRef.current = sleeping;
   useEffect(() => {
@@ -367,8 +367,8 @@ export function Assistant(p: AssistantProps) {
       if (quiet || !b.is3D() || (view !== 'none' && view !== 'bubble') || document.hidden || st.busy() || b.isBusy() || modalOpen()) return;
       const idleFor = Date.now() - lastInput.current;
       if (idleFor > 120000) { if (!sleepingRef.current && view === 'none') { sleepingRef.current = true; setSleeping(true); } return; }
-      if (sleepingRef.current || idleFor < 30000 || Date.now() - lastGag.current < gap.current) return;
-      lastGag.current = Date.now(); gap.current = 25000 + Math.random() * 15000;
+      if (sleepingRef.current || idleFor < 15000 || Date.now() - lastGag.current < gap.current) return;
+      lastGag.current = Date.now(); gap.current = 15000;
       if (isTyping()) { b.play((['dance', 'juggle', 'spin', 'stretch', 'moonwalk'] as BuddyAction[])[Math.floor(Math.random() * 5)]); return; }
       const due = dueDayFx();
       if (due) { markDayFx(due); void st.run(due); return; }
