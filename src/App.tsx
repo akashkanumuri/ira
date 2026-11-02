@@ -23,6 +23,8 @@ import { TeamApprovals } from './components/employee/TeamApprovals';
 import { LeavePolicySettings } from './components/admin/LeavePolicySettings';
 import { OfficeLocationSettings } from './components/admin/OfficeLocationSettings';
 import { AdminCheckInModal } from './components/admin/AdminCheckInModal';
+import { LateBreakdown } from './components/employee/LateMarks';
+import { fetchLateTeam, type LateTeamRow } from './lib/late';
 import { WorkRulesEditor } from './components/admin/WorkRulesEditor';
 import { WorkTemplatesSettings } from './components/admin/WorkTemplatesSettings';
 import { featureOn, useWorkContext } from './lib/workContext';
@@ -884,6 +886,7 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
                 <InfoRow label="Unpaid leave" value={`${r.unpaidLeaveDays} day(s)`} />
                 <InfoRow label="Leave deduction" value={r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)} />
                 {r.absentDays > 0 && <InfoRow label={`Absent (${r.absentDays} day${r.absentDays === 1 ? '' : 's'})`} value={`− ${money(r.absentDeduction)}`} />}
+                {r.lateCount > 0 && <InfoRow label={`Late (${r.lateCount} late${r.lateCount === 1 ? '' : 's'}${r.lateDays ? ` · ${r.lateDays} day${r.lateDays === 1 ? '' : 's'} cut` : ' · warnings only'})`} value={r.lateDeduction ? `− ${money(r.lateDeduction)}` : money(0)} />}
               </div>
               <p className="text-[11px] text-ink-400 mt-3">Finalized {r.finalizedAt ? new Date(r.finalizedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</p>
             </section>
@@ -1575,6 +1578,9 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, holidays, onRef
   const [checkInFor, setCheckInFor] = useState<Employee | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'working' | 'break' | 'done' | 'out' | 'leave'>('all');
+  const [lateTeam, setLateTeam] = useState<LateTeamRow[]>([]);
+  useEffect(() => { let alive = true; void fetchLateTeam(`${date.slice(0, 7)}-01`).then((t) => { if (alive) setLateTeam(t); }); return () => { alive = false; }; }, [date.slice(0, 7), attendance]);
+  const lateOn = (empId: string) => lateTeam.find((t) => t.employee_id === empId)?.dates.find((d) => d.date === date) ?? null;
   const cl = classifyDay(date, holidays);
   const base = (employees as Employee[]).filter((e) => e.status === 'active').map((e) => {
     const record = (attendance as AttendanceRecord[]).find((a) => a.employeeId === e.id && a.date === date);
@@ -1633,7 +1639,7 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, holidays, onRef
               <Td mono>{r.record ? r.record.workingHours || duration(r.record.workingSeconds) : '—'}</Td>
               <Td>
                 <div className="flex items-center gap-2">
-                  <StatusBadge label={statusOf(r)} />
+                  <span className="inline-flex flex-wrap items-center gap-1.5"><StatusBadge label={statusOf(r)} />{(() => { const lm = lateOn(r.e.id); return lm ? <Badge tone={lm.cut > 0 ? 'rose' : 'amber'}>#{lm.n} · {lm.cut >= 1 ? '−1 day' : lm.cut > 0 ? '−½ day' : 'warning'}</Badge> : null; })()}</span>
                   {isToday && cl.isWorkingDay && r.state === 'out' && !(r.e.joinDate && date < r.e.joinDate) && (
                     <button type="button" className="btn-ghost btn-sm !min-h-[30px] !px-2.5 text-brand-700" onClick={() => setCheckInFor(r.e)}>Check in</button>
                   )}
@@ -1814,6 +1820,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
 
 function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: any) {
   const [month, setMonth] = useState(today().slice(0, 7));
+  const [lateFor, setLateFor] = useState<PayrollRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [settings, setSettings] = useState<{ monthly: number; divisor: 'calendar_days' | 'working_days' }>({ monthly: 1.5, divisor: 'calendar_days' });
@@ -1864,7 +1871,8 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
   }
 
   const totalPay = records.reduce((sum, r) => sum + r.finalPay, 0);
-  const totalDeduction = records.reduce((sum, r) => sum + r.leaveDeduction + (r.absentDeduction || 0), 0);
+  const totalDeduction = records.reduce((sum, r) => sum + r.leaveDeduction + (r.absentDeduction || 0) + (r.lateDeduction || 0), 0);
+  const lateDaysTotal = records.reduce((sum, r) => sum + Number(r.lateDays || 0), 0);
   const unpaidDays = records.reduce((sum, r) => sum + Number(r.unpaidLeaveDays || 0), 0);
   const absentDays = records.reduce((sum, r) => sum + Number(r.absentDays || 0), 0);
   const step = !period ? 1 : period.status === 'draft' ? 2 : 3;
@@ -1906,7 +1914,7 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Stat index={1} icon={<WalletCards className="w-5 h-5" />} tone="brand" label="Total payout" value={records.length ? money(totalPay) : '—'} caption={`${records.length} employee${records.length === 1 ? '' : 's'}`} />
-        <Stat index={2} label="Deductions" value={records.length ? money(totalDeduction) : '—'} caption={`${unpaidDays} unpaid leave · ${absentDays} absent day${absentDays === 1 ? '' : 's'}`} />
+        <Stat index={2} label="Deductions" value={records.length ? money(totalDeduction) : '—'} caption={`${unpaidDays} unpaid leave · ${absentDays} absent · ${lateDaysTotal} late day${lateDaysTotal === 1 ? '' : 's'}`} />
         <Stat index={3} label="Paid leave used" value={records.reduce((sum, r) => sum + Number(r.paidLeaveDays || 0), 0)} caption="Days across the team" />
         <Stat index={4} label="Status" value={period ? (period.status === 'draft' ? 'Draft' : 'Locked') : '—'} caption={period?.finalizedAt ? `Finalized ${new Date(period.finalizedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })}` : 'Not finalized'} />
       </div>
@@ -1915,14 +1923,15 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
         <div className="p-5 sm:p-6"><h2 className="font-display text-lg font-bold text-ink-950">Payroll records</h2><p className="text-[13px] text-ink-500 mt-1">Salary is the snapshot taken when the draft was generated. Absent = a working day with no check-in and no approved leave (half a day when worked hours are under the half-day mark), counted up to yesterday.</p></div>
         <div className="overflow-x-auto">
           <table className="data-table">
-            <thead><tr><Th>Employee</Th><Th>Salary</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Leave deduction</Th><Th>Absent</Th><Th>Final pay</Th></tr></thead>
+            <thead><tr><Th>Employee</Th><Th>Salary</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Leave deduction</Th><Th>Absent</Th><Th>Late</Th><Th>Final pay</Th></tr></thead>
             <tbody>
-              {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td mono>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td mono>{r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)}</Td><Td mono>{r.absentDays ? `${r.absentDays} d · − ${money(r.absentDeduction)}` : '—'}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
-              {!records.length && <EmptyRow colSpan={7} text={period ? 'No records for this period. Regenerate the draft.' : 'Generate the draft for this month to see records.'} />}
+              {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td mono>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td mono>{r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)}</Td><Td mono>{r.absentDays ? `${r.absentDays} d · − ${money(r.absentDeduction)}` : '—'}</Td><Td>{r.lateCount ? <button type="button" className="text-left underline decoration-dotted underline-offset-2 hover:text-brand-700" onClick={() => setLateFor(r)}>{r.lateCount} late · {r.lateDays ? `${r.lateDays} d · − ${money(r.lateDeduction)}` : 'warnings'}</button> : '—'}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
+              {!records.length && <EmptyRow colSpan={8} text={period ? 'No records for this period. Regenerate the draft.' : 'Generate the draft for this month to see records.'} />}
             </tbody>
           </table>
         </div>
       </section>
+      {lateFor && <Modal title={`Lates · ${lateFor.employeeName}`} onClose={() => setLateFor(null)} wide><LateBreakdown employeeId={lateFor.employeeId} month={`${month}-01`} /></Modal>}
     </PageShell>
   );
 }
@@ -2211,7 +2220,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
     { id: 'attendance', group: 'People', title: 'Attendance', text: 'Every day’s check-in, check-out, breaks and hours.', icon: <Clock3 className="w-5 h-5" />, tone: 'mint', build: async () => { const [raw, breaks] = await Promise.all([fetchAll('attendance_effective', 'date'), fetchAll('break_events', 'break_start')]); const breaksBy = new Map<string, any[]>(); for (const b of breaks) { const list = breaksBy.get(b.attendance_id) ?? []; list.push(b); breaksBy.set(b.attendance_id, list) } return raw.map(r => { const m = mapAttendance(r, employeeMap, breaksBy); return { Date: m.date, Employee: m.employeeName, EmployeeID: m.employeeEmpId, Mode: m.mode, CheckIn: m.checkIn ?? '', CheckOut: m.checkOut ?? '', Break: m.breakDuration ?? '', Working: m.workingHours ?? '', Status: m.status } }) } },
     { id: 'leave', group: 'People', title: 'Leave requests', text: 'All leave with paid and unpaid days, status and reviewer note.', icon: <CalendarDays className="w-5 h-5" />, tone: 'amber', build: async () => (await fetchAll('leave_requests', 'start_date', 'employee_id, leave_type, start_date, end_date, duration, days, paid_days, unpaid_days, reason, status, review_note, created_at')).map(r => ({ Employee: empName(r.employee_id), EmployeeID: empCode(r.employee_id), Type: r.leave_type, From: r.start_date, To: r.end_date, Duration: r.duration, Days: r.days, PaidDays: r.paid_days, UnpaidDays: r.unpaid_days, Reason: r.reason ?? '', Status: r.status, ReviewNote: r.review_note ?? '', RequestedOn: String(r.created_at ?? '').slice(0, 10) })) },
     { id: 'wfh', group: 'People', title: 'Work from home', text: 'WFH requests by date, duration and status.', icon: <Home className="w-5 h-5" />, tone: 'sky', build: async () => (await fetchAll('wfh_requests', 'date', 'employee_id, date, duration, reason, status, review_note, created_at')).map(r => ({ Employee: empName(r.employee_id), EmployeeID: empCode(r.employee_id), Date: r.date, Duration: r.duration, Reason: r.reason ?? '', Status: r.status, ReviewNote: r.review_note ?? '', RequestedOn: String(r.created_at ?? '').slice(0, 10) })) },
-    { id: 'payroll', group: 'Money', title: 'Payroll', text: 'Monthly payroll records with leave deductions and final pay.', icon: <WalletCards className="w-5 h-5" />, tone: 'brand', build: async () => { const rows = await fetchAll('payroll_records', 'created_at'); return rows.map(r => { const p = mapPayrollRecord(r, employeeMap); const period = payrollPeriodMap.get(p.periodId); return { Period: period?.monthStart?.slice(0, 7) ?? '', Status: p.finalizedAt ? 'finalized' : (period?.status ?? 'draft'), Employee: p.employeeName, Salary: p.salarySnapshot, PaidLeave: p.paidLeaveDays, UnpaidLeave: p.unpaidLeaveDays, Deduction: p.leaveDeduction, FinalPay: p.finalPay } }) } },
+    { id: 'payroll', group: 'Money', title: 'Payroll', text: 'Monthly payroll records with leave deductions and final pay.', icon: <WalletCards className="w-5 h-5" />, tone: 'brand', build: async () => { const rows = await fetchAll('payroll_records', 'created_at'); return rows.map(r => { const p = mapPayrollRecord(r, employeeMap); const period = payrollPeriodMap.get(p.periodId); return { Period: period?.monthStart?.slice(0, 7) ?? '', Status: p.finalizedAt ? 'finalized' : (period?.status ?? 'draft'), Employee: p.employeeName, Salary: p.salarySnapshot, PaidLeave: p.paidLeaveDays, UnpaidLeave: p.unpaidLeaveDays, LeaveDeduction: p.leaveDeduction, AbsentDays: p.absentDays, AbsentDeduction: p.absentDeduction, Lates: p.lateCount, LateDaysCut: p.lateDays, LateDeduction: p.lateDeduction, FinalPay: p.finalPay } }) } },
     { id: 'billing', group: 'Money', title: 'Billing milestones', text: 'Every payment milestone with invoice number, due date, amount and balance.', icon: <BadgeIndianRupee className="w-5 h-5" />, tone: 'mint', build: async () => (await fetchAll('payment_installments', 'due_date', 'installment_number, name, amount, tax_amount, amount_paid, status, due_date, invoice_number, deleted_at, projects:project_id (name), clients:client_id (company_name)')).filter(r => !r.deleted_at).map(r => { const total = Number(r.amount ?? 0) + Number(r.tax_amount ?? 0); const paid = Number(r.amount_paid ?? 0); return { Client: r.clients?.company_name ?? '', Project: r.projects?.name ?? '', Number: r.installment_number ?? '', Milestone: r.name, Invoice: r.invoice_number ?? '', Due: r.due_date ?? '', Amount: Number(r.amount ?? 0), Tax: Number(r.tax_amount ?? 0), Total: total, Paid: paid, Balance: Math.max(0, total - paid), Status: r.status } }) },
     { id: 'payments', group: 'Money', title: 'Payments', text: 'Client payment submissions and verified receipts with references.', icon: <CheckCircle2 className="w-5 h-5" />, tone: 'amber', build: async () => (await fetchAll('payments', 'submitted_at', 'amount, reference, method, paid_on, submitted_at, status, rejection_reason, projects:project_id (name), clients:client_id (company_name), payment_installments:installment_id (name)')).map(r => ({ Client: r.clients?.company_name ?? '', Project: r.projects?.name ?? '', Milestone: r.payment_installments?.name ?? '', Amount: Number(r.amount ?? 0), Reference: r.reference ?? '', Method: r.method ?? '', PaidOn: r.paid_on ?? '', SubmittedAt: String(r.submitted_at ?? '').slice(0, 16).replace('T', ' '), Status: r.status, RejectionReason: r.rejection_reason ?? '' })) },
     { id: 'tasks', group: 'Work', title: 'Tasks', text: 'Assigned work with dates, priority, status and handed-in links.', icon: <BriefcaseBusiness className="w-5 h-5" />, tone: 'sky', build: async () => { const rows = await fetchAll('tasks', 'start_date'); return rows.map(r => { const t = mapTask(r, employeeMap); return { Task: t.title, Subtask: t.parentTaskId ? 'Yes' : '', Employee: t.assignedToName, AssignedBy: t.assignedByName ?? '', Start: t.startDate, Due: t.dueDate, Priority: t.priority, Status: TASK_STATUS[t.status]?.label ?? t.status, ProgressPct: t.progressPct ?? 0, HoursSpent: Math.round(((t.timeSpentMinutes ?? 0) / 60) * 100) / 100, CompletedOn: t.completedAt ? t.completedAt.slice(0, 10) : '', Note: t.statusNote ?? '', SubmittedLink: t.submittedLink ?? '' } }) } },
@@ -2392,6 +2401,12 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-[12px] text-ink-400">Paid leave accrues 1.5 days a month and carries forward.</p>
                 <button onClick={() => void savePayroll()} disabled={payrollDivisor === savedDivisor || saving === 'payroll'} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">{saving === 'payroll' ? 'Saving…' : 'Save policy'}</button>
+              </div>
+              <div className="mt-6 rounded-2xl border border-ink-100 bg-ink-50/50 p-4 text-[13px] text-ink-700 space-y-1.5">
+                <p className="font-bold text-ink-900">Deductions applied by payroll</p>
+                <p><b>Unpaid leave</b> — each unpaid day × the daily rate.</p>
+                <p><b>Absent</b> — a working day with no check-in and no approved leave = 1 day; a completed day under the half-day hours = ½ day.</p>
+                <p><b>Late</b> — counted from the person’s start time + grace, each calendar month: lates 1–3 are warnings, the 4th cuts ½ day, the 5th and every later late cut 1 day each. One day is never cut more than once. Flexible-hours people are never late.</p>
               </div>
             </>
           )}

@@ -8,6 +8,8 @@ import { GeoError, fetchOffice, fmtDistance, getFix, locationHelp, type Fix, typ
 import { classifyDay, formatKolkataTime, getKolkataDateString } from '../../lib/workingDays';
 import { dateLabel, duration } from '../../lib/v2';
 import { notify } from '../../lib/toast';
+import { fetchLateStatus, lateStepLabel, useLateStatus } from '../../lib/late';
+import { money } from '../../lib/v2';
 import { Badge, Button, Card, CardHeader, EmptyState, Notice, PillTabs, Skeleton, StatusBadge, cx, type Tone } from '../../ui';
 import { DotCalendar, Legend, Ring, type DayMark } from '../../ui/charts';
 import { Modal } from '../../ui/Modal';
@@ -88,6 +90,10 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
   const visitOffered = Boolean(rules?.field_visit) && !isRemote;
   const [checkInMode, setCheckInMode] = useState<'office' | 'wfh' | 'visit'>(isRemote || approvedWfhToday ? 'wfh' : 'office');
   const [visitReason, setVisitReason] = useState('');
+  // Late rule: this month's lates so far, to warn before a late check-in and explain it after.
+  const { status: lateS } = useLateStatus(null, null, Boolean(user.employeeDbId));
+  const nowIst = now.toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Kolkata' });
+  const lateNow = Boolean(lateS?.enabled && !lateS.never_late && lateS.late_after && nowIst > lateS.late_after);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000);
@@ -195,6 +201,13 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
       }
       return res;
     }, `Checked in · ${fieldReason ? 'Client visit' : mode === 'wfh' ? 'WFH' : 'Office'}`);
+    // If that check-in was late, say which late it was and what it costs.
+    const s = await fetchLateStatus();
+    const m = s?.marks.find((x) => x.date === today() && Date.now() - new Date(x.check_in).getTime() < 3 * 60 * 1000);
+    if (s && m) {
+      const step = lateStepLabel(m.n, s.warnings);
+      notify(`Late by ${m.late_min} min · ${step}${m.cut > 0 && m.amount != null ? ` (−${money(m.amount)})` : ''}`, m.cut > 0 ? 'error' : 'info', 9000, 'attendance');
+    }
   };
 
   const live = liveSeconds(current, now);
@@ -312,6 +325,16 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
             </p>
           )}
 
+          {!current && !previousOpen && !blockedReason && lateNow && lateS && (
+            <div className={cx('rounded-2xl px-4 py-3 text-[13px] flex items-start gap-2.5', lateS.next_cut > 0 ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-900')}>
+              <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                <b>You’re past your start time.</b> Checking in now counts as late #{lateS.next_n} this month — {lateStepLabel(lateS.next_n, lateS.warnings).toLowerCase()}
+                {lateS.next_cut > 0 && lateS.daily_rate != null ? ` (−${money(lateS.next_cut * lateS.daily_rate)})` : ''}.
+              </span>
+            </div>
+          )}
+
           {!current && !previousOpen && !blockedReason && effectiveMode === 'office' && fenceOn && !geoIssue && (
             <p className="text-xs text-ink-500 flex items-center gap-1.5 -mt-2">
               <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
@@ -405,13 +428,15 @@ export function AttendanceMonth({ user, attendance, holidays, leaveRequests = []
   const month = base.toISOString().slice(0, 10);
 
   const byDate = useMemo(() => new Map(attendance.map((a) => [a.date, a])), [attendance]);
+  const { status: monthLate } = useLateStatus(null, month, Boolean(employeeId));
+  const lateOn = (ds: string) => monthLate?.marks.find((m) => m.date === ds) ?? null;
   const leaveOn = (ds: string) => leaveRequests.find((l) => l.employeeId === employeeId && l.status === 'approved' && l.startDate <= ds && l.endDate >= ds);
 
   const mark = (ds: string): DayMark | null => {
     const cl = classifyDay(ds, holidays);
     const r = byDate.get(ds);
     if (user.joinDate && ds < user.joinDate) return { tone: 'ink', label: 'Before joining' };
-    if (r?.status === 'late') return { tone: 'amber', label: 'Late' };
+    if (r?.status === 'late' || lateOn(ds)) { const lm = lateOn(ds); return { tone: lm && lm.cut > 0 ? 'rose' : 'amber', label: lm ? `Late #${lm.n} · ${lm.cut >= 1 ? 'full-day cut' : lm.cut > 0 ? 'half-day cut' : `warning ${lm.n} of ${monthLate?.warnings ?? 3}`}` : 'Late' }; }
     if (r?.mode === 'wfh') return { tone: 'mint', label: 'Work from home' };
     if (r) return { tone: 'brand', label: 'Present' };
     if (cl.type === 'holiday') return { tone: 'dark', label: cl.label };
@@ -547,6 +572,11 @@ export function AttendanceMonth({ user, attendance, holidays, leaveRequests = []
                   {record.notes && <p className="inset-tile px-3.5 py-3 text-[13px] text-ink-600"><b className="text-ink-800">Note:</b> {record.notes}</p>}
                 </>
               )}
+              {selected && lateOn(selected) && (() => { const lm = lateOn(selected)!; return (
+                <Notice tone={lm.cut > 0 ? 'rose' : 'amber'} title={`Late #${lm.n} this month · ${lateStepLabel(lm.n, monthLate?.warnings ?? 3)}`}>
+                  Checked in {lm.late_min} min after your start time.{lm.cut > 0 ? ` ${lm.cut >= 1 ? 'A full day' : 'Half a day'} of salary is deducted${lm.amount != null ? ` (${money(lm.amount)})` : ''}.` : ' No salary cut for this one.'}
+                </Notice>
+              ); })()}
               {selLeave && <Notice tone="sky" title={`Approved ${selLeave.leaveType} leave`}>{selLeave.reason}</Notice>}
               {selClass?.type === 'holiday' && <Notice tone="dark" title="Company holiday">{selClass.label}</Notice>}
             </div>

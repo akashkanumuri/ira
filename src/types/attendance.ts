@@ -226,6 +226,9 @@ export interface PayrollRecord {
   leaveDeduction: number;
   absentDays: number;
   absentDeduction: number;
+  lateCount: number;
+  lateDays: number;
+  lateDeduction: number;
   finalPay: number;
   finalizedAt?: string | null;
 }

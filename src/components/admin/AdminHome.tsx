@@ -1,13 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import {
   AlertTriangle, ArrowRight, BadgeIndianRupee, Building2, CalendarClock, ChevronRight, ClipboardCheck,
-  Download, FileSignature, FileClock, Home, Package, RefreshCw, Users, Wallet, Upload, Hourglass,
+  AlarmClock, Download, FileSignature, FileClock, Home, Package, RefreshCw, Users, Wallet, Upload, Hourglass,
 } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
 import type { AttendanceRecord, BreakEvent, CorrectionRequest, Employee, Holiday, LeaveRequest, PayrollPeriod, PayrollRecord, Task, WfhRequest } from '../../types/attendance';
 import { supabase } from '../../lib/supabase';
 import { notify } from '../../lib/toast';
+import { fetchLateTeam, type LateTeamRow } from '../../lib/late';
 import { dateLabel, duration, money } from '../../lib/v2';
 import { classifyDay, formatKolkataTime, getKolkataDateString } from '../../lib/workingDays';
 import { inr } from '../../lib/sigma';
@@ -65,6 +66,8 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
   const today = getKolkataDateString();
   const org = useOrgOverview(true);
   const [selectedDate, setSelectedDate] = useState(today);
+  const [lateTeam, setLateTeam] = useState<LateTeamRow[]>([]);
+  useEffect(() => { let alive = true; void fetchLateTeam().then((t) => { if (alive) setLateTeam(t); }); return () => { alive = false; }; }, [attendance]);
   const [search, setSearch] = useState('');
   const [inspect, setInspect] = useState<Row | null>(null);
   const [inspectBreaks, setInspectBreaks] = useState<BreakEvent[]>([]);
@@ -127,6 +130,10 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
   const attention: Array<{ key: string; tone: Tone; icon: React.ReactNode; title: string; caption: string; to: string }> = [];
   if (pendingLeaves.length) attention.push({ key: 'leave', tone: 'amber', icon: <CalendarClock className="w-5 h-5" />, title: `${pendingLeaves.length} leave request${pendingLeaves.length === 1 ? '' : 's'} to review`, caption: pendingLeaves.slice(0, 2).map((r) => r.employeeName).join(', '), to: 'admin-requests?tab=leave' });
   if (pendingWfh.length) attention.push({ key: 'wfh', tone: 'amber', icon: <Home className="w-5 h-5" />, title: `${pendingWfh.length} WFH request${pendingWfh.length === 1 ? '' : 's'} to review`, caption: pendingWfh.slice(0, 2).map((r) => r.employeeName).join(', '), to: 'admin-requests?tab=wfh' });
+  const lateCut = lateTeam.filter((t) => t.cut_days > 0);
+  const lateFinal = lateTeam.filter((t) => t.count === 3);
+  if (lateCut.length) attention.push({ key: 'latecut', tone: 'rose', icon: <AlarmClock className="w-5 h-5" />, title: `${lateCut.length} ${lateCut.length === 1 ? 'person has' : 'people have'} late salary cuts this month`, caption: lateCut.slice(0, 3).map((t) => `${t.name} (${t.count} lates · −${t.cut_days} d)`).join(', '), to: 'admin-payroll' });
+  if (lateFinal.length) attention.push({ key: 'latefinal', tone: 'amber', icon: <AlarmClock className="w-5 h-5" />, title: `${lateFinal.length} ${lateFinal.length === 1 ? 'person is' : 'people are'} on a final late warning`, caption: `${lateFinal.slice(0, 3).map((t) => t.name).join(', ')} · next late cuts half a day`, to: 'admin-attendance' });
   if (o?.finance.paymentsToVerify) attention.push({ key: 'pay', tone: 'brand', icon: <BadgeIndianRupee className="w-5 h-5" />, title: `${o.finance.paymentsToVerify} client payment${o.finance.paymentsToVerify === 1 ? '' : 's'} to verify`, caption: 'Submitted by clients — not counted until verified', to: 'admin-finance' });
   if (o?.finance.overdueCount) attention.push({ key: 'overdue', tone: 'rose', icon: <AlertTriangle className="w-5 h-5" />, title: `${o.finance.overdueCount} payment milestone${o.finance.overdueCount === 1 ? '' : 's'} overdue`, caption: `${inr(o.finance.overdueAmount)} outstanding`, to: 'admin-finance' });
   if (o?.delivery.overdue) attention.push({ key: 'dover', tone: 'rose', icon: <Package className="w-5 h-5" />, title: `${o.delivery.overdue} deliverable${o.delivery.overdue === 1 ? '' : 's'} past due date`, caption: 'Open deliverables with a due date before today', to: 'admin-clients' });
