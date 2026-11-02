@@ -192,9 +192,7 @@ export function validateRules(r: WorkRules, effectiveFrom?: string): string | nu
     if (r.office_days_period === 'week' && r.must_come_days.length > r.office_days_count) return 'More must-come days than office days a week.';
   }
   if (!isNonEmployee(r)) {
-    if ((r.schedule_type === 'fixed' || r.schedule_type === 'split') && (!r.shift_start || !r.shift_end)) return 'Set the shift start and end.';
-    if (r.schedule_type === 'split' && (!r.shift2_start || !r.shift2_end)) return 'Set the second shift start and end.';
-    if (r.schedule_type === 'flexible_core' && (!r.core_start || !r.core_end || r.core_end <= r.core_start)) return 'Set core hours (end after start).';
+    if (r.schedule_type === 'fixed' && (!r.shift_start || !r.shift_end)) return 'Set the shift start and end.';
   }
   if (r.half_day_minutes >= r.full_day_minutes) return 'Half-day hours must be less than full-day hours.';
   if (r.absent_below_minutes > r.half_day_minutes) return 'The absent threshold must be at or below the half-day threshold.';
