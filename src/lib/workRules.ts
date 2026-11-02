@@ -140,7 +140,7 @@ export function rulesSummary(r: WorkRules): string {
   const parts: string[] = [EMPLOYMENT_LABEL[r.employment_type]];
   if (r.location_mode === 'hybrid') {
     const home = r.office_days_period === 'week' && r.office_days_count != null ? Math.max(0, r.working_days.length - r.office_days_count) : null;
-    let h = `Hybrid, ${r.office_days_count ?? '?'} office${home != null ? ` + ${home} home` : ''} day${(r.office_days_count ?? 0) + (home ?? 0) === 1 ? '' : 's'} a ${r.office_days_period} (any days)`;
+    let h = `Hybrid, ${r.office_days_count ?? '?'} office${home != null ? ` + ${home} home` : ''} day${(r.office_days_count ?? 0) + (home ?? 0) === 1 ? '' : 's'} a ${r.office_days_period}${r.must_come_days.length ? '' : ' (any days)'}`;
     if (r.must_come_days.length) h += `, must come ${r.must_come_days.map((n) => DAYS[n - 1].short).join('/')}`;
     parts.push(h);
   } else parts.push(r.location_mode === 'office' ? 'Office' : 'Remote');
