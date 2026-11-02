@@ -167,12 +167,24 @@ export function rulesBadge(r: WorkRules): string {
   return r.employment_type === 'full_time' ? where : `${where} · ${EMPLOYMENT_LABEL[r.employment_type]}`;
 }
 
+/** What the agreed whiteboard fixes for each employee type: timing and pay are never asked, they follow the type. */
+export function expectedFor(r: Pick<WorkRules, 'employment_type'>): { timing: 'fixed' | 'flexible'; pay: WorkRules['pay_type']; payLabel: string } {
+  switch (r.employment_type) {
+    case 'project_based': case 'freelancer': return { timing: 'flexible', pay: 'per_project', payLabel: 'per project' };
+    case 'part_time': return { timing: 'flexible', pay: 'hourly', payLabel: 'hourly' };
+    case 'intern': return { timing: 'fixed', pay: 'stipend', payLabel: 'a stipend' };
+    default: return { timing: 'fixed', pay: 'monthly', payLabel: 'a monthly salary' };
+  }
+}
+
 /** Same checks the database makes; returns the first problem or null. */
 export function validateRules(r: WorkRules, effectiveFrom?: string): string | null {
   if (!r.working_days.length) return 'Pick at least one working day.';
+  const exp = expectedFor(r);
+  if (r.schedule_type !== exp.timing) return exp.timing === 'fixed' ? 'This type works a fixed shift — set the shift start and end.' : 'This type works flexible hours — set the hours a day.';
+  if (r.pay_type !== exp.pay) return `This type is paid ${exp.payLabel}.`;
   if (r.location_mode === 'hybrid') {
     if (!r.office_days_count) return 'Tap the days a hybrid employee comes to the office.';
-    if (r.schedule_type !== 'fixed' && r.schedule_type !== 'split') return 'Hybrid works a fixed shift — set the shift start and end.';
     if (r.office_days_period === 'week' && r.must_come_days.length && r.must_come_days.length >= r.working_days.length) return 'All working days are office days — pick Standard office instead, or leave some days for home.';
     if (r.office_days_period === 'week' && r.office_days_count > r.working_days.length) return `Office days a week (${r.office_days_count}) can’t be more than working days (${r.working_days.length}).`;
     if (r.office_days_period === 'month' && r.office_days_count > 27) return 'Office days a month is too high.';

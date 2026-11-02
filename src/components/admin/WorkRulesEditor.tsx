@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BookmarkPlus, Briefcase, Building2, CalendarDays, ChevronDown, Clock3, GraduationCap, Home, Laptop, MapPin, Shuffle, Sparkles, Timer, ToggleRight } from 'lucide-react';
 import {
-  DAYS, FEATURE_LABEL, PAY_LABEL, SCHEDULE_LABEL, derivedFeatures, normalizeRules, rulesSummary, saveTemplate, validateRules,
+  DAYS, FEATURE_LABEL, PAY_LABEL, derivedFeatures, expectedFor, normalizeRules, rulesSummary, saveTemplate, validateRules,
   type FeatureKey, type WorkRules, type WorkTemplate,
 } from '../../lib/workRules';
 import { notify } from '../../lib/toast';
@@ -155,7 +155,9 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
   const derived = derivedFeatures(r);
   const problem = validateRules(r, effectiveFrom);
   const savedTemplates = templates.filter((t) => !t.is_builtin);
-  const monthlyPay = r.pay_type === 'monthly' || r.pay_type === 'stipend';
+  const exp = expectedFor(r);
+  const monthlyPay = exp.pay === 'monthly' || exp.pay === 'stipend';
+  const mismatch = r.schedule_type !== exp.timing || r.pay_type !== exp.pay;
 
   const applyTemplate = (t: WorkTemplate) => {
     const keep = { probation_end: r.probation_end, engagement_end: r.engagement_end, project_ids: r.project_ids };
@@ -171,11 +173,6 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
     catch (e) { notify(e instanceof Error ? e.message : 'Couldn’t save the template.', 'error'); }
     finally { setSavingTpl(false); }
   }
-
-  const scheduleMain: ScheduleKind = r.schedule_type === 'fixed' || r.schedule_type === 'split' ? 'fixed' : 'flexible';
-  const setSchedule = (k: ScheduleKind) => patch(k === 'fixed'
-    ? { schedule_type: 'fixed', shift_start: r.shift_start ?? '09:00', shift_end: r.shift_end ?? '18:00' }
-    : { schedule_type: 'flexible' });
 
   return (
     <div className="space-y-3">
@@ -201,6 +198,12 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
         </div>
       </div>
 
+      {mismatch && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12.5px] text-amber-900">
+          <span>This saved setup doesn’t follow the {BOARD_TYPES.find((t) => t.id === type)?.label} rules ({exp.timing === 'fixed' ? 'fixed shift' : 'flexible hours'}, paid {exp.payLabel}).</span>
+          <button type="button" className="btn btn-secondary !min-h-[32px] !py-1 text-[12px]" onClick={() => onChange(applyBoardType(r, type))}>Apply {BOARD_TYPES.find((t) => t.id === type)?.label} rules</button>
+        </div>
+      )}
       {/* 2 — the essentials for that type (all required) */}
       <Block icon={<Briefcase className="w-3.5 h-3.5" />} title="Essentials">
         <Row label="Working days *">
@@ -232,35 +235,28 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
           )}
         </Row>
         <Row label="Timing *">
-          <div className="space-y-2">
-            {type === 'hybrid' ? <p className="text-[12.5px] font-semibold text-ink-800">Fixed shift</p> : <Seg value={scheduleMain} onChange={setSchedule} options={[{ id: 'fixed', label: 'Fixed shift' }, { id: 'flexible', label: 'Flexible hours' }]} />}
-            {r.schedule_type === 'fixed' && (
-              <span className="inline-flex items-center gap-2 text-[13px] text-ink-600"><Time label="Shift start" value={r.shift_start} onChange={(v) => set('shift_start', v)} /> to <Time label="Shift end" value={r.shift_end} onChange={(v) => set('shift_end', v)} />{r.shift_end && r.shift_start && r.shift_end <= r.shift_start && <span className="text-[11.5px] text-ink-400">ends next day</span>}</span>
-            )}
-            {r.schedule_type === 'flexible' && (
-              <span className="inline-flex items-center gap-2 text-[13px] text-ink-600">Any time, <HoursInput label="Hours a day" minutes={r.full_day_minutes} onChange={(m) => { const half = r.half_day_minutes < m ? r.half_day_minutes : Math.round(m / 2); patch({ full_day_minutes: m, half_day_minutes: half, absent_below_minutes: Math.min(r.absent_below_minutes, half) }); }} /> a day</span>
-            )}
-            {(r.schedule_type === 'split' || r.schedule_type === 'flexible_core') && (
-              <p className="text-[12.5px] text-ink-500">{SCHEDULE_LABEL[r.schedule_type]} — set under More settings.</p>
-            )}
-          </div>
+          {exp.timing === 'fixed' ? (
+            <span className="inline-flex items-center gap-2 flex-wrap text-[13px] text-ink-600"><span className="font-semibold text-ink-800 mr-1">Fixed shift</span>
+              <Time label="Shift start" value={r.shift_start} onChange={(v) => patch({ schedule_type: 'fixed', shift_start: v })} /> to <Time label="Shift end" value={r.shift_end} onChange={(v) => patch({ schedule_type: 'fixed', shift_end: v })} />
+              {r.shift_end && r.shift_start && r.shift_end <= r.shift_start && <span className="text-[11.5px] text-ink-400">ends next day</span>}</span>
+          ) : (
+            <span className="inline-flex items-center gap-2 flex-wrap text-[13px] text-ink-600"><span className="font-semibold text-ink-800 mr-1">Flexible</span>any time,
+              <HoursInput label="Hours a day" minutes={r.full_day_minutes} onChange={(m) => { const half = r.half_day_minutes < m ? r.half_day_minutes : Math.round(m / 2); patch({ schedule_type: 'flexible', full_day_minutes: m, half_day_minutes: half, absent_below_minutes: Math.min(r.absent_below_minutes, half) }); }} /> a day</span>
+          )}
         </Row>
         {!hidePay && (
           <Row label="Pay *">
             <div className="space-y-2">
-              {type === 'freelancer' && (
-                <Seg value={r.pay_type} onChange={(v) => set('pay_type', v)} options={(['per_project', 'per_milestone', 'per_deliverable', 'hourly'] as const).map((id) => ({ id, label: PAY_LABEL[id] }))} />
-              )}
               {monthlyPay ? (
                 onSalary ? (
                   <span className="inline-flex items-center gap-2 text-[13px] text-ink-600"><span className="text-ink-500">₹</span>
-                    <input type="number" aria-label={r.pay_type === 'stipend' ? 'Monthly stipend' : 'Monthly salary'} className="input tnum !w-[150px] !min-h-[38px] !py-1.5" min={0} step={100} value={salary ?? ''} onChange={(e) => onSalary(e.target.value)} />
-                    {r.pay_type === 'stipend' ? 'stipend a month' : 'a month'}</span>
-                ) : <p className="pt-1.5 text-[13px] text-ink-700">{PAY_LABEL[r.pay_type]} (amount set per person)</p>
+                    <input type="number" aria-label={exp.pay === 'stipend' ? 'Monthly stipend' : 'Monthly salary'} className="input tnum !w-[150px] !min-h-[38px] !py-1.5" min={0} step={100} value={salary ?? ''} onChange={(e) => onSalary(e.target.value)} />
+                    {exp.pay === 'stipend' ? 'stipend a month' : 'a month'}</span>
+                ) : <p className="pt-1.5 text-[13px] text-ink-700">{PAY_LABEL[exp.pay]} (amount set per person)</p>
               ) : (
                 <span className="inline-flex items-center gap-2 text-[13px] text-ink-600"><span className="text-ink-500">₹</span>
-                  <Num label="Pay rate" value={r.pay_rate} step={r.pay_type === 'hourly' ? 10 : 500} width="!w-[150px]" onChange={(v) => set('pay_rate', v)} />
-                  {r.pay_type === 'hourly' ? 'an hour' : r.pay_type.replace('per_', 'per ')}</span>
+                  <Num label="Pay rate" value={r.pay_rate} step={exp.pay === 'hourly' ? 10 : 500} width="!w-[150px]" onChange={(v) => patch({ pay_type: exp.pay, pay_rate: v })} />
+                  {exp.pay === 'hourly' ? 'an hour' : 'per project'}</span>
               )}
               {nonEmployee && (
                 <span className="inline-flex items-center gap-2 text-[12.5px] text-ink-600">TDS <Num label="TDS percent" value={r.tds_percent} max={50} step={0.5} onChange={(v) => set('tds_percent', v)} width="!w-[80px]" /> % on payouts</span>
@@ -371,28 +367,6 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
             </Block>
 
             <Block icon={<Clock3 className="w-3.5 h-3.5" />} title="Day rules">
-              <Row label="Other schedules" hint="Rarely needed">
-                <Seg value={r.schedule_type} onChange={(v) => patch({
-                  schedule_type: v,
-                  shift_start: (v === 'fixed' || v === 'split') ? (r.shift_start ?? '09:00') : r.shift_start,
-                  shift_end: (v === 'fixed' || v === 'split') ? (r.shift_end ?? (v === 'split' ? '13:00' : '18:00')) : r.shift_end,
-                  shift2_start: v === 'split' ? (r.shift2_start ?? '17:00') : r.shift2_start,
-                  shift2_end: v === 'split' ? (r.shift2_end ?? '21:00') : r.shift2_end,
-                  core_start: v === 'flexible_core' ? (r.core_start ?? '11:00') : r.core_start,
-                  core_end: v === 'flexible_core' ? (r.core_end ?? '16:00') : r.core_end,
-                })} options={(Object.keys(SCHEDULE_LABEL) as WorkRules['schedule_type'][]).filter((id) => type !== 'hybrid' || id === 'fixed' || id === 'split').map((id) => ({ id, label: SCHEDULE_LABEL[id] }))} />
-              </Row>
-              {r.schedule_type === 'split' && (
-                <>
-                  <Row label="First part"><span className="inline-flex items-center gap-2"><Time label="Shift start" value={r.shift_start} onChange={(v) => set('shift_start', v)} /> to <Time label="Shift end" value={r.shift_end} onChange={(v) => set('shift_end', v)} /></span></Row>
-                  <Row label="Second part"><span className="inline-flex items-center gap-2"><Time label="Second start" value={r.shift2_start} onChange={(v) => set('shift2_start', v)} /> to <Time label="Second end" value={r.shift2_end} onChange={(v) => set('shift2_end', v)} /></span></Row>
-                </>
-              )}
-              {r.schedule_type === 'flexible_core' && (
-                <Row label="Core hours" hint="Must be working between these">
-                  <span className="inline-flex items-center gap-2"><Time label="Core start" value={r.core_start} onChange={(v) => set('core_start', v)} /> to <Time label="Core end" value={r.core_end} onChange={(v) => set('core_end', v)} /></span>
-                </Row>
-              )}
               {r.schedule_type !== 'flexible' && <Row label="Full day"><HoursInput label="Full-day hours" minutes={r.full_day_minutes} onChange={(m) => set('full_day_minutes', m)} /></Row>}
               <Row label="Half day if below"><HoursInput label="Half-day hours" minutes={r.half_day_minutes} onChange={(m) => set('half_day_minutes', m)} /></Row>
               <Row label="Absent if below" hint="0 = any check-in counts"><HoursInput label="Absent hours" minutes={r.absent_below_minutes} onChange={(m) => set('absent_below_minutes', m)} /></Row>
@@ -467,4 +441,3 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
   );
 }
 
-type ScheduleKind = 'fixed' | 'flexible';
