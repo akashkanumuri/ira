@@ -1,12 +1,21 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Buddy, type BuddyMood } from './Buddy';
 
-export type BuddyAction = 'wave' | 'celebrate' | 'backflip' | 'worried' | 'yawn' | 'knock' | 'dance' | 'spin' | 'juggle' | 'look' | 'land' | 'peek' | 'stretch' | 'moonwalk';
+export type BuddyAction = 'wave' | 'celebrate' | 'backflip' | 'worried' | 'yawn' | 'knock' | 'dance' | 'spin' | 'juggle' | 'look' | 'land' | 'peek' | 'stretch' | 'moonwalk'
+  | 'header' | 'kick' | 'throw' | 'ollie' | 'boo' | 'startle' | 'facepalm' | 'victory' | 'squash' | 'dizzy' | 'annoyed' | 'sip' | 'munch' | 'party' | 'dj' | 'bye' | 'explode';
+export type BuddyPose = 'surf' | 'wipe' | 'hang' | 'dangle' | 'lean';
+export type BuddyProp = 'board' | 'sponge' | 'mug' | 'sandwich' | 'hat' | 'backpack' | 'deck';
 export interface Buddy3DApi {
   setMood: (m: BuddyMood) => void;
   play: (a: BuddyAction) => number;
   fly: (on: boolean, dir?: number) => void;
+  setDir: (dir: number) => void;
   setFacing: (rad: number) => void;
+  pose: (p: BuddyPose | null) => void;
+  prop: (p: BuddyProp, on: boolean) => void;
+  setZoom: (z: number) => void;
+  /** true once the real 3D robot is running (false for the flat fallback) */
+  is3D: () => boolean;
   isBusy: () => boolean;
   dispose: () => void;
 }
@@ -26,7 +35,12 @@ export const Buddy3D = forwardRef<Buddy3DApi | null, { mood: BuddyMood; classNam
     setMood: (m) => api.current?.setMood(m),
     play: (a) => api.current?.play(a) ?? 0,
     fly: (on, dir) => api.current?.fly(on, dir),
+    setDir: (d) => api.current?.setDir(d),
     setFacing: (r) => api.current?.setFacing(r),
+    pose: (p) => api.current?.pose(p),
+    prop: (p, on) => api.current?.prop(p, on),
+    setZoom: (z) => api.current?.setZoom(z),
+    is3D: () => Boolean(api.current),
     isBusy: () => api.current?.isBusy() ?? false,
     dispose: () => api.current?.dispose(),
   }), []);

@@ -30,3 +30,16 @@
   .buddy-spot { transition: none; }
   .buddy-fab { transition: none; }
 }
+
+/* stunts: the script drives the position frame by frame, and clicks pass through while it performs */
+.buddy-fab.buddy-driving { transition: none !important; }
+.buddy-fab[data-stunt] { pointer-events: none; }
+.buddy-fab[data-stunt] * { pointer-events: none !important; }
+.buddy-fx { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 59; }
+.buddy-glitch > button { animation: buddy-glitch .11s steps(2) infinite; }
+@keyframes buddy-glitch {
+  0% { transform: translate(-3px, 1px) skewX(6deg); filter: drop-shadow(4px 0 rgb(255 0 90 / .85)) drop-shadow(-4px 0 rgb(0 220 255 / .85)); clip-path: inset(8% 0 30% 0); }
+  50% { transform: translate(3px, -2px) skewX(-8deg); filter: drop-shadow(-5px 0 rgb(255 0 90 / .85)) drop-shadow(5px 0 rgb(0 220 255 / .85)); clip-path: inset(40% 0 4% 0); }
+  100% { transform: translate(0, 0); filter: none; clip-path: none; }
+}
+@media (prefers-reduced-motion: reduce) { .buddy-glitch > button { animation: none !important; } .buddy-fx { display: none; } }

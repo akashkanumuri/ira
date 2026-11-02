@@ -17,6 +17,10 @@ export interface BuddyMemory {
   shown?: { day: string; keys: string[] }; // tips that popped up today
   level?: BuddyLevel;
   minimized?: boolean;
+  /** once-a-day reactions already played (lunch, coffee, party, bye) */
+  dayFx?: { day: string; done: string[] };
+  /** where the person put Sigma down (fractions of the window); missing = bottom-right corner */
+  homeAt?: { fx: number; fy: number };
 }
 
 const KEY = (userId: string) => `sigma-buddy:v1:${userId}`;
