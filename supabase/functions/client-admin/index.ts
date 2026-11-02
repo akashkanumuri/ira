@@ -259,11 +259,32 @@ Contact your assigned project manager or email: ${params.supportEmail}
 (c) ${new Date().getFullYear()} IRA Hospitality & Architecture. All rights reserved.`;
 }
 
+export function buildResetEmailHtml(p: { name: string; companyName: string; url: string; supportEmail: string }): string {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset your password</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:40px 16px;"><tr><td align="center">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border-radius:20px;border:1px solid #e2e8f0;overflow:hidden;">
+<tr><td style="background:#0f172a;padding:28px 36px;"><span style="font-size:18px;font-weight:800;letter-spacing:2px;color:#fff;">IRA HOSPITALITY</span><br><span style="font-size:11px;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;">Client Portal</span></td></tr>
+<tr><td style="padding:36px;">
+<h1 style="font-size:20px;color:#0f172a;margin:0 0 14px;">Choose a new password</h1>
+<p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 8px;">Hello ${escapeHtml(p.name)},</p>
+<p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;">Your IRA account manager sent you a link to choose a new password for your <strong>${escapeHtml(p.companyName)}</strong> client portal account.</p>
+<p style="text-align:center;margin:28px 0;"><a href="${p.url}" style="display:inline-block;background:#5b35e8;color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:12px;">Choose a new password</a></p>
+<p style="font-size:12px;color:#475569;line-height:1.5;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;">This link works once and expires in 24 hours. Your current password keeps working until you set a new one.</p>
+<p style="font-size:12px;color:#64748b;margin:22px 0 0;">If the button doesn’t work, copy this link into your browser:</p>
+<p style="font-size:11px;word-break:break-all;color:#5b35e8;margin:6px 0 0;font-family:Menlo,Consolas,monospace;">${p.url}</p>
+</td></tr>
+<tr><td style="background:#f8fafc;padding:20px 36px;text-align:center;font-size:12px;color:#64748b;">Need help? Email <a href="mailto:${escapeHtml(p.supportEmail)}" style="color:#5b35e8;text-decoration:none;">${escapeHtml(p.supportEmail)}</a></td></tr>
+</table></td></tr></table></body></html>`;
+}
+
 export interface SendInvitationEmailParams {
   toEmail: string;
   companyName: string;
   primaryContact: string;
   invitationUrl: string;
+  /** 'reset' for someone who already has a password (the link lets them choose a new one) */
+  kind?: 'invite' | 'reset';
   resendApiKey?: string | null;
   resendFromEmail?: string | null;
   supportEmail?: string | null;
@@ -322,19 +343,24 @@ export async function sendInvitationEmail(
     };
   }
 
-  const html = buildInvitationEmailHtml({
-    companyName: params.companyName,
-    primaryContact: params.primaryContact,
-    invitationUrl: params.invitationUrl,
-    supportEmail,
-  });
+  const isReset = params.kind === 'reset';
+  const html = isReset
+    ? buildResetEmailHtml({ name: params.primaryContact, companyName: params.companyName, url: params.invitationUrl, supportEmail })
+    : buildInvitationEmailHtml({
+      companyName: params.companyName,
+      primaryContact: params.primaryContact,
+      invitationUrl: params.invitationUrl,
+      supportEmail,
+    });
 
-  const text = buildInvitationEmailText({
-    companyName: params.companyName,
-    primaryContact: params.primaryContact,
-    invitationUrl: params.invitationUrl,
-    supportEmail,
-  });
+  const text = isReset
+    ? `Reset your IRA client portal password\n\nHello ${params.primaryContact},\n\nYour IRA account manager sent you a link to choose a new password for your ${params.companyName} client portal account:\n${params.invitationUrl}\n\nThe link works once and expires in 24 hours.\n\nNeed help? ${supportEmail}`
+    : buildInvitationEmailText({
+      companyName: params.companyName,
+      primaryContact: params.primaryContact,
+      invitationUrl: params.invitationUrl,
+      supportEmail,
+    });
 
   const fetchImpl = params.fetchFn ?? fetch;
 
@@ -349,7 +375,7 @@ export async function sendInvitationEmail(
       body: JSON.stringify({
         from: fromEmail,
         to: [params.toEmail],
-        subject: `Welcome to IRA Hospitality — Client Portal Setup for ${params.companyName}`,
+        subject: isReset ? 'Reset your IRA client portal password' : `Welcome to IRA Hospitality — Client Portal Setup for ${params.companyName}`,
         html,
         text,
       }),
@@ -594,6 +620,9 @@ async function resendClientInvitation(
 
   const trustedBaseUrl = getTrustedBaseUrl();
 
+  // Already set up → this is a password reset link (shorter life, different email).
+  const kind: 'invite' | 'reset' = client.status === 'active' ? 'reset' : 'invite';
+
   // Invalidate any existing unused invitation tokens for this client
   await admin
     .from('client_invitations')
@@ -612,6 +641,7 @@ async function resendClientInvitation(
       email: client.email,
       token_hash: tokenHash,
       created_by: actorId,
+      ...(kind === 'reset' ? { expires_at: new Date(Date.now() + 24 * 3600_000).toISOString() } : {}),
     });
 
   if (inviteError) throw new Error(`Failed to generate new invitation: ${inviteError.message}`);
@@ -623,10 +653,12 @@ async function resendClientInvitation(
     companyName: client.company_name,
     primaryContact: client.primary_contact,
     invitationUrl,
+    kind,
   });
 
   return {
     success: true,
+    kind,
     clientId,
     email: client.email,
     companyName: client.company_name,
@@ -637,7 +669,7 @@ async function resendClientInvitation(
 
 async function issueClientUserInvitation(
   admin: ReturnType<typeof createClient>,
-  params: { userId: string; email: string; fullName: string; companyName: string; actorId: string },
+  params: { userId: string; email: string; fullName: string; companyName: string; actorId: string; kind?: 'invite' | 'reset' },
 ) {
   const trustedBaseUrl = getTrustedBaseUrl();
   // Invalidate earlier unused links for this person.
@@ -649,6 +681,7 @@ async function issueClientUserInvitation(
     email: params.email,
     token_hash: tokenHash,
     created_by: params.actorId,
+    ...(params.kind === 'reset' ? { expires_at: new Date(Date.now() + 24 * 3600_000).toISOString() } : {}),
   });
   if (inviteError) throw new Error(`Failed to create the invitation: ${inviteError.message}`);
   const invitationUrl = `${trustedBaseUrl}/client/setup?token=${rawToken}`;
@@ -657,6 +690,7 @@ async function issueClientUserInvitation(
     companyName: params.companyName,
     primaryContact: params.fullName,
     invitationUrl,
+    kind: params.kind ?? 'invite',
   });
   return { invitationUrl, emailDelivery };
 }
@@ -733,12 +767,14 @@ async function resendClientUserInvitation(input: ResendClientUserInput, admin: R
     .from('client_users').select('id, client_id, profile_id, status, full_name, email, clients:client_id (company_name, profile_id)').eq('id', id).maybeSingle();
   if (error || !cu) throw new Error('User not found.');
   if (caller.kind === 'client_admin' && cu.client_id !== caller.clientId) throw new Error('User not found.');
-  if (cu.status !== 'invited') throw new Error('This person has already set up their account.');
+  if (cu.status === 'inactive') throw new Error('This person’s access is switched off. Turn it back on first.');
   if ((cu as any).clients?.profile_id === cu.profile_id) throw new Error('Use “Resend invitation” on the client account for the primary contact.');
+  // Someone who already set a password gets a reset link instead of a welcome invitation.
+  const kind: 'invite' | 'reset' = cu.status === 'active' ? 'reset' : 'invite';
   const { invitationUrl, emailDelivery } = await issueClientUserInvitation(admin, {
-    userId: cu.profile_id, email: cu.email, fullName: cu.full_name ?? cu.email, companyName: (cu as any).clients?.company_name ?? 'your organisation', actorId,
+    userId: cu.profile_id, email: cu.email, fullName: cu.full_name ?? cu.email, companyName: (cu as any).clients?.company_name ?? 'your organisation', actorId, kind,
   });
-  return { success: true, email: cu.email, emailDelivery, invitationUrl: caller.kind === 'admin' ? invitationUrl : undefined };
+  return { success: true, kind, email: cu.email, emailDelivery, invitationUrl: caller.kind === 'admin' ? invitationUrl : undefined };
 }
 
 Deno.serve(async (req: Request) => {

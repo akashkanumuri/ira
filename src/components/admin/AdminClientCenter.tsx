@@ -165,6 +165,8 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
   const [selectedMgrId, setSelectedMgrId] = useState('');
   const [toggleAccessDialogOpen, setToggleAccessDialogOpen] = useState(false);
   const [resendingClient, setResendingClient] = useState<string | null>(null);
+  // The new link, shown when it couldn't be emailed (or for the admin to share directly).
+  const [linkInfo, setLinkInfo] = useState<{ email: string; url: string; kind: 'invite' | 'reset'; sent: boolean } | null>(null);
 
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId) || null;
@@ -191,11 +193,12 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
         clientId: c.profile_id,
       });
       if (res?.success) {
-        toast(
-          res.emailDelivery?.sent
-            ? `Invitation email delivered to ${c.email}!`
-            : 'New invitation link generated successfully.'
-        );
+        const kind: 'invite' | 'reset' = res.kind === 'reset' ? 'reset' : 'invite';
+        const sent = Boolean(res.emailDelivery?.sent);
+        if (res.invitationUrl) setLinkInfo({ email: c.email, url: res.invitationUrl, kind, sent });
+        toast(sent
+          ? `${kind === 'reset' ? 'Password reset link' : 'Invitation'} emailed to ${c.email}.`
+          : 'Email isn’t set up — copy the link and send it to the client yourself.');
       } else {
         toast(res?.error || 'Failed to resend invitation.', 'err');
       }
@@ -490,7 +493,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
                           loading={resendingClient === selectedClient.id}
                           onClick={() => handleResendInvitation(selectedClient)}
                         >
-                          Resend Invitation Link
+                          {selectedClient.status === 'active' ? 'Send password reset link' : 'Resend Invitation Link'}
                         </Button>
                         <Button
                           variant="danger"
@@ -844,6 +847,24 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
       </Dialog>
 
       {/* Toggle Client Access Dialog */}
+      <Dialog
+        open={Boolean(linkInfo)}
+        onClose={() => setLinkInfo(null)}
+        title={linkInfo?.kind === 'reset' ? 'Password reset link' : 'Invitation link'}
+        desc={linkInfo?.sent ? `Also emailed to ${linkInfo?.email}.` : `Email isn’t set up, so nothing was sent. Share this link with ${linkInfo?.email ?? 'the client'} privately.`}
+        footer={
+          <>
+            <Button onClick={() => setLinkInfo(null)}>Close</Button>
+            <Button variant="primary" onClick={() => { if (linkInfo) { void navigator.clipboard?.writeText(linkInfo.url); toast('Link copied.'); } }}>Copy link</Button>
+          </>
+        }
+      >
+        <p className="text-[13px] text-[#5e5a80] mb-2">
+          Anyone with this link can set the password for {linkInfo?.email}. It works once and expires in {linkInfo?.kind === 'reset' ? '24 hours' : '72 hours'}. Older links for this person stop working.
+        </p>
+        <input readOnly className="input font-mono text-[12px] w-full" value={linkInfo?.url ?? ''} onFocus={(e) => e.currentTarget.select()} />
+      </Dialog>
+
       <Dialog
         open={toggleAccessDialogOpen}
         onClose={() => setToggleAccessDialogOpen(false)}

@@ -28,7 +28,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [link, setLink] = useState<{ email: string; url: string } | null>(null);
+  const [link, setLink] = useState<{ email: string; url: string; reset?: boolean } | null>(null);
   const [primary, setPrimary] = useState<string | null>(primaryProfileId ?? null);
 
   const load = useCallback(async () => {
@@ -57,8 +57,10 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
     setBusy(m.id);
     try {
       const res = await invokeClientAdmin({ action: 'resend_client_user_invitation', clientUserId: m.id });
-      if (res?.invitationUrl) setLink({ email: m.email, url: res.invitationUrl });
-      notify(res?.emailDelivery?.sent ? `Invitation sent to ${m.email}.` : mode === 'admin' ? 'Email isn’t configured — copy the setup link.' : 'Invitation created, but email isn’t set up yet. Ask IRA to share the link.', res?.emailDelivery?.sent ? 'success' : 'info');
+      const reset = res?.kind === 'reset';
+      if (res?.invitationUrl) setLink({ email: m.email, url: res.invitationUrl, reset });
+      const what = reset ? 'Password reset link' : 'Invitation';
+      notify(res?.emailDelivery?.sent ? `${what} sent to ${m.email}.` : mode === 'admin' ? 'Email isn’t configured — copy the link.' : `${what} created, but email isn’t set up yet. Ask IRA to share the link.`, res?.emailDelivery?.sent ? 'success' : 'info');
     } catch (e) { notify(e instanceof Error ? e.message : 'Unable to resend.', 'error'); }
     finally { setBusy(null); }
   }
@@ -90,6 +92,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
                 {!locked && (
                   <div className="flex gap-1.5 w-full sm:w-auto justify-end">
                     {m.status === 'invited' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void resend(m)}><MailPlus className="w-3.5 h-3.5" /> Resend</button>}
+                    {m.status === 'active' && !isPrimary && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void resend(m)}><MailPlus className="w-3.5 h-3.5" /> Reset password</button>}
                     {m.status === 'active' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void update(m, { role: m.role === 'client_admin' ? 'client_user' : 'client_admin' })}>{m.role === 'client_admin' ? 'Make member' : 'Make admin'}</button>}
                     {m.status !== 'inactive'
                       ? <button type="button" className="btn-ghost btn-sm text-rose-600" disabled={busy === m.id} onClick={() => void update(m, { status: 'inactive' })}>Remove access</button>
@@ -104,9 +107,9 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
       {!canManage && mode === 'client' && <p className="text-[12px] text-ink-400 mt-2">Only your organisation’s admins can add or remove people.</p>}
       {inviting && <InviteDialog clientId={clientId} mode={mode} onClose={() => setInviting(false)} onDone={async (res) => { setInviting(false); if (res) setLink(res); await load(); }} />}
       {link && (
-        <Modal title="Setup link" onClose={() => setLink(null)}>
+        <Modal title={link.reset ? 'Password reset link' : 'Setup link'} onClose={() => setLink(null)}>
           <div className="space-y-3">
-            <Notice tone="amber" title="Share this privately">Anyone with this link can set the password for {link.email}. It works once and expires in 72 hours.</Notice>
+            <Notice tone="amber" title="Share this privately">Anyone with this link can set the password for {link.email}. It works once and expires in {link.reset ? '24 hours' : '72 hours'}.</Notice>
             <input readOnly className="input font-mono text-[12px]" value={link.url} onFocus={(e) => e.currentTarget.select()} />
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setLink(null)}>Close</Button>

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { takeSignOutNotice } from '../../lib/deviceLock';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { invokeClientSetup } from '../../lib/v2';
 import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, Mail, ArrowLeft, ArrowRight } from 'lucide-react';
 import { AuthLayout, AuthField } from '../../ui/AuthLayout';
 import { PillTabs } from '../../ui';
@@ -38,9 +38,9 @@ const PORTAL_META: Record<Portal, PortalMeta> = {
     roleName: 'Client',
     headline: 'Contracts, deliverables and billing for your account.',
     subtitle: 'Sign in to your client portal.',
-    identifierLabel: 'Client Login ID',
-    identifierPlaceholder: 'Login ID or email',
-    emptyError: 'Please enter your Client Login ID and password.',
+    identifierLabel: 'Email address',
+    identifierPlaceholder: 'Email address',
+    emptyError: 'Please enter your email address and password.',
   },
 };
 
@@ -65,6 +65,8 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resetError, setResetError] = useState('');
+  // Email isn't set up on the server yet: the link can't be emailed, so point people to their account manager instead.
+  const [resetNoEmail, setResetNoEmail] = useState(false);
 
   const meta = PORTAL_META[activePortal] || PORTAL_META.employee;
 
@@ -133,18 +135,14 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
 
     const targetEmail = resetEmail.trim();
     if (!targetEmail) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) { setResetError('Enter a valid email address.'); return; }
 
     setResetLoading(true);
     try {
-      const redirectTo = `${window.location.origin}/client/setup`;
-      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-        redirectTo,
-      });
-      if (error) {
-        setResetError(error.message);
-      } else {
-        setResetSent(true);
-      }
+      // Our own single-use link (same page as the welcome invitation), emailed by the server.
+      const res = await invokeClientSetup({ action: 'request_reset', email: targetEmail });
+      setResetNoEmail(res?.emailConfigured === false);
+      setResetSent(true);
     } catch {
       setResetError('Unable to send password reset link right now. Please try again.');
     } finally {
@@ -174,7 +172,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             <h2 className="font-display text-[32px] font-bold leading-tight text-ink-950">Reset password</h2>
             <p className="mt-2 text-sm text-ink-500">
               {activePortal === 'client'
-                ? resetSent ? 'Check your email for the recovery link.' : 'Enter the email address your account was created with.'
+                ? resetSent ? (resetNoEmail ? 'Contact your account manager.' : 'Check your email.') : 'Enter the email address you sign in with. We’ll email you a link to choose a new password.'
                 : 'For security, staff passwords are reset by your administrator.'}
             </p>
           </div>
@@ -192,12 +190,18 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
             </div>
           ) : resetSent ? (
             <div className="space-y-5">
-              <p className="text-sm text-ink-600 leading-relaxed">
-                If an account matches <span className="font-semibold text-ink-900">{resetEmail}</span>, we have sent a secure link to reset your password.
-              </p>
+              {resetNoEmail ? (
+                <p className="text-sm text-ink-600 leading-relaxed">
+                  We can’t email reset links right now. Please ask your IRA account manager to send you a new password link — it arrives by email or they can share it with you directly.
+                </p>
+              ) : (
+                <p className="text-sm text-ink-600 leading-relaxed">
+                  If an account matches <span className="font-semibold text-ink-900">{resetEmail}</span>, we’ve sent a link to choose a new password. It works once and expires in 60 minutes — check your spam folder if you don’t see it.
+                </p>
+              )}
               <button
                 type="button"
-                onClick={() => { setResetSent(false); setResetEmail(''); setScreen('login'); }}
+                onClick={() => { setResetSent(false); setResetNoEmail(false); setResetEmail(''); setScreen('login'); }}
                 className="btn-primary w-full !min-h-[52px]"
               >
                 Back to sign in

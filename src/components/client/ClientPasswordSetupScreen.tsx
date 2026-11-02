@@ -6,6 +6,8 @@ import { ClientAlert } from './ClientAlert';
 
 export const ClientPasswordSetupScreen: React.FC = () => {
   const [token, setToken] = useState<string>('');
+  // 'setup' = first-time invitation; 'reset' = the account already has a password and is choosing a new one
+  const [mode, setMode] = useState<'setup' | 'reset'>('setup');
   const [verifying, setVerifying] = useState(true);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [clientInfo, setClientInfo] = useState<{
@@ -26,7 +28,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
     const urlToken = params.get('token')?.trim();
 
     if (!urlToken || !/^[0-9a-f]{64}$/i.test(urlToken)) {
-      setVerifyError('Invalid or missing invitation token. Please check the link from your invitation email.');
+      setVerifyError('This link is incomplete. Open the link from your email again, or ask for a new one.');
       setVerifying(false);
       return;
     }
@@ -37,6 +39,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
       try {
         const res = await invokeClientSetup({ action: 'verify_token', token: urlToken });
         if (res?.valid) {
+          setMode(res.mode === 'reset' ? 'reset' : 'setup');
           setClientInfo({
             companyName: res.companyName,
             primaryContact: res.primaryContact,
@@ -81,6 +84,8 @@ export const ClientPasswordSetupScreen: React.FC = () => {
         password,
       });
       setSetupSuccess(true);
+      // the one-time link has done its job: don't leave it in the address bar / history
+      try { window.history.replaceState({}, '', '/client/setup'); } catch { /* ignore */ }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to set password. Please try again.');
     } finally {
@@ -97,7 +102,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
       >
         <div className="py-12 text-center text-[#5e5a80] text-[13px] flex flex-col items-center gap-3">
           <Loader2 size={24} className="animate-spin text-[#5b35e8]" />
-          <span>Verifying your invitation link…</span>
+          <span>Checking your link…</span>
         </div>
       </ClientAuthLayout>
     );
@@ -107,17 +112,20 @@ export const ClientPasswordSetupScreen: React.FC = () => {
   if (verifyError) {
     return (
       <ClientAuthLayout
-        tag="Invitation"
+        tag="Secure link"
         line="Secure links expire to keep your account safe."
       >
         <div className="w-10 h-10 rounded-md bg-[#fdf4e3] text-[#b7791f] grid place-items-center mb-4">
           <TimerOff size={18} />
         </div>
         <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#14112b]">
-          This invitation link has expired
+          This link can’t be used
         </h1>
         <p className="text-[13px] text-[#5e5a80] mt-1.5 mb-6 leading-relaxed">
           {verifyError}
+        </p>
+        <p className="text-[13px] text-[#5e5a80] -mt-3 mb-6 leading-relaxed">
+          Already set a password? Use <span className="font-medium text-[#14112b]">Forgot password?</span> on the sign-in page to get a new link.
         </p>
         <a
           href="/client/login"
@@ -140,10 +148,10 @@ export const ClientPasswordSetupScreen: React.FC = () => {
           <CheckCircle2 size={18} />
         </div>
         <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#14112b]">
-          Password set
+          {mode === 'reset' ? 'Password changed' : 'Password set'}
         </h1>
         <p className="text-[13px] text-[#5e5a80] mt-1.5 mb-6 leading-relaxed">
-          Your account is ready. Sign in with{' '}
+          {mode === 'reset' ? 'Your new password is saved. Sign in with' : 'Your account is ready. Sign in with'}{' '}
           <span className="font-medium text-[#14112b]">{clientInfo?.email}</span> and your new password.
         </p>
         <a
@@ -163,7 +171,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
       line="Choose a password you’ll use to sign in from now on."
     >
       <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-[#14112b]">
-        Set your password
+        {mode === 'reset' ? 'Choose a new password' : 'Set your password'}
       </h1>
       <p className="text-[13px] text-[#5e5a80] mt-1.5 mb-6">
         For {clientInfo?.email || 'your account'}
