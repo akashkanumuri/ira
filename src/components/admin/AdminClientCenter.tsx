@@ -198,7 +198,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
         if (res.invitationUrl) setLinkInfo({ email: c.email, url: res.invitationUrl, kind, sent });
         toast(sent
           ? `${kind === 'reset' ? 'Password reset link' : 'Invitation'} emailed to ${c.email}.`
-          : 'Email isn’t set up — copy the link and send it to the client yourself.');
+          : 'New link ready — copy it and send it to the client.');
       } else {
         toast(res?.error || 'Failed to resend invitation.', 'err');
       }
@@ -851,7 +851,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
         open={Boolean(linkInfo)}
         onClose={() => setLinkInfo(null)}
         title={linkInfo?.kind === 'reset' ? 'Password reset link' : 'Invitation link'}
-        desc={linkInfo?.sent ? `Also emailed to ${linkInfo?.email}.` : `Email isn’t set up, so nothing was sent. Share this link with ${linkInfo?.email ?? 'the client'} privately.`}
+        desc={`Send this link to ${linkInfo?.email ?? 'the client'} privately (WhatsApp or your own email).`}
         footer={
           <>
             <Button onClick={() => setLinkInfo(null)}>Close</Button>

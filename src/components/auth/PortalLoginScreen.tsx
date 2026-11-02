@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { takeSignOutNotice } from '../../lib/deviceLock';
 import { useAuth } from '../../contexts/AuthContext';
-import { invokeClientSetup } from '../../lib/v2';
-import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, Mail, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { AuthLayout, AuthField } from '../../ui/AuthLayout';
 import { PillTabs } from '../../ui';
 
@@ -60,96 +59,6 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const [startWithNotice] = useState(() => Boolean(error));
   const firstPortalRun = useRef(true);
 
-  // Password reset state
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
-  const [resetError, setResetError] = useState('');
-  // Email isn't set up on the server yet: the link can't be emailed, so point people to their account manager instead.
-  const [resetNoEmail, setResetNoEmail] = useState(false);
-
-  const meta = PORTAL_META[activePortal] || PORTAL_META.employee;
-
-  useEffect(() => {
-    // keep a sign-out notice on first load; clear everything when switching portals afterwards
-    if (firstPortalRun.current) { firstPortalRun.current = false; setActivePortal(portal); return; }
-    setActivePortal(portal);
-    setIdentifier('');
-    setPassword('');
-    setError('');
-    setShowPassword(false);
-    setScreen('login');
-  }, [portal]);
-
-  const switchPortal = (next: Portal) => {
-    if (next === activePortal || loading) return;
-    setActivePortal(next);
-    setIdentifier('');
-    setPassword('');
-    setError('');
-    setShowPassword(false);
-    setScreen('login');
-    const path = next === 'admin' ? '/admin/login' : next === 'client' ? '/client/login' : '/login';
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', path);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }
-  };
-
-  // When the hidden staff sign-in closes itself after 30 s idle, don't leave a typed password behind.
-  useEffect(() => {
-    const onHidden = () => { setPassword(''); setShowPassword(false); setError(''); setScreen('login'); };
-    window.addEventListener('sigma1-login-hidden', onHidden);
-    return () => window.removeEventListener('sigma1-login-hidden', onHidden);
-  }, []);
-
-  // Lets the animated sign-in scene react (robot shakes its head, portal flashes, etc.).
-  const announce = (detail: 'error' | 'success') => window.dispatchEvent(new CustomEvent('ira-login', { detail }));
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-
-    if (!identifier.trim() || !password) {
-      setError(meta.emptyError);
-      announce('error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await signIn(identifier.trim(), password, activePortal);
-      if (result.error) setError(result.error);
-      announce(result.error ? 'error' : 'success');
-    } catch {
-      setError('Unable to sign in right now. Please try again.');
-      announce('error');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError('');
-
-    const targetEmail = resetEmail.trim();
-    if (!targetEmail) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) { setResetError('Enter a valid email address.'); return; }
-
-    setResetLoading(true);
-    try {
-      // Our own single-use link (same page as the welcome invitation), emailed by the server.
-      const res = await invokeClientSetup({ action: 'request_reset', email: targetEmail });
-      setResetNoEmail(res?.emailConfigured === false);
-      setResetSent(true);
-    } catch {
-      setResetError('Unable to send password reset link right now. Please try again.');
-    } finally {
-      setResetLoading(false);
-    }
-  };
-
   // Staff sign-in (SIGMA 1) only switches between Employee and Admin; clients use their own IRA page at /client/login.
   const isClient = activePortal === 'client';
   const portalTabs: Array<{ id: Portal; label: string }> = [
@@ -171,66 +80,21 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
           <div>
             <h2 className="font-display text-[32px] font-bold leading-tight text-ink-950">Reset password</h2>
             <p className="mt-2 text-sm text-ink-500">
-              {activePortal === 'client'
-                ? resetSent ? (resetNoEmail ? 'Contact your account manager.' : 'Check your email.') : 'Enter the email address you sign in with. We’ll email you a link to choose a new password.'
-                : 'For security, staff passwords are reset by your administrator.'}
+              {activePortal === 'client' ? 'Your IRA account manager can send you a new link.' : 'For security, staff passwords are reset by your administrator.'}
             </p>
           </div>
-
-          {activePortal !== 'client' ? (
-            <div className="space-y-5">
-              <div className="inset-tile p-4 text-[13px] text-ink-600 leading-relaxed">
-                {activePortal === 'employee'
+          <div className="space-y-5">
+            <div className="inset-tile p-4 text-[13px] text-ink-600 leading-relaxed">
+              {activePortal === 'client'
+                ? 'Contact your IRA account manager and ask for a password reset link. Open the link they send you, choose a new password, and sign in with your email address. The link works once and expires in 24 hours.'
+                : activePortal === 'employee'
                   ? 'Ask your HR or system administrator to reset your password. They will give you a temporary password, which you can change from your Profile after signing in.'
                   : 'Ask the system owner to reset the administrator password.'}
-              </div>
-              <button type="button" onClick={() => setScreen('login')} className="btn-secondary w-full !min-h-[52px]">
-                <ArrowLeft className="w-4 h-4" /> Back to sign in
-              </button>
             </div>
-          ) : resetSent ? (
-            <div className="space-y-5">
-              {resetNoEmail ? (
-                <p className="text-sm text-ink-600 leading-relaxed">
-                  We can’t email reset links right now. Please ask your IRA account manager to send you a new password link — it arrives by email or they can share it with you directly.
-                </p>
-              ) : (
-                <p className="text-sm text-ink-600 leading-relaxed">
-                  If an account matches <span className="font-semibold text-ink-900">{resetEmail}</span>, we’ve sent a link to choose a new password. It works once and expires in 60 minutes — check your spam folder if you don’t see it.
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => { setResetSent(false); setResetNoEmail(false); setResetEmail(''); setScreen('login'); }}
-                className="btn-primary w-full !min-h-[52px]"
-              >
-                Back to sign in
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
-              {resetError && errorBox(resetError)}
-              <AuthField
-                icon={<Mail className="w-[18px] h-[18px]" />}
-                id="ira-reset-email"
-                type="email"
-                value={resetEmail}
-                onChange={e => { setResetEmail(e.target.value); if (resetError) setResetError(''); }}
-                autoComplete="email"
-                autoCapitalize="none"
-                spellCheck={false}
-                placeholder="Email address"
-                aria-label="Email address"
-                required
-              />
-              <button type="submit" disabled={resetLoading} className="btn-primary w-full !min-h-[52px]">
-                {resetLoading ? 'Sending link…' : 'Send reset link'}
-              </button>
-              <button type="button" onClick={() => { setResetError(''); setScreen('login'); }} className="btn-ghost w-full">
-                <ArrowLeft className="w-4 h-4" /> Back to sign in
-              </button>
-            </form>
-          )}
+            <button type="button" onClick={() => setScreen('login')} className="btn-secondary w-full !min-h-[52px]">
+              <ArrowLeft className="w-4 h-4" /> Back to sign in
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-7">

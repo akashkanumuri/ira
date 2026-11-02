@@ -125,7 +125,7 @@ export const ClientPasswordSetupScreen: React.FC = () => {
           {verifyError}
         </p>
         <p className="text-[13px] text-[#5e5a80] -mt-3 mb-6 leading-relaxed">
-          Already set a password? Use <span className="font-medium text-[#14112b]">Forgot password?</span> on the sign-in page to get a new link.
+          Need a new link? Ask your IRA account manager — they can send you a fresh one in a minute.
         </p>
         <a
           href="/client/login"

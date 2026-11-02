@@ -1,6 +1,5 @@
 import { createSupabaseContext } from 'npm:@supabase/server';
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import nodemailer from 'npm:nodemailer@6.9.16';
 
 interface CreateClientInput {
   action: 'create_client';
@@ -42,43 +41,6 @@ const BASE_CORS_HEADERS = {
 };
 
 const DEFAULT_APP_BASE_URL = 'https://ira-eta-two.vercel.app';
-
-// ── Email: Gmail (SMTP over SSL, port 465 — Supabase blocks 25/587) or Resend, whichever is configured ──
-const GMAIL_PASSWORD = () => Deno.env.get('GMAIL_APP_PASSWORD')?.replace(/\s+/g, '') || '';
-const GMAIL_USER = () => Deno.env.get('GMAIL_USER')?.trim() || 'info.irahospitality@gmail.com';
-const MAIL_FROM_NAME = () => Deno.env.get('MAIL_FROM_NAME')?.trim() || 'IRA Hospitality';
-function mailProvider(): 'gmail' | 'resend' | null {
-  if (GMAIL_PASSWORD()) return 'gmail';
-  if (Deno.env.get('RESEND_API_KEY')?.trim() && Deno.env.get('RESEND_FROM_EMAIL')?.trim()) return 'resend';
-  return null;
-}
-async function sendMail(m: { to: string; subject: string; html: string; text: string }): Promise<{ sent: boolean; id?: string | null; error?: string }> {
-  const provider = mailProvider();
-  try {
-    if (provider === 'gmail') {
-      const transport = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user: GMAIL_USER(), pass: GMAIL_PASSWORD() } });
-      const info = await transport.sendMail({ from: `"${MAIL_FROM_NAME()}" <${GMAIL_USER()}>`, replyTo: GMAIL_USER(), to: m.to, subject: m.subject, html: m.html, text: m.text });
-      return { sent: true, id: info?.messageId ?? null };
-    }
-    if (provider === 'resend') {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${Deno.env.get('RESEND_API_KEY')!.trim()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: Deno.env.get('RESEND_FROM_EMAIL')!.trim(), to: [m.to], subject: m.subject, html: m.html, text: m.text }),
-      });
-      if (!res.ok) return { sent: false, error: `Email provider error: HTTP ${res.status}` };
-      const data = await res.json().catch(() => null);
-      return { sent: true, id: data?.id ?? null };
-    }
-    return { sent: false, error: 'Email isn’t set up.' };
-  } catch (e) {
-    // never log the link or the password
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('[mail] send failed:', msg.replace(/[0-9a-f]{64}/gi, '…'));
-    return { sent: false, error: `Email could not be sent: ${msg}` };
-  }
-}
-
 
 export function getTrustedBaseUrl(): string {
   const envUrl = (
@@ -153,227 +115,18 @@ function generateSecureToken(): string {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-export function buildInvitationEmailHtml(params: {
-  companyName: string;
-  primaryContact: string;
-  invitationUrl: string;
-  supportEmail: string;
-}): string {
-  const safeContact = escapeHtml(params.primaryContact);
-  const safeCompany = escapeHtml(params.companyName);
-  const safeSupport = escapeHtml(params.supportEmail);
-  const safeUrl = params.invitationUrl;
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Set up your IRA Hospitality Client Portal account</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 40px 16px;">
-    <tr>
-      <td align="center">
-        <!-- Main Card -->
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; background-color: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);">
-          <!-- Header -->
-          <tr>
-            <td style="background: linear-gradient(135deg, #090d16 0%, #1e293b 100%); padding: 36px 40px; text-align: left;">
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td>
-                    <span style="font-size: 20px; font-weight: 800; letter-spacing: 2px; color: #ffffff; display: block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                      IRA HOSPITALITY
-                    </span>
-                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 1px; color: #94a3b8; text-transform: uppercase; margin-top: 4px; display: block;">
-                      Client Portal
-                    </span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Body -->
-          <tr>
-            <td style="padding: 40px 40px 32px 40px;">
-              <h1 style="font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 16px 0; line-height: 1.3;">
-                Welcome, ${safeContact}
-              </h1>
-
-              <p style="font-size: 15px; color: #334155; line-height: 1.6; margin: 0 0 16px 0;">
-                An account has been created for <strong>${safeCompany}</strong> on the IRA Hospitality Client Portal.
-              </p>
-
-              <p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 28px 0;">
-                Through your dedicated portal, you can monitor architectural project milestones, view active deliverables, and stay synchronized with your project managers.
-              </p>
-
-              <!-- CTA Button -->
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 32px 0;">
-                <tr>
-                  <td align="center">
-                    <a href="${safeUrl}" target="_blank" style="display: inline-block; background-color: #0044ff; color: #ffffff !important; font-size: 14px; font-weight: 700; text-decoration: none; padding: 15px 32px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 68, 255, 0.35); text-align: center;">
-                      Set Up Password & Access Portal
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Expiration & Security Notice Box -->
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-top: 24px;">
-                <tr>
-                  <td style="padding: 16px 20px;">
-                    <p style="font-size: 12px; color: #475569; margin: 0; line-height: 1.5;">
-                      <strong style="color: #0f172a;">Security Notice:</strong> This invitation is single-use and will expire in <strong>72 hours</strong>. You will be prompted to create your own secure password upon opening the link.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Fallback Plain Link -->
-              <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 28px 0 0 0;">
-                If the button above does not work, copy and paste the following link into your web browser:
-              </p>
-              <p style="font-size: 11px; word-break: break-all; color: #0044ff; margin: 6px 0 0 0; font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
-                ${safeUrl}
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8fafc; border-top: 1px solid #f1f5f9; padding: 24px 40px; text-align: center;">
-              <p style="font-size: 12px; color: #64748b; margin: 0 0 8px 0; line-height: 1.5;">
-                Need help or have questions? Contact your assigned project manager or email our team at
-                <a href="mailto:${safeSupport}" style="color: #0044ff; text-decoration: none; font-weight: 500;">${safeSupport}</a>.
-              </p>
-              <p style="font-size: 11px; color: #94a3b8; margin: 8px 0 0 0;">
-                © ${new Date().getFullYear()} IRA Hospitality & Architecture. All rights reserved.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
-export function buildInvitationEmailText(params: {
-  companyName: string;
-  primaryContact: string;
-  invitationUrl: string;
-  supportEmail: string;
-}): string {
-  return `IRA HOSPITALITY - CLIENT PORTAL INVITATION
-
-Hello ${params.primaryContact},
-
-An account has been created for ${params.companyName} on the IRA Hospitality Client Portal.
-
-Through your dedicated portal, you can monitor architectural project milestones, view active deliverables, and stay synchronized with your project managers.
-
-Please set up your account password by visiting the link below:
-${params.invitationUrl}
-
-SECURITY NOTICE:
-This invitation link is single-use and expires in 72 hours. You will choose your own secure password upon clicking the link.
-
-Need help or have questions?
-Contact your assigned project manager or email: ${params.supportEmail}
-
-(c) ${new Date().getFullYear()} IRA Hospitality & Architecture. All rights reserved.`;
-}
-
-export function buildResetEmailHtml(p: { name: string; companyName: string; url: string; supportEmail: string }): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset your password</title></head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:40px 16px;"><tr><td align="center">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border-radius:20px;border:1px solid #e2e8f0;overflow:hidden;">
-<tr><td style="background:#0f172a;padding:28px 36px;"><span style="font-size:18px;font-weight:800;letter-spacing:2px;color:#fff;">IRA HOSPITALITY</span><br><span style="font-size:11px;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;">Client Portal</span></td></tr>
-<tr><td style="padding:36px;">
-<h1 style="font-size:20px;color:#0f172a;margin:0 0 14px;">Choose a new password</h1>
-<p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 8px;">Hello ${escapeHtml(p.name)},</p>
-<p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;">Your IRA account manager sent you a link to choose a new password for your <strong>${escapeHtml(p.companyName)}</strong> client portal account.</p>
-<p style="text-align:center;margin:28px 0;"><a href="${p.url}" style="display:inline-block;background:#5b35e8;color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:12px;">Choose a new password</a></p>
-<p style="font-size:12px;color:#475569;line-height:1.5;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;">This link works once and expires in 24 hours. Your current password keeps working until you set a new one.</p>
-<p style="font-size:12px;color:#64748b;margin:22px 0 0;">If the button doesn’t work, copy this link into your browser:</p>
-<p style="font-size:11px;word-break:break-all;color:#5b35e8;margin:6px 0 0;font-family:Menlo,Consolas,monospace;">${p.url}</p>
-</td></tr>
-<tr><td style="background:#f8fafc;padding:20px 36px;text-align:center;font-size:12px;color:#64748b;">Need help? Email <a href="mailto:${escapeHtml(p.supportEmail)}" style="color:#5b35e8;text-decoration:none;">${escapeHtml(p.supportEmail)}</a></td></tr>
-</table></td></tr></table></body></html>`;
-}
-
-export interface SendInvitationEmailParams {
-  toEmail: string;
-  companyName: string;
-  primaryContact: string;
-  invitationUrl: string;
-  /** 'reset' for someone who already has a password (the link lets them choose a new one) */
-  kind?: 'invite' | 'reset';
-  resendApiKey?: string | null;
-  resendFromEmail?: string | null;
-  supportEmail?: string | null;
-  fetchFn?: typeof fetch;
-}
-
 export interface EmailDeliveryResult {
   attempted: boolean;
   sent: boolean;
-  id?: string | null;
-  error?: string | null;
   reason?: string | null;
 }
 
-export async function sendInvitationEmail(
-  params: SendInvitationEmailParams
-): Promise<EmailDeliveryResult> {
-  const supportEmail = params.supportEmail ?? (Deno.env.get('SUPPORT_EMAIL')?.trim() || GMAIL_USER());
-
-  // If email isn't configured, fail safely and keep the manual copy-the-link workflow.
-  if (!mailProvider()) {
-    return { attempted: false, sent: false, reason: 'Automated email delivery not configured.' };
-  }
-
-  const isReset = params.kind === 'reset';
-  const html = isReset
-    ? buildResetEmailHtml({ name: params.primaryContact, companyName: params.companyName, url: params.invitationUrl, supportEmail })
-    : buildInvitationEmailHtml({
-      companyName: params.companyName,
-      primaryContact: params.primaryContact,
-      invitationUrl: params.invitationUrl,
-      supportEmail,
-    });
-
-  const text = isReset
-    ? `Reset your IRA client portal password\n\nHello ${params.primaryContact},\n\nYour IRA account manager sent you a link to choose a new password for your ${params.companyName} client portal account:\n${params.invitationUrl}\n\nThe link works once and expires in 24 hours.\n\nNeed help? ${supportEmail}`
-    : buildInvitationEmailText({
-      companyName: params.companyName,
-      primaryContact: params.primaryContact,
-      invitationUrl: params.invitationUrl,
-      supportEmail,
-    });
-
-  const r = await sendMail({
-    to: params.toEmail,
-    subject: isReset ? 'Reset your IRA client portal password' : `Welcome to IRA Hospitality — Client Portal Setup for ${params.companyName}`,
-    html,
-    text,
-  });
-  if (r.sent) console.log(`[client-admin] ${isReset ? 'reset' : 'invitation'} email sent`);
-  return r.sent ? { attempted: true, sent: true, id: r.id ?? null } : { attempted: true, sent: false, error: r.error ?? 'Email could not be sent.' };
+/**
+ * SIGMA 1 doesn't email setup or reset links: the administrator copies the link from the screen and shares it
+ * privately (WhatsApp, their own email). Kept as one function so the screens get the same answer everywhere.
+ */
+function sendInvitationEmail(_params: { toEmail: string; companyName: string; primaryContact: string; invitationUrl: string; kind?: 'invite' | 'reset' }): EmailDeliveryResult {
+  return { attempted: false, sent: false, reason: 'Links are shared by the administrator.' };
 }
 
 async function createClientAccount(
@@ -530,7 +283,7 @@ async function createClientAccount(
     const invitationUrl = `${trustedBaseUrl}/client/setup?token=${rawToken}`;
 
     // 8. Attempt email delivery via Resend (fails safely if unconfigured, preserving setup link)
-    const emailDelivery = await sendInvitationEmail({
+    const emailDelivery = sendInvitationEmail({
       toEmail: email,
       companyName,
       primaryContact,
@@ -605,7 +358,7 @@ async function resendClientInvitation(
 
   const invitationUrl = `${trustedBaseUrl}/client/setup?token=${rawToken}`;
 
-  const emailDelivery = await sendInvitationEmail({
+  const emailDelivery = sendInvitationEmail({
     toEmail: client.email,
     companyName: client.company_name,
     primaryContact: client.primary_contact,
@@ -642,7 +395,7 @@ async function issueClientUserInvitation(
   });
   if (inviteError) throw new Error(`Failed to create the invitation: ${inviteError.message}`);
   const invitationUrl = `${trustedBaseUrl}/client/setup?token=${rawToken}`;
-  const emailDelivery = await sendInvitationEmail({
+  const emailDelivery = sendInvitationEmail({
     toEmail: params.email,
     companyName: params.companyName,
     primaryContact: params.fullName,
@@ -703,8 +456,8 @@ async function inviteClientUser(input: InviteClientUserInput, admin: ReturnType<
       clientUserId,
       email,
       emailDelivery,
-      // Only IRA administrators receive the setup link; a client admin must not hold a credential link for someone else's account.
-      invitationUrl: caller.kind === 'admin' ? invitationUrl : undefined,
+      // No emails: whoever adds the person shares the one-time setup link with them.
+      invitationUrl,
     };
   } catch (error) {
     try {
@@ -725,13 +478,15 @@ async function resendClientUserInvitation(input: ResendClientUserInput, admin: R
   if (error || !cu) throw new Error('User not found.');
   if (caller.kind === 'client_admin' && cu.client_id !== caller.clientId) throw new Error('User not found.');
   if (cu.status === 'inactive') throw new Error('This person’s access is switched off. Turn it back on first.');
+  if (caller.kind === 'client_admin' && cu.status === 'active') throw new Error('For a password reset, ask your IRA account manager to send a new link.');
   if ((cu as any).clients?.profile_id === cu.profile_id) throw new Error('Use “Resend invitation” on the client account for the primary contact.');
   // Someone who already set a password gets a reset link instead of a welcome invitation.
   const kind: 'invite' | 'reset' = cu.status === 'active' ? 'reset' : 'invite';
   const { invitationUrl, emailDelivery } = await issueClientUserInvitation(admin, {
     userId: cu.profile_id, email: cu.email, fullName: cu.full_name ?? cu.email, companyName: (cu as any).clients?.company_name ?? 'your organisation', actorId, kind,
   });
-  return { success: true, kind, email: cu.email, emailDelivery, invitationUrl: caller.kind === 'admin' ? invitationUrl : undefined };
+  // Client admins only ever get first-time setup links (resets are blocked above).
+  return { success: true, kind, email: cu.email, emailDelivery, invitationUrl };
 }
 
 Deno.serve(async (req: Request) => {

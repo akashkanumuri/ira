@@ -239,9 +239,9 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
                 <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm text-slate-700 flex items-start gap-3">
                   <Mail className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold block text-slate-800 text-sm sm:text-base">Manual Distribution Mode</span>
+                    <span className="font-bold block text-slate-800 text-sm sm:text-base">Send this link to the client</span>
                     <span className="text-slate-600 leading-relaxed block mt-0.5">
-                      Automated email delivery is not configured. Please copy the invitation link below and send it to the client.
+                      Copy the setup link below and send it to the client privately (WhatsApp or your own email). They open it, choose a password, and can sign in.
                     </span>
                   </div>
                 </div>
@@ -291,7 +291,7 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
               )}
 
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3">
-                {!createdInfo.emailDelivery?.sent && createdInfo.clientId ? (
+                {false && createdInfo.clientId ? (
                   <button
                     type="button"
                     onClick={handleRetryEmail}

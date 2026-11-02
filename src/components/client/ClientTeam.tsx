@@ -60,7 +60,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
       const reset = res?.kind === 'reset';
       if (res?.invitationUrl) setLink({ email: m.email, url: res.invitationUrl, reset });
       const what = reset ? 'Password reset link' : 'Invitation';
-      notify(res?.emailDelivery?.sent ? `${what} sent to ${m.email}.` : mode === 'admin' ? 'Email isn’t configured — copy the link.' : `${what} created, but email isn’t set up yet. Ask IRA to share the link.`, res?.emailDelivery?.sent ? 'success' : 'info');
+      notify(`${what} ready — copy it and send it to ${m.email}.`, 'success');
     } catch (e) { notify(e instanceof Error ? e.message : 'Unable to resend.', 'error'); }
     finally { setBusy(null); }
   }
@@ -92,7 +92,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
                 {!locked && (
                   <div className="flex gap-1.5 w-full sm:w-auto justify-end">
                     {m.status === 'invited' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void resend(m)}><MailPlus className="w-3.5 h-3.5" /> Resend</button>}
-                    {m.status === 'active' && !isPrimary && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void resend(m)}><MailPlus className="w-3.5 h-3.5" /> Reset password</button>}
+                    {m.status === 'active' && !isPrimary && mode === 'admin' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void resend(m)}><MailPlus className="w-3.5 h-3.5" /> Reset password</button>}
                     {m.status === 'active' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void update(m, { role: m.role === 'client_admin' ? 'client_user' : 'client_admin' })}>{m.role === 'client_admin' ? 'Make member' : 'Make admin'}</button>}
                     {m.status !== 'inactive'
                       ? <button type="button" className="btn-ghost btn-sm text-rose-600" disabled={busy === m.id} onClick={() => void update(m, { status: 'inactive' })}>Remove access</button>
@@ -133,8 +133,7 @@ function InviteDialog({ clientId, mode, onClose, onDone }: { clientId: string; m
     setBusy(true);
     try {
       const res = await invokeClientAdmin({ action: 'invite_client_user', fullName: name.trim(), email: email.trim(), role, clientId: mode === 'admin' ? clientId : undefined });
-      const sent = Boolean(res?.emailDelivery?.sent);
-      notify(sent ? `Invitation emailed to ${email.trim()}.` : mode === 'admin' ? 'Added — email isn’t configured, copy the setup link.' : 'Added, but invitation email isn’t set up yet. Ask IRA to share the setup link.', sent ? 'success' : 'info');
+      notify(`Added — copy the setup link and send it to ${email.trim()}.`, 'success');
       await onDone(res?.invitationUrl ? { email: email.trim(), url: res.invitationUrl } : null);
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Unable to add this person.', 'error');
