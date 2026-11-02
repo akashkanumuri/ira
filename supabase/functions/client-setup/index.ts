@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import nodemailer from 'npm:nodemailer@6.9.16';
 
 const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -48,16 +49,49 @@ const APP_BASE_URL = (Deno.env.get('APP_BASE_URL')?.trim() || 'https://ira-eta-t
 const RESET_MINUTES = 60;          // self-service reset links are short-lived
 const RESET_LIMIT_PER_HOUR = 3;    // per person, so the form can't be used to flood an inbox
 
+// ── Email: Gmail (SMTP over SSL, port 465 — Supabase blocks 25/587) or Resend, whichever is configured ──
+const GMAIL_PASSWORD = () => Deno.env.get('GMAIL_APP_PASSWORD')?.replace(/\s+/g, '') || '';
+const GMAIL_USER = () => Deno.env.get('GMAIL_USER')?.trim() || 'info.irahospitality@gmail.com';
+const MAIL_FROM_NAME = () => Deno.env.get('MAIL_FROM_NAME')?.trim() || 'IRA Hospitality';
+function mailProvider(): 'gmail' | 'resend' | null {
+  if (GMAIL_PASSWORD()) return 'gmail';
+  if (Deno.env.get('RESEND_API_KEY')?.trim() && Deno.env.get('RESEND_FROM_EMAIL')?.trim()) return 'resend';
+  return null;
+}
+async function sendMail(m: { to: string; subject: string; html: string; text: string }): Promise<{ sent: boolean; id?: string | null; error?: string }> {
+  const provider = mailProvider();
+  try {
+    if (provider === 'gmail') {
+      const transport = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user: GMAIL_USER(), pass: GMAIL_PASSWORD() } });
+      const info = await transport.sendMail({ from: `"${MAIL_FROM_NAME()}" <${GMAIL_USER()}>`, replyTo: GMAIL_USER(), to: m.to, subject: m.subject, html: m.html, text: m.text });
+      return { sent: true, id: info?.messageId ?? null };
+    }
+    if (provider === 'resend') {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${Deno.env.get('RESEND_API_KEY')!.trim()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: Deno.env.get('RESEND_FROM_EMAIL')!.trim(), to: [m.to], subject: m.subject, html: m.html, text: m.text }),
+      });
+      if (!res.ok) return { sent: false, error: `Email provider error: HTTP ${res.status}` };
+      const data = await res.json().catch(() => null);
+      return { sent: true, id: data?.id ?? null };
+    }
+    return { sent: false, error: 'Email isn’t set up.' };
+  } catch (e) {
+    // never log the link or the password
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[mail] send failed:', msg.replace(/[0-9a-f]{64}/gi, '…'));
+    return { sent: false, error: `Email could not be sent: ${msg}` };
+  }
+}
+
 /** Is automated email set up at all? (Same answer for every address, so it reveals nothing about accounts.) */
 function emailConfigured(): boolean {
-  return Boolean(Deno.env.get('RESEND_API_KEY')?.trim() && Deno.env.get('RESEND_FROM_EMAIL')?.trim());
+  return mailProvider() !== null;
 }
 
 async function sendResetEmail(toEmail: string, name: string, companyName: string, url: string): Promise<boolean> {
-  const apiKey = Deno.env.get('RESEND_API_KEY')?.trim();
-  const from = Deno.env.get('RESEND_FROM_EMAIL')?.trim();
-  if (!apiKey || !from) return false;
-  const support = Deno.env.get('SUPPORT_EMAIL')?.trim() || 'support@iragroup.in';
+  const support = Deno.env.get('SUPPORT_EMAIL')?.trim() || GMAIL_USER();
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset your password</title></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:40px 16px;"><tr><td align="center">
@@ -75,18 +109,8 @@ async function sendResetEmail(toEmail: string, name: string, companyName: string
 <tr><td style="background:#f8fafc;padding:20px 36px;text-align:center;font-size:12px;color:#64748b;">Need help? Email <a href="mailto:${escapeHtml(support)}" style="color:#5b35e8;text-decoration:none;">${escapeHtml(support)}</a></td></tr>
 </table></td></tr></table></body></html>`;
   const text = `Reset your IRA client portal password\n\nHello ${name},\n\nWe received a request to reset the password for your ${companyName} client portal account. Open this link to choose a new password:\n${url}\n\nThe link works once and expires in ${RESET_MINUTES} minutes. If you didn't ask for a reset, ignore this email.\n\nNeed help? ${support}`;
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [toEmail], subject: 'Reset your IRA client portal password', html, text }),
-    });
-    if (!res.ok) { console.error('[client-setup] reset email failed: HTTP', res.status); return false; }
-    return true;
-  } catch (e) {
-    console.error('[client-setup] reset email network error:', e instanceof Error ? e.message : e);
-    return false;
-  }
+  const r = await sendMail({ to: toEmail, subject: 'Reset your IRA client portal password', html, text });
+  return r.sent;
 }
 
 /**

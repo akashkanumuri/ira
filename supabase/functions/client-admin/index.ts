@@ -1,5 +1,6 @@
 import { createSupabaseContext } from 'npm:@supabase/server';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import nodemailer from 'npm:nodemailer@6.9.16';
 
 interface CreateClientInput {
   action: 'create_client';
@@ -41,6 +42,43 @@ const BASE_CORS_HEADERS = {
 };
 
 const DEFAULT_APP_BASE_URL = 'https://ira-eta-two.vercel.app';
+
+// ── Email: Gmail (SMTP over SSL, port 465 — Supabase blocks 25/587) or Resend, whichever is configured ──
+const GMAIL_PASSWORD = () => Deno.env.get('GMAIL_APP_PASSWORD')?.replace(/\s+/g, '') || '';
+const GMAIL_USER = () => Deno.env.get('GMAIL_USER')?.trim() || 'info.irahospitality@gmail.com';
+const MAIL_FROM_NAME = () => Deno.env.get('MAIL_FROM_NAME')?.trim() || 'IRA Hospitality';
+function mailProvider(): 'gmail' | 'resend' | null {
+  if (GMAIL_PASSWORD()) return 'gmail';
+  if (Deno.env.get('RESEND_API_KEY')?.trim() && Deno.env.get('RESEND_FROM_EMAIL')?.trim()) return 'resend';
+  return null;
+}
+async function sendMail(m: { to: string; subject: string; html: string; text: string }): Promise<{ sent: boolean; id?: string | null; error?: string }> {
+  const provider = mailProvider();
+  try {
+    if (provider === 'gmail') {
+      const transport = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user: GMAIL_USER(), pass: GMAIL_PASSWORD() } });
+      const info = await transport.sendMail({ from: `"${MAIL_FROM_NAME()}" <${GMAIL_USER()}>`, replyTo: GMAIL_USER(), to: m.to, subject: m.subject, html: m.html, text: m.text });
+      return { sent: true, id: info?.messageId ?? null };
+    }
+    if (provider === 'resend') {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${Deno.env.get('RESEND_API_KEY')!.trim()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: Deno.env.get('RESEND_FROM_EMAIL')!.trim(), to: [m.to], subject: m.subject, html: m.html, text: m.text }),
+      });
+      if (!res.ok) return { sent: false, error: `Email provider error: HTTP ${res.status}` };
+      const data = await res.json().catch(() => null);
+      return { sent: true, id: data?.id ?? null };
+    }
+    return { sent: false, error: 'Email isn’t set up.' };
+  } catch (e) {
+    // never log the link or the password
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[mail] send failed:', msg.replace(/[0-9a-f]{64}/gi, '…'));
+    return { sent: false, error: `Email could not be sent: ${msg}` };
+  }
+}
+
 
 export function getTrustedBaseUrl(): string {
   const envUrl = (
@@ -302,45 +340,11 @@ export interface EmailDeliveryResult {
 export async function sendInvitationEmail(
   params: SendInvitationEmailParams
 ): Promise<EmailDeliveryResult> {
-  const apiKey = params.resendApiKey ?? (
-    typeof Deno !== 'undefined'
-      ? Deno.env.get('RESEND_API_KEY')
-      : typeof process !== 'undefined'
-      ? process.env.RESEND_API_KEY
-      : null
-  )?.trim();
+  const supportEmail = params.supportEmail ?? (Deno.env.get('SUPPORT_EMAIL')?.trim() || GMAIL_USER());
 
-  const fromEmail = params.resendFromEmail ?? (
-    typeof Deno !== 'undefined'
-      ? Deno.env.get('RESEND_FROM_EMAIL')
-      : typeof process !== 'undefined'
-      ? process.env.RESEND_FROM_EMAIL
-      : null
-  )?.trim();
-
-  const supportEmail = params.supportEmail ?? (
-    (typeof Deno !== 'undefined'
-      ? Deno.env.get('SUPPORT_EMAIL')
-      : typeof process !== 'undefined'
-      ? process.env.SUPPORT_EMAIL
-      : null)?.trim() || 'support@iragroup.in'
-  );
-
-  // Rule 3: If sender configuration or API key is missing, fail safely and preserve manual link workflow.
-  if (!apiKey) {
-    return {
-      attempted: false,
-      sent: false,
-      reason: 'Automated email delivery not configured: RESEND_API_KEY is not set.',
-    };
-  }
-
-  if (!fromEmail) {
-    return {
-      attempted: false,
-      sent: false,
-      reason: 'Automated email delivery not configured: RESEND_FROM_EMAIL is not set.',
-    };
+  // If email isn't configured, fail safely and keep the manual copy-the-link workflow.
+  if (!mailProvider()) {
+    return { attempted: false, sent: false, reason: 'Automated email delivery not configured.' };
   }
 
   const isReset = params.kind === 'reset';
@@ -362,61 +366,14 @@ export async function sendInvitationEmail(
       supportEmail,
     });
 
-  const fetchImpl = params.fetchFn ?? fetch;
-
-  try {
-    const res = await fetchImpl('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'IRA-Hospitality-Client-Admin/1.0',
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [params.toEmail],
-        subject: isReset ? 'Reset your IRA client portal password' : `Welcome to IRA Hospitality — Client Portal Setup for ${params.companyName}`,
-        html,
-        text,
-      }),
-    });
-
-    if (!res.ok) {
-      let errorDetail = `HTTP ${res.status}`;
-      try {
-        const errorJson = await res.json();
-        if (errorJson?.message) errorDetail = errorJson.message;
-        else if (errorJson?.error) errorDetail = String(errorJson.error);
-      } catch {
-        if (res.statusText) errorDetail = `${res.status} ${res.statusText}`;
-      }
-
-      // Rule 5: Never log raw tokens or token-bearing URLs
-      console.error(`[client-admin] Resend email delivery failed for recipient: ${errorDetail}`);
-      return {
-        attempted: true,
-        sent: false,
-        error: `Email provider error: ${errorDetail}`,
-      };
-    }
-
-    const data = await res.json();
-    // Rule 5: Never log raw tokens or token-bearing URLs
-    console.log(`[client-admin] Resend invitation email dispatched successfully (id: ${data?.id})`);
-    return {
-      attempted: true,
-      sent: true,
-      id: data?.id ?? null,
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[client-admin] Resend dispatch network error: ${message}`);
-    return {
-      attempted: true,
-      sent: false,
-      error: `Network error sending email: ${message}`,
-    };
-  }
+  const r = await sendMail({
+    to: params.toEmail,
+    subject: isReset ? 'Reset your IRA client portal password' : `Welcome to IRA Hospitality — Client Portal Setup for ${params.companyName}`,
+    html,
+    text,
+  });
+  if (r.sent) console.log(`[client-admin] ${isReset ? 'reset' : 'invitation'} email sent`);
+  return r.sent ? { attempted: true, sent: true, id: r.id ?? null } : { attempted: true, sent: false, error: r.error ?? 'Email could not be sent.' };
 }
 
 async function createClientAccount(
