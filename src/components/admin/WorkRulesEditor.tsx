@@ -118,7 +118,7 @@ function applyBoardType(r: WorkRules, t: BoardType): WorkRules {
   const base = normalizeRules({ ...r, ...keep });
   switch (t) {
     case 'office': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'office', office_days_count: null, must_come_days: [], extra_wfh: 'approval', geofence_required: true, pay_type: 'monthly', pay_rate: null });
-    case 'hybrid': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'hybrid', office_days_count: r.office_days_count ?? 3, office_days_period: 'week', extra_wfh: 'free', geofence_required: true, pay_type: 'monthly', pay_rate: null });
+    case 'hybrid': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'hybrid', office_days_count: r.office_days_count ?? 3, office_days_period: 'week', must_come_days: [], extra_wfh: 'free', geofence_required: true, pay_type: 'monthly', pay_rate: null });
     case 'remote': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'remote', office_days_count: null, must_come_days: [], extra_wfh: 'free', geofence_required: false, pay_type: 'monthly', pay_rate: null });
     case 'part_time': return normalizeRules({ ...base, ...staff, ...flexDay(4), employment_type: 'part_time', location_mode: r.location_mode === 'office' ? 'office' : 'remote', office_days_count: null, must_come_days: [], extra_hours: 'approval', pay_type: 'hourly' });
     case 'intern': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'intern', location_mode: 'office', office_days_count: null, must_come_days: [], extra_wfh: 'approval', geofence_required: true, pay_type: 'stipend', pay_rate: null, access_end_mode: 'end_date' });
@@ -203,18 +203,13 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
       <Block icon={<Briefcase className="w-3.5 h-3.5" />} title="Essentials">
         <Row label="Work location *">
           {type === 'hybrid' ? (
-            <div className="space-y-2">
-              <span className="inline-flex items-center gap-2 flex-wrap text-[13px] text-ink-700">
-                <Num label="Office days" value={r.office_days_count} min={1} max={r.office_days_period === 'week' ? 7 : 27} onChange={(v) => set('office_days_count', v)} width="!w-[72px]" />
-                office days
-                <Seg value={r.office_days_period} onChange={(v) => set('office_days_period', v)} options={[{ id: 'week', label: 'a week' }, { id: 'month', label: 'a month' }]} />
-                · the rest from home
-              </span>
-              <div>
-                <p className="text-[11.5px] text-ink-500 mb-1">Fixed office days (optional — leave empty to let them choose)</p>
-                <DayPicker value={r.must_come_days} allowed={r.working_days} onChange={(v) => set('must_come_days', v)} />
-              </div>
-            </div>
+            <span className="inline-flex items-center gap-2 flex-wrap text-[13px] text-ink-700">
+              <Num label="Office days" value={r.office_days_count} min={1} max={Math.max(1, r.working_days.length)} onChange={(v) => patch({ office_days_count: v, office_days_period: 'week' })} width="!w-[72px]" />
+              days in office ·
+              <Num label="Home days" value={Math.max(0, r.working_days.length - (r.office_days_count ?? 0))} min={0} max={Math.max(0, r.working_days.length - 1)} onChange={(v) => patch({ office_days_count: Math.max(1, r.working_days.length - (v ?? 0)), office_days_period: 'week' })} width="!w-[72px]" />
+              days from home, every week
+              <span className="text-[11.5px] text-ink-400">— any days they choose</span>
+            </span>
           ) : type === 'part_time' ? (
             <Seg value={r.location_mode === 'office' ? 'office' : 'remote'} onChange={(v) => patch({ location_mode: v, geofence_required: v === 'office', extra_wfh: v === 'office' ? 'approval' : 'free' })}
               options={[{ id: 'remote', label: 'Work from home' }, { id: 'office', label: 'Work from office' }]} />
@@ -224,7 +219,7 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
         </Row>
         <Row label="Working days *">
           <div className="space-y-2">
-            <DayPicker value={r.working_days} onChange={(v) => patch({ working_days: v, must_come_days: r.must_come_days.filter((d) => v.includes(d)) })} />
+            <DayPicker value={r.working_days} onChange={(v) => patch({ working_days: v, must_come_days: r.must_come_days.filter((d) => v.includes(d)), ...(r.location_mode === 'hybrid' && r.office_days_count != null && r.office_days_count > v.length ? { office_days_count: Math.max(1, v.length) } : {}) })} />
             {r.working_days.includes(6) && (
               <Seg value={r.saturday_off} onChange={(v) => set('saturday_off', v)} options={[
                 { id: 'none', label: 'Every Saturday' }, { id: 'second_fourth', label: '2nd & 4th Sat off' }, { id: 'first_third', label: '1st & 3rd Sat off' }, { id: 'all', label: 'Saturdays off' },
@@ -335,7 +330,12 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
 
             <Block icon={<MapPin className="w-3.5 h-3.5" />} title="Office & home">
               {type === 'hybrid' && (
-                <Row label="Extra home days" hint="Beyond the quota / on a fixed office day">
+                <Row label="Fixed office days" hint="Optional. Only if certain days must be in office — leave empty to let them choose">
+                  <DayPicker value={r.must_come_days} allowed={r.working_days} onChange={(v) => set('must_come_days', v)} />
+                </Row>
+              )}
+              {type === 'hybrid' && (
+                <Row label="Extra home days" hint="More home days than agreed">
                   <Seg value={r.extra_wfh} onChange={(v) => set('extra_wfh', v)} options={[
                     { id: 'free', label: 'Free' }, { id: 'approval', label: 'Needs approval' }, { id: 'not_allowed', label: 'Not allowed' },
                   ]} />
