@@ -23,6 +23,8 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
   );
 }
 
+const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 function DayPicker({ value, onChange, allowed }: { value: number[]; onChange: (v: number[]) => void; allowed?: number[] }) {
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -118,7 +120,7 @@ function applyBoardType(r: WorkRules, t: BoardType): WorkRules {
   const base = normalizeRules({ ...r, ...keep });
   switch (t) {
     case 'office': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'office', office_days_count: null, must_come_days: [], extra_wfh: 'approval', geofence_required: true, pay_type: 'monthly', pay_rate: null });
-    case 'hybrid': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'hybrid', office_days_count: r.office_days_count ?? 3, office_days_period: 'week', must_come_days: [], extra_wfh: 'free', geofence_required: true, pay_type: 'monthly', pay_rate: null });
+    case 'hybrid': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'hybrid', office_days_count: r.location_mode === 'hybrid' && r.must_come_days.length ? r.must_come_days.length : null, office_days_period: 'week', must_come_days: r.location_mode === 'hybrid' ? r.must_come_days : [], extra_wfh: 'approval', geofence_required: true, pay_type: 'monthly', pay_rate: null });
     case 'remote': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'full_time', location_mode: 'remote', office_days_count: null, must_come_days: [], extra_wfh: 'free', geofence_required: false, pay_type: 'monthly', pay_rate: null });
     case 'part_time': return normalizeRules({ ...base, ...staff, ...flexDay(4), employment_type: 'part_time', location_mode: r.location_mode === 'office' ? 'office' : 'remote', office_days_count: null, must_come_days: [], extra_hours: 'approval', pay_type: 'hourly' });
     case 'intern': return normalizeRules({ ...base, ...staff, ...fixedDay, employment_type: 'intern', location_mode: 'office', office_days_count: null, must_come_days: [], extra_wfh: 'approval', geofence_required: true, pay_type: 'stipend', pay_rate: null, access_end_mode: 'end_date' });
@@ -201,31 +203,33 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
 
       {/* 2 — the essentials for that type (all required) */}
       <Block icon={<Briefcase className="w-3.5 h-3.5" />} title="Essentials">
-        <Row label="Work location *">
-          {type === 'hybrid' ? (
-            <span className="inline-flex items-center gap-2 flex-wrap text-[13px] text-ink-700">
-              <Num label="Office days" value={r.office_days_count} min={1} max={Math.max(1, r.working_days.length)} onChange={(v) => patch({ office_days_count: v, office_days_period: 'week' })} width="!w-[72px]" />
-              days in office ·
-              <Num label="Home days" value={Math.max(0, r.working_days.length - (r.office_days_count ?? 0))} min={0} max={Math.max(0, r.working_days.length - 1)} onChange={(v) => patch({ office_days_count: Math.max(1, r.working_days.length - (v ?? 0)), office_days_period: 'week' })} width="!w-[72px]" />
-              days from home, every week
-              <span className="text-[11.5px] text-ink-400">— any days they choose</span>
-            </span>
-          ) : type === 'part_time' ? (
-            <Seg value={r.location_mode === 'office' ? 'office' : 'remote'} onChange={(v) => patch({ location_mode: v, geofence_required: v === 'office', extra_wfh: v === 'office' ? 'approval' : 'free' })}
-              options={[{ id: 'remote', label: 'Work from home' }, { id: 'office', label: 'Work from office' }]} />
-          ) : (
-            <p className="pt-1.5 text-[13px] font-semibold text-ink-800">{type === 'remote' || type === 'freelancer' ? 'Work from home' : 'Work from office'}</p>
-          )}
-        </Row>
         <Row label="Working days *">
           <div className="space-y-2">
-            <DayPicker value={r.working_days} onChange={(v) => patch({ working_days: v, must_come_days: r.must_come_days.filter((d) => v.includes(d)), ...(r.location_mode === 'hybrid' && r.office_days_count != null && r.office_days_count > v.length ? { office_days_count: Math.max(1, v.length) } : {}) })} />
+            <DayPicker value={r.working_days} onChange={(v) => { const mc = r.must_come_days.filter((d) => v.includes(d)); patch({ working_days: v, must_come_days: mc, ...(r.location_mode === 'hybrid' ? { office_days_count: mc.length || null, office_days_period: 'week' as const } : {}) }); }} />
             {r.working_days.includes(6) && (
               <Seg value={r.saturday_off} onChange={(v) => set('saturday_off', v)} options={[
                 { id: 'none', label: 'Every Saturday' }, { id: 'second_fourth', label: '2nd & 4th Sat off' }, { id: 'first_third', label: '1st & 3rd Sat off' }, { id: 'all', label: 'Saturdays off' },
               ]} />
             )}
           </div>
+        </Row>
+        <Row label="Work location *">
+          {type === 'hybrid' ? (
+            <div className="space-y-1.5">
+              <p className="text-[11.5px] text-ink-500">Tap the days they come to the office — the other working days are from home</p>
+              <DayPicker value={r.must_come_days} allowed={r.working_days} onChange={(v) => patch({ must_come_days: v, office_days_count: v.length || null, office_days_period: 'week' })} />
+              <p className="text-[12.5px] text-ink-700">
+                <span className="font-semibold">Office:</span> {r.must_come_days.length ? r.must_come_days.map((d) => DAY_SHORT[d - 1]).join(', ') : '—'}
+                <span className="mx-2 text-ink-300">·</span>
+                <span className="font-semibold">Home:</span> {r.working_days.filter((d) => !r.must_come_days.includes(d)).map((d) => DAY_SHORT[d - 1]).join(', ') || '—'}
+              </p>
+            </div>
+          ) : type === 'part_time' ? (
+            <Seg value={r.location_mode === 'office' ? 'office' : 'remote'} onChange={(v) => patch({ location_mode: v, geofence_required: v === 'office', extra_wfh: v === 'office' ? 'approval' : 'free' })}
+              options={[{ id: 'remote', label: 'Work from home' }, { id: 'office', label: 'Work from office' }]} />
+          ) : (
+            <p className="pt-1.5 text-[13px] font-semibold text-ink-800">{type === 'remote' || type === 'freelancer' ? 'Work from home' : 'Work from office'}</p>
+          )}
         </Row>
         <Row label="Timing *">
           <div className="space-y-2">
@@ -330,12 +334,7 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
 
             <Block icon={<MapPin className="w-3.5 h-3.5" />} title="Office & home">
               {type === 'hybrid' && (
-                <Row label="Fixed office days" hint="Optional. Only if certain days must be in office — leave empty to let them choose">
-                  <DayPicker value={r.must_come_days} allowed={r.working_days} onChange={(v) => set('must_come_days', v)} />
-                </Row>
-              )}
-              {type === 'hybrid' && (
-                <Row label="Extra home days" hint="More home days than agreed">
+                <Row label="Home day on an office day" hint="Swapping an office day for home">
                   <Seg value={r.extra_wfh} onChange={(v) => set('extra_wfh', v)} options={[
                     { id: 'free', label: 'Free' }, { id: 'approval', label: 'Needs approval' }, { id: 'not_allowed', label: 'Not allowed' },
                   ]} />

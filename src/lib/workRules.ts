@@ -139,9 +139,11 @@ function daysText(r: WorkRules) {
 export function rulesSummary(r: WorkRules): string {
   const parts: string[] = [EMPLOYMENT_LABEL[r.employment_type]];
   if (r.location_mode === 'hybrid') {
-    const home = r.office_days_period === 'week' && r.office_days_count != null ? Math.max(0, r.working_days.length - r.office_days_count) : null;
-    let h = `Hybrid, ${r.office_days_count ?? '?'} office${home != null ? ` + ${home} home` : ''} day${(r.office_days_count ?? 0) + (home ?? 0) === 1 ? '' : 's'} a ${r.office_days_period}${r.must_come_days.length ? '' : ' (any days)'}`;
-    if (r.must_come_days.length) h += `, must come ${r.must_come_days.map((n) => DAYS[n - 1].short).join('/')}`;
+    const fmt = (ds: number[]) => ds.map((n) => DAYS[n - 1].short).join('/');
+    const fixed = r.must_come_days.length > 0 && r.office_days_period === 'week' && r.must_come_days.length >= (r.office_days_count ?? 0);
+    const h = fixed
+      ? `Hybrid — office ${fmt(r.must_come_days)}, home ${fmt(r.working_days.filter((d) => !r.must_come_days.includes(d))) || 'none'}`
+      : `Hybrid, any ${r.office_days_count ?? '?'} office day${r.office_days_count === 1 ? '' : 's'} a ${r.office_days_period}${r.must_come_days.length ? `, must come ${fmt(r.must_come_days)}` : ''}`;
     parts.push(h);
   } else parts.push(r.location_mode === 'office' ? 'Office' : 'Remote');
   if (!isNonEmployee(r)) {
@@ -169,7 +171,8 @@ export function rulesBadge(r: WorkRules): string {
 export function validateRules(r: WorkRules, effectiveFrom?: string): string | null {
   if (!r.working_days.length) return 'Pick at least one working day.';
   if (r.location_mode === 'hybrid') {
-    if (!r.office_days_count) return 'Set how many office days a hybrid employee needs.';
+    if (!r.office_days_count) return 'Tap the days a hybrid employee comes to the office.';
+    if (r.office_days_period === 'week' && r.must_come_days.length && r.must_come_days.length >= r.working_days.length) return 'All working days are office days — pick Standard office instead, or leave some days for home.';
     if (r.office_days_period === 'week' && r.office_days_count > r.working_days.length) return `Office days a week (${r.office_days_count}) can’t be more than working days (${r.working_days.length}).`;
     if (r.office_days_period === 'month' && r.office_days_count > 27) return 'Office days a month is too high.';
     if (r.must_come_days.some((d) => !r.working_days.includes(d))) return 'Must-come days have to be working days.';
