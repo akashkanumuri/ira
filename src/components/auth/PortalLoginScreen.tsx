@@ -135,7 +135,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   );
 
   return (
-    <AuthLayout brand={isClient ? 'ira' : 'sigma'} secret={!isClient && !startWithNotice} eyebrow={isClient ? 'IRA Hospitality · Client portal' : 'SIGMA 1'} headline={meta.headline}>
+    <AuthLayout brand="sigma" secret={!isClient && !startWithNotice} eyebrow={isClient ? 'SIGMA 1 · Client portal' : 'SIGMA 1'} headline={meta.headline}>
       {screen === 'forgot' ? (
         <div className="space-y-6">
           <div>

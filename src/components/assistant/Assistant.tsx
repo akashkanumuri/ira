@@ -715,8 +715,8 @@ function CopySite() {
 
 /* ───────────────────────── tour: point at each menu item ───────────────────────── */
 
-function Tour({ groups, onClose, onFocus, robotW }: { groups: NavGroupLite[]; onClose: () => void; onFocus: (r: DOMRect | null) => void; robotW: number }) {
-  const items = useMemo(() => groups.flatMap((g) => g.items).filter((it) => PAGE_HELP[it.id]), [groups]);
+export function Tour({ groups, onClose, onFocus, robotW, help: helpMap = PAGE_HELP }: { groups: NavGroupLite[]; onClose: () => void; onFocus: (r: DOMRect | null) => void; robotW: number; help?: Record<string, { title: string; text: string }> }) {
+  const items = useMemo(() => groups.flatMap((g) => g.items).filter((it) => helpMap[it.id]), [groups, helpMap]);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const it = items[i];
@@ -740,7 +740,7 @@ function Tour({ groups, onClose, onFocus, robotW }: { groups: NavGroupLite[]; on
   }, [items.length, onClose]);
 
   if (!it) return null;
-  const help = PAGE_HELP[it.id];
+  const help = helpMap[it.id];
   const last = i === items.length - 1;
   const cardStyle: React.CSSProperties = rect
     ? { position: 'fixed', left: Math.min(rect.right + 18 + robotW, window.innerWidth - 340), top: Math.max(12, Math.min(rect.top + rect.height / 2 - 70, window.innerHeight - 200)), zIndex: 71 }

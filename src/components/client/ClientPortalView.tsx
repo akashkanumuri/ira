@@ -19,6 +19,7 @@ import { AppShell, type NavGroup as ShellNavGroup } from '../../ui/AppShell';
 import { SkeletonPage } from '../../ui';
 import { ClientSupport } from './ClientSupport';
 import { ClientTeam } from './ClientTeam';
+import { ClientAssistant } from '../assistant/ClientAssistant';
 import {
   cx,
   Button,
@@ -321,7 +322,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
 
   return (
     <AppShell
-      brand="ira"
+      brand="sigma"
       groups={navGroups}
       active={page}
       onNavigate={id => setPage(id as ClientNavPage)}
@@ -367,6 +368,18 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
       <div key={page} className="ira-section-transition mx-auto w-full max-w-[1320px]">
         {renderActivePage()}
       </div>
+      {/* Sigma, the guide robot — calm version for clients (tips from this project's data, page help, tour) */}
+      <ClientAssistant
+        userId={user.id}
+        firstName={(user.primaryContact || user.name || '').split(' ')[0] || 'there'}
+        page={page}
+        onNavigate={setPage}
+        navGroups={navGroups.map(g => ({ label: g.label, items: g.items.map(it => ({ id: it.id, label: it.label })) }))}
+        ws={ws}
+        projectName={selectedProject?.name ?? 'your project'}
+        unread={unreadNotifCount}
+        canPay={user.clientRole !== 'client_user'}
+      />
     </AppShell>
   );
 };

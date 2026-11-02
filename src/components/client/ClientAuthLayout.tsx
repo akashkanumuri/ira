@@ -8,9 +8,9 @@ interface ClientAuthLayoutProps {
   notice?: string;
 }
 
-/** Client invitation / password set-up screens share the main sign-in layout. */
+/** Client invitation / password set-up screens share the SIGMA 1 sign-in layout (3D robot scene, form always visible). */
 export const ClientAuthLayout: React.FC<ClientAuthLayoutProps> = ({ children, tag, line, notice }) => (
-  <AuthLayout eyebrow={tag} headline={line} notice={notice}>
+  <AuthLayout brand="sigma" eyebrow={`SIGMA 1 · ${tag}`} headline={line} notice={notice}>
     {children}
   </AuthLayout>
 );
