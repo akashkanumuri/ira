@@ -45,6 +45,7 @@ function NavButton({ item, active, collapsed, onClick }: { item: NavItem; active
       type="button"
       onClick={onClick}
       title={collapsed ? item.label : undefined}
+      data-tour={item.id}
       aria-current={active ? 'page' : undefined}
       className={cx(
         'group relative w-full flex items-center gap-3 rounded-full p-1.5 text-[13.5px] transition-colors duration-200',

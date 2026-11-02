@@ -23,6 +23,7 @@ import { TeamApprovals } from './components/employee/TeamApprovals';
 import { LeavePolicySettings } from './components/admin/LeavePolicySettings';
 import { OfficeLocationSettings } from './components/admin/OfficeLocationSettings';
 import { AdminCheckInModal } from './components/admin/AdminCheckInModal';
+import { Assistant } from './components/assistant/Assistant';
 import { LateBreakdown } from './components/employee/LateMarks';
 import { fetchLateTeam, type LateTeamRow } from './lib/late';
 import { WorkRulesEditor } from './components/admin/WorkRulesEditor';
@@ -767,6 +768,11 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           </div>
         )}
       </AppShell>
+      <Assistant
+        user={user} activeTab={activeTab} onNavigate={navigate} navGroups={visibleNav} managesPeople={managesPeople} ready={!loadingData}
+        attendance={attendance} tasks={tasks} leaveRequests={leaveRequests} wfhRequests={wfhRequests} holidays={holidays} ledgers={ledgers}
+        payrollPeriods={payrollPeriods} payrollRecords={payrollRecords} employees={employees}
+      />
       <ToastHost />
       <ConfirmHost />
     </WorkProvider>

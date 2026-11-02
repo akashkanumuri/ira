@@ -1,0 +1,32 @@
+/* SIGMA 1 mini robot (assistant) */
+.buddy-body { animation: buddy-bob 3.2s ease-in-out infinite; transform-origin: 60px 110px; }
+.buddy-eye { animation: buddy-blink 4.6s infinite; transform-box: fill-box; transform-origin: center; }
+.buddy-ear { animation: buddy-ear 2.4s ease-in-out infinite; }
+.buddy-wave { animation: buddy-wave 0.9s ease-in-out infinite; }
+.buddy-point { animation: buddy-point 1.4s ease-in-out infinite; }
+.buddy-drop { animation: buddy-drop 1.6s ease-in infinite; }
+.buddy-z { animation: buddy-z 2s ease-in-out infinite; }
+.buddy-confetti rect { animation: buddy-pop 1.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.buddy-confetti rect:nth-child(2) { animation-delay: .2s } .buddy-confetti rect:nth-child(3) { animation-delay: .4s }
+.buddy-confetti rect:nth-child(4) { animation-delay: .1s } .buddy-confetti rect:nth-child(5) { animation-delay: .3s }
+@keyframes buddy-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-2.5px) } }
+@keyframes buddy-blink { 0%, 92%, 100% { transform: scaleY(1) } 95% { transform: scaleY(0.1) } }
+@keyframes buddy-ear { 0%, 100% { stroke-opacity: .55 } 50% { stroke-opacity: 1 } }
+@keyframes buddy-wave { 0%, 100% { transform: rotate(-8deg) } 50% { transform: rotate(18deg) } }
+@keyframes buddy-point { 0%, 100% { transform: translate(0, 0) } 50% { transform: translate(2px, -3px) } }
+@keyframes buddy-drop { 0% { transform: translateY(0); opacity: 1 } 100% { transform: translateY(8px); opacity: 0 } }
+@keyframes buddy-z { 0%, 100% { transform: translate(0, 0); opacity: .4 } 50% { transform: translate(3px, -4px); opacity: 1 } }
+@keyframes buddy-pop { 0% { transform: scale(.4) rotate(0); opacity: 0 } 40% { opacity: 1 } 100% { transform: scale(1.1) rotate(160deg) translateY(-6px); opacity: 0 } }
+
+.buddy-fab { position: fixed; right: 20px; bottom: 20px; z-index: 60; }
+@media (max-width: 1023px) { .buddy-fab { bottom: 84px; right: 12px; } }
+.buddy-btn { border-radius: 9999px; background: radial-gradient(circle at 50% 40%, #ffffff 0%, #f1edff 70%); box-shadow: 0 14px 32px -14px rgb(76 29 149 / .55), 0 0 0 1px rgb(139 92 246 / .18); transition: transform .2s ease; }
+.buddy-btn:hover { transform: translateY(-2px) scale(1.04); }
+.buddy-bubble { animation: buddy-in .28s cubic-bezier(.2,.9,.3,1.2) both; }
+@keyframes buddy-in { from { opacity: 0; transform: translateY(8px) scale(.96) } to { opacity: 1; transform: none } }
+.buddy-spot { position: fixed; z-index: 70; border-radius: 9999px; box-shadow: 0 0 0 4px rgb(139 92 246 / .9), 0 0 0 9999px rgb(15 10 40 / .45); pointer-events: none; transition: all .35s cubic-bezier(.2,.8,.2,1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .buddy-body, .buddy-eye, .buddy-ear, .buddy-wave, .buddy-point, .buddy-drop, .buddy-z, .buddy-confetti rect, .buddy-bubble { animation: none !important; }
+  .buddy-spot { transition: none; }
+}
