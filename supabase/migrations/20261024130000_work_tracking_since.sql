@@ -15,7 +15,7 @@ begin
     return jsonb_build_object('date', p_date, 'untracked', true,
       'check_in', a.check_in_at, 'check_out', a.check_out_at, 'open', a.check_out_at is null,
       'shift_start', to_char(coalesce(e.shift_start, time '09:00'), 'HH24:MI'), 'shift_end', to_char(coalesce(e.shift_end, time '18:00'), 'HH24:MI'),
-      'late', (a.check_in_at at time zone 'Asia/Kolkata')::time > coalesce(e.shift_start, time '09:00'),
+      'late', private.late_minutes(p_emp, p_date, a.check_in_at) > 0,
       'left_early', a.check_out_at is not null and (a.check_out_at at time zone 'Asia/Kolkata')::time < coalesce(e.shift_end, time '18:00')
                     and (a.check_out_at at time zone 'Asia/Kolkata')::time > (a.check_in_at at time zone 'Asia/Kolkata')::time,
       'tasks', '[]'::jsonb, 'segments', '[]'::jsonb);
@@ -38,7 +38,7 @@ begin
     'date', p_date,
     'check_in', a.check_in_at, 'check_out', a.check_out_at, 'open', a.check_out_at is null,
     'shift_start', to_char(coalesce(e.shift_start, time '09:00'), 'HH24:MI'), 'shift_end', to_char(coalesce(e.shift_end, time '18:00'), 'HH24:MI'),
-    'late', (a.check_in_at at time zone 'Asia/Kolkata')::time > coalesce(e.shift_start, time '09:00'),
+    'late', private.late_minutes(p_emp, p_date, a.check_in_at) > 0,
     'left_early', a.check_out_at is not null and (a.check_out_at at time zone 'Asia/Kolkata')::time < coalesce(e.shift_end, time '18:00')
                   and (a.check_out_at at time zone 'Asia/Kolkata')::time > (a.check_in_at at time zone 'Asia/Kolkata')::time,
     'gross_min', round(sm.gross_m), 'task_min', round(sm.task_m), 'meeting_min', round(sm.meet_m), 'break_min', round(sm.break_m),
