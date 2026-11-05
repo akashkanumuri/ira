@@ -14,6 +14,8 @@ import { isPushOrigin, isPushSupported, subscribeToPush } from '../../lib/pushSu
 import { getKolkataDateString } from '../../lib/workingDays';
 import { cx } from '../../ui';
 import { supabase } from '../../lib/supabase';
+import { notify } from '../../lib/toast';
+import { researchApi, type ResearchInboxItem } from '../../lib/research';
 
 interface NavGroupLite { label?: string; items: Array<{ id: string; label: string }> }
 
@@ -107,15 +109,39 @@ export function Assistant(p: AssistantProps) {
     return () => window.removeEventListener('ira:attendance', on);
   }, []);
 
+  // research waiting for this person's review: top priority, shown the moment it lands
+  const [researchInbox, setResearchInbox] = useState<ResearchInboxItem[]>([]);
+  const loadInbox = useCallback(async () => {
+    if (role !== 'admin' && !p.managesPeople) { setResearchInbox([]); return; }
+    setResearchInbox(await researchApi.inbox());
+  }, [role, p.managesPeople]);
+  useEffect(() => {
+    void loadInbox();
+    const id = window.setInterval(() => void loadInbox(), 2 * 60000);
+    const onNote = (e: Event) => { const n = (e as CustomEvent).detail; if (n?.metadata?.kind === 'research' || /research/i.test(n?.title ?? '')) void loadInbox(); };
+    const onResearch = () => void loadInbox();
+    window.addEventListener('ira:notification', onNote);
+    window.addEventListener('ira:research', onResearch);
+    const vis = () => { if (document.visibilityState === 'visible') void loadInbox(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { window.clearInterval(id); window.removeEventListener('ira:notification', onNote); window.removeEventListener('ira:research', onResearch); document.removeEventListener('visibilitychange', vis); };
+  }, [loadInbox]);
+  const researchNudges = useMemo<Nudge[]>(() => researchInbox.map((r) => ({
+    key: `research:${r.research_id}`, type: 'research-review', priority: 1, mood: 'alert',
+    text: `🔎 ${r.employee_name} finished research for “${r.task_title}” (${Math.max(1, Math.round(r.spent_seconds / 60))} of ${r.research_minutes ?? '?'} min). Have a look — approve it or leave a comment.`,
+    action: { label: 'Open', to: `${role === 'admin' ? 'admin-tasks' : 'emp-tasks'}?task=${r.task_id}` },
+    quick: { label: 'Approve', kind: 'approve-research', taskId: r.task_id },
+  })), [researchInbox, role]);
+
   const nudges = useMemo(() => {
     if (!p.ready) return [];
-    return [...insights, ...computeNudges({
+    return [...researchNudges, ...insights, ...computeNudges({
       role, firstName, today, nowTime: nowIstTime(), myId: user.employeeDbId,
       attendance: p.attendance, tasks: p.tasks, leaveRequests: p.leaveRequests, wfhRequests: p.wfhRequests, holidays: p.holidays,
       ledgers: p.ledgers, payrollPeriods: p.payrollPeriods, payrollRecords: p.payrollRecords, employees: p.employees,
       rules: (ctx as any)?.rules ?? null, work: work?.state ?? null, late, notifyPermission: perm, managesPeople: p.managesPeople,
     })].sort((a, b) => a.priority - b.priority);
-  }, [insights, p.ready, p.attendance, p.tasks, p.leaveRequests, p.wfhRequests, p.holidays, p.ledgers, p.payrollPeriods, p.payrollRecords, p.employees,
+  }, [researchNudges, insights, p.ready, p.attendance, p.tasks, p.leaveRequests, p.wfhRequests, p.holidays, p.ledgers, p.payrollPeriods, p.payrollRecords, p.employees,
     ctx, work?.state, late, perm, p.managesPeople, tick, role, firstName, today, user.employeeDbId]);
 
   // first time on this laptop: run the setup
@@ -143,6 +169,17 @@ export function Assistant(p: AssistantProps) {
       update((m) => ({ ...m, toursDone: { ...(m.toursDone ?? {}), [p.activeTab]: true } }));
     }
   }, [nudges, view, mem.setupDone, p.activeTab, stunting, sleeping]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // new research to review jumps the queue, even over a tip already showing
+  useEffect(() => {
+    if (!mem.setupDone || (mem.level ?? 'normal') === 'quiet' || mem.minimized) return;
+    if (view !== 'none' && view !== 'bubble') return;
+    const r = researchNudges.find((n) => !(mem.shown?.day === today && mem.shown.keys.includes(n.key)) && !((mem.snooze?.[n.key] ?? 0) > Date.now()));
+    if (!r || (view === 'bubble' && bubble?.type === 'research-review')) return;
+    if (stage.current?.busy()) stage.current.abort(false);
+    setBubble(r); setView('bubble');
+    update((m) => ({ ...m, shown: { day: today, keys: [...(m.shown?.day === today ? m.shown.keys : []), r.key] } }));
+  }, [researchNudges]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a tip whose situation is over disappears by itself
   useEffect(() => {
@@ -177,6 +214,17 @@ export function Assistant(p: AssistantProps) {
       return e instanceof Error ? e.message : 'Notifications couldn’t be turned on.';
     }
   }, [user.id]);
+
+  const doQuick = async (n: Nudge) => {
+    if (n.quick?.kind !== 'approve-research') return;
+    try {
+      await researchApi.review(n.quick.taskId, 'approve');
+      notify('Research approved.', 'success');
+      setFlash('celebrate'); window.setTimeout(() => setFlash(null), 3000);
+      setBubble(null); setView('none');
+      window.dispatchEvent(new Event('ira:research'));
+    } catch (e) { notify(e instanceof Error ? e.message : 'Couldn’t approve.', 'error'); }
+  };
 
   const doAction = async (n: Nudge) => {
     if (n.action?.kind === 'notifications') {
@@ -423,12 +471,12 @@ export function Assistant(p: AssistantProps) {
     <div ref={fab} className="buddy-fab print:hidden" data-buddy>
       <div style={popStyle} className={cx('z-[1]', hidePops && 'hidden')}>
         {view === 'bubble' && bubble && (
-          <TipBubble n={bubble} onAction={() => void doAction(bubble)} onLater={() => closeBubble('later')} onClose={() => closeBubble('close')} onNever={() => closeBubble('never')} />
+          <TipBubble n={bubble} onAction={() => void doAction(bubble)} onQuick={() => void doQuick(bubble)} onLater={() => closeBubble('later')} onClose={() => closeBubble('close')} onNever={() => closeBubble('never')} />
         )}
         {view === 'panel' && (
           <Panel
             firstName={firstName} role={role} nudges={nudges} activeTab={p.activeTab} mem={mem} perm={perm}
-            onClose={() => setView('none')} onAction={(n) => void doAction(n)}
+            onClose={() => setView('none')} onAction={(n) => void doAction(n)} onQuick={(n) => void doQuick(n)}
             onTour={() => setView('tour')} onSetup={() => setView('setup')}
             onLevel={(level) => update((m) => ({ ...m, level, minimized: false }))}
             onMinimize={() => { update((m) => ({ ...m, minimized: !m.minimized })); setView('none'); }}
@@ -476,7 +524,8 @@ export function Assistant(p: AssistantProps) {
 
 /* ───────────────────────── tip bubble ───────────────────────── */
 
-function TipBubble({ n, onAction, onLater, onClose, onNever }: { n: Nudge; onAction: () => void; onLater: () => void; onClose: () => void; onNever: () => void }) {
+function TipBubble({ n, onAction, onQuick, onLater, onClose, onNever }: { n: Nudge; onAction: () => void; onQuick: () => void; onLater: () => void; onClose: () => void; onNever: () => void }) {
+  const [quickBusy, setQuickBusy] = useState(false);
   const [menu, setMenu] = useState(false);
   return (
     <div role="status" className="buddy-bubble relative w-[min(340px,calc(100vw-24px))] rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgb(30_10_80/0.45)] ring-1 ring-ink-100 p-4">
@@ -484,6 +533,7 @@ function TipBubble({ n, onAction, onLater, onClose, onNever }: { n: Nudge; onAct
       <p className="pr-7 text-[14px] leading-snug text-ink-800">{n.text}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {n.action && <button type="button" onClick={onAction} className="btn-primary btn-sm">{n.action.label}</button>}
+        {n.quick && <button type="button" disabled={quickBusy} onClick={() => { setQuickBusy(true); onQuick(); }} className="btn-mint btn-sm">{n.quick.label}</button>}
         {n.type !== 'page' && <button type="button" onClick={onLater} className="btn-ghost btn-sm">Later</button>}
         {n.type !== 'page' && n.priority > 1 && (
           <span className="relative ml-auto">
@@ -499,9 +549,9 @@ function TipBubble({ n, onAction, onLater, onClose, onNever }: { n: Nudge; onAct
 
 /* ───────────────────────── panel (click the robot) ───────────────────────── */
 
-function Panel({ firstName, role, nudges, activeTab, mem, perm, onClose, onAction, onTour, onSetup, onLevel, onMinimize, onResetTips, onCorner }: {
+function Panel({ firstName, role, nudges, activeTab, mem, perm, onClose, onAction, onQuick, onTour, onSetup, onLevel, onMinimize, onResetTips, onCorner }: {
   firstName: string; role: 'admin' | 'employee'; nudges: Nudge[]; activeTab: string; mem: BuddyMemory; perm: NotificationPermission | 'unsupported';
-  onClose: () => void; onAction: (n: Nudge) => void; onTour: () => void; onSetup: () => void; onLevel: (l: BuddyLevel) => void; onMinimize: () => void; onResetTips: () => void; onCorner: () => void;
+  onClose: () => void; onAction: (n: Nudge) => void; onQuick: (n: Nudge) => void; onTour: () => void; onSetup: () => void; onLevel: (l: BuddyLevel) => void; onMinimize: () => void; onResetTips: () => void; onCorner: () => void;
 }) {
   const help = PAGE_HELP[activeTab];
   const level = mem.level ?? 'normal';
@@ -525,7 +575,10 @@ function Panel({ firstName, role, nudges, activeTab, mem, perm, onClose, onActio
               {nudges.map((n) => (
                 <li key={n.key} className={cx('rounded-2xl px-3.5 py-3 text-[13px] leading-snug', n.priority === 1 ? 'bg-rose-50 text-rose-900' : n.priority === 2 ? 'bg-amber-50 text-amber-950' : 'bg-ink-50 text-ink-800')}>
                   <p>{n.text}</p>
-                  {n.action && <button type="button" onClick={() => onAction(n)} className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-bold text-brand-700 hover:underline">{n.action.label} <ChevronRight className="w-3.5 h-3.5" /></button>}
+                  <span className="flex flex-wrap items-center gap-3">
+                    {n.action && <button type="button" onClick={() => onAction(n)} className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-bold text-brand-700 hover:underline">{n.action.label} <ChevronRight className="w-3.5 h-3.5" /></button>}
+                    {n.quick && <button type="button" onClick={() => onQuick(n)} className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-bold text-mint-700 hover:underline"><Check className="w-3.5 h-3.5" />{n.quick.label}</button>}
+                  </span>
                 </li>
               ))}
             </ul>

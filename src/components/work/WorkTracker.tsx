@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AlarmClock, Bell, BriefcaseBusiness, Coffee, MessageCircleQuestion, Pause, Play, RefreshCw, Users } from 'lucide-react';
+import { AlarmClock, Bell, BookOpenCheck, BriefcaseBusiness, Coffee, Link2, MessageCircleQuestion, Pause, Play, Plus, RefreshCw, Search, Trash2, Users } from 'lucide-react';
 import type { Task } from '../../types/attendance';
 import { Modal } from '../../ui/Modal';
 import { Badge, cx } from '../../ui';
@@ -8,6 +8,7 @@ import { dateLabel } from '../../lib/v2';
 import { getKolkataDateString } from '../../lib/workingDays';
 import { fetchAttendanceRecord, performResumeWork, performStartBreak } from '../../lib/attendance';
 import { MEETING_TYPES, MOODS, WORK_NOT_READY, clockOf, hm, meetingLabel, ticker, workApi, type MeetingType, type Mood, type PendingCheck, type WorkState } from '../../lib/work';
+import { isUrl, researchApi, researchLeft } from '../../lib/research';
 
 /* ------------------------------------------------------------------ context */
 
@@ -33,6 +34,8 @@ interface WorkCtx {
   openMeeting: () => void;
   openCheck: () => void;
   refresh: () => Promise<void>;
+  /** Opens the “Done researching” form for a task (the running one when omitted). */
+  openResearch: (taskId?: string | null) => void;
   /** Call right after a draft is submitted: shows “Up next”. */
   draftSubmitted: (taskId: string) => void;
   beforeLogout: () => Promise<void>;
@@ -83,6 +86,8 @@ export function WorkProvider({ employeeId, tasks, tasksReady = true, attendanceK
   const [picker, setPicker] = useState<PickerMode>(null);
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState<string | null>(null);
+  const [researchFor, setResearchFor] = useState<{ id: string; title: string } | null>(null);
+  const researchPrompted = useRef<Set<string>>(new Set());
   const prevRef = useRef<WorkState | null>(null);
   const localRef = useRef(false);
   const seenChecks = useRef<Set<string>>(new Set());
@@ -160,12 +165,27 @@ export function WorkProvider({ employeeId, tasks, tasksReady = true, attendanceK
       document.title = flip ? `⏰ Progress check waiting | ${base}` : base;
     } else if (state?.current) {
       const sec = (now - Date.parse(state.current.started_at)) / 1000;
-      document.title = `${state.current.kind === 'task' ? '▶' : '●'} ${ticker(sec)} ${state.current.kind === 'task' ? (state.current.title ?? '') : meetingLabel(state.current.meeting_type)} | ${base}`;
+      const left = state.current.phase === 'research' ? researchLeft(state.current, now) : null;
+      document.title = left != null
+        ? `🔎 ${left >= 0 ? ticker(left) + ' left' : '+' + ticker(-left)} research | ${base}`
+        : `${state.current.kind === 'task' ? '▶' : '●'} ${ticker(sec)} ${state.current.kind === 'task' ? (state.current.title ?? '') : meetingLabel(state.current.meeting_type)} | ${base}`;
     } else if (state?.attendance_state === 'on_break') {
       document.title = `☕ On break | ${base}`;
     } else document.title = base;
   }, [state, now]);
   useEffect(() => () => { if (baseTitle.current) document.title = baseTitle.current; }, []);
+
+  // Research time is up: open the submit form once (the timer keeps counting as over time).
+  useEffect(() => {
+    const cur = state?.current;
+    if (!cur || cur.phase !== 'research' || !cur.task_id) return;
+    const left = researchLeft(cur, now);
+    if (left != null && left <= 0 && !researchPrompted.current.has(cur.task_id)) {
+      researchPrompted.current.add(cur.task_id);
+      setResearchFor((r) => r ?? { id: cur.task_id as string, title: cur.title ?? 'this task' });
+      notify('Research time is up — write down what you found to start the work.', 'info', 7000);
+    }
+  }, [state?.current, now]);
 
   async function act(key: string, fn: () => Promise<WorkState | void>, ok?: string) {
     if (busy) return false;
@@ -237,6 +257,12 @@ export function WorkProvider({ employeeId, tasks, tasksReady = true, attendanceK
     enabled: enabled && !unavailable, ready, state, now, canStart, notifyPermission: perm, requestNotifications, busy, startingId, tasksReady,
     startTask, pause, startMeeting, startBreak, endBreak,
     openPicker: setPicker, openMeeting: () => setMeetingOpen(true), openCheck: () => setCheckOpen(state?.pending[0]?.id ?? null), refresh,
+    openResearch: (taskId) => {
+      const id = taskId ?? state?.current?.task_id ?? null;
+      if (!id) return;
+      const t = tasks.find((x) => x.id === id);
+      setResearchFor({ id, title: t?.title ?? (state?.current?.task_id === id ? state?.current?.title ?? 'this task' : 'this task') });
+    },
     draftSubmitted: (taskId) => { localRef.current = true; void refresh(); setPicker({ kind: 'next', doneTaskId: taskId }); },
     beforeLogout: async () => { if (prevRef.current?.current) { try { await workApi.pause('logout'); } catch { /* signing out anyway */ } } },
   };
@@ -251,6 +277,12 @@ export function WorkProvider({ employeeId, tasks, tasksReady = true, attendanceK
         <TaskPicker mode={picker} state={state} tasks={myTasks} ctx={value} onOpenTask={onOpenTask} onClose={() => setPicker(null)} />
       )}
       {value.enabled && meetingOpen && <MeetingPicker ctx={value} onClose={() => setMeetingOpen(false)} />}
+      {researchFor && (
+        <ResearchDialog task={researchFor} running={state?.current?.phase === 'research' && state.current.task_id === researchFor.id ? state.current : null} now={now}
+          busy={busy === 'research'} onClose={() => setResearchFor(null)}
+          onSubmit={(links, findings, plan) => void act('research', () => researchApi.submit(researchFor.id, links, findings, plan),
+            'Research sent to your manager. The work timer has started.').then((ok) => { if (ok) { setResearchFor(null); window.dispatchEvent(new CustomEvent('ira:research', { detail: { taskId: researchFor.id } })); } })} />
+      )}
       {value.enabled && activeCheck && (
         <CheckDialog check={activeCheck} now={now} busy={busy === 'answer'}
           onLater={() => setCheckOpen(null)}
@@ -298,6 +330,19 @@ export function WorkBar() {
     icon = <Coffee className="w-4 h-4" />;
     main = <><b>On break</b><span className="opacity-80"> · {hm(s.break_used_minutes)} of {hm(s.break_allow_minutes)} used today{over ? ' — extra counts as away' : s.break_used_minutes >= s.break_allow_minutes - 5 ? ' — almost used up' : ''}</span></>;
     actions = <button type="button" className="btn-primary btn-sm" disabled={w.busy === 'break'} onClick={() => void w.endBreak()}><Play className="w-3.5 h-3.5" />Back to work</button>;
+  } else if (s.current?.kind === 'task' && s.current.phase === 'research') {
+    const left = researchLeft(s.current, nowMs) ?? 0;
+    const over = left < 0;
+    tone = over ? 'bg-rose-50 border-rose-200 text-rose-900' : 'bg-violet-50 border-violet-200 text-violet-900';
+    icon = <Search className="w-4 h-4" />;
+    main = <><span className="opacity-80 mr-1">Researching</span><b className="truncate">{s.current.title}</b>
+      <span className="tnum font-bold ml-2">{over ? `+${ticker(-left)} over` : `${ticker(left)} left`}</span></>;
+    actions = <>
+      <button type="button" className="btn-primary btn-sm" disabled={Boolean(w.busy)} onClick={() => w.openResearch(s.current?.task_id)}><BookOpenCheck className="w-3.5 h-3.5" />Done researching</button>
+      <button type="button" className="btn-secondary btn-sm !bg-white" disabled={Boolean(w.busy)} onClick={() => void w.pause()}><Pause className="w-3.5 h-3.5" /><span className="hidden sm:inline">Pause</span></button>
+      <button type="button" className="btn-ghost btn-sm" disabled={Boolean(w.busy)} onClick={() => w.openMeeting()}><Users className="w-3.5 h-3.5" /><span className="hidden sm:inline">Meeting</span></button>
+      <button type="button" className="btn-ghost btn-sm" disabled={Boolean(w.busy)} onClick={() => void w.startBreak()}><Coffee className="w-3.5 h-3.5" /><span className="hidden sm:inline">Break</span></button>
+    </>;
   } else if (s.current?.kind === 'task') {
     tone = 'bg-brand-50 border-brand-200 text-brand-900';
     icon = <span className="relative flex w-2.5 h-2.5"><span className="absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-60 animate-ping" /><span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-brand-600" /></span>;
@@ -426,6 +471,64 @@ function MeetingPicker({ ctx, onClose }: { ctx: WorkCtx; onClose: () => void }) 
             {ctx.busy === 'meeting' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}Start meeting
           </button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ResearchDialog({ task, running, now, busy, onSubmit, onClose }: {
+  task: { id: string; title: string };
+  running: NonNullable<WorkState['current']> | null;
+  now: number; busy: boolean;
+  onSubmit: (links: string[], findings: string, plan: string) => void;
+  onClose: () => void;
+}) {
+  const [links, setLinks] = useState<string[]>(['']);
+  const [findings, setFindings] = useState('');
+  const [plan, setPlan] = useState('');
+  const left = running ? researchLeft(running, now) : null;
+  const filled = links.map((l) => l.trim()).filter(Boolean);
+  const badLink = filled.find((l) => !isUrl(l));
+  const ok = filled.length >= 1 && filled.length <= 10 && !badLink && findings.trim().length >= 10 && plan.trim().length >= 10;
+  return (
+    <Modal title="Done researching" onClose={onClose} closeDisabled={busy}>
+      <div className="space-y-4 -mt-1">
+        <div className="flex items-start gap-3">
+          <span className="w-10 h-10 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0"><BookOpenCheck className="w-5 h-5" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-[15px] font-bold text-ink-900 truncate">{task.title}</p>
+            <p className="text-[12.5px] text-ink-500">Share what you found. It goes to your manager, and the work timer starts straight away — you don’t wait for approval.</p>
+          </div>
+          {left != null && <span className={cx('tnum text-[12px] font-bold rounded-full px-2.5 py-1 shrink-0', left < 0 ? 'bg-rose-50 text-rose-700' : 'bg-violet-50 text-violet-700')}>{left < 0 ? `+${ticker(-left)}` : `${ticker(left)} left`}</span>}
+        </div>
+        <div>
+          <span className="label">Reference links <span className="font-normal text-ink-400">at least 1</span></span>
+          <div className="space-y-2">
+            {links.map((l, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <span className="text-ink-400"><Link2 className="w-4 h-4" /></span>
+                <input value={l} onChange={(e) => setLinks(links.map((x, j) => (j === i ? e.target.value : x)))} inputMode="url" maxLength={500}
+                  className={cx('input', l.trim() && !isUrl(l) && '!border-rose-300')} placeholder="https://… (Behance, Dribbble, a competitor’s site, an article)" autoFocus={i === 0} />
+                {links.length > 1 && <button type="button" className="icon-btn !w-9 !h-9 shrink-0" aria-label="Remove link" onClick={() => setLinks(links.filter((_, j) => j !== i))}><Trash2 className="w-4 h-4" /></button>}
+              </div>
+            ))}
+          </div>
+          {links.length < 10 && <button type="button" className="btn-ghost btn-sm mt-1.5" onClick={() => setLinks([...links, ''])}><Plus className="w-3.5 h-3.5" />Add another link</button>}
+          {badLink && <p className="text-[12px] text-rose-600 mt-1">Links must start with http:// or https://</p>}
+        </div>
+        <label className="block"><span className="label">Key findings</span>
+          <textarea value={findings} onChange={(e) => setFindings(e.target.value)} maxLength={3000} className="input min-h-[80px]" placeholder="What did you learn? e.g. competitors use muted palettes; the client’s audience is 25–35" />
+        </label>
+        <label className="block"><span className="label">My plan / direction</span>
+          <textarea value={plan} onChange={(e) => setPlan(e.target.value)} maxLength={3000} className="input min-h-[80px]" placeholder="What will you do? e.g. two-colour mark, 3 options, start with the wordmark" />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>Keep researching</button>
+          <button type="button" className="btn-primary" disabled={!ok || busy} onClick={() => onSubmit(filled, findings.trim(), plan.trim())}>
+            {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}Submit & start work
+          </button>
+        </div>
+        {!ok && <p className="text-[11px] text-ink-400 -mt-2">Needs a link, findings and a plan (10+ characters each).</p>}
       </div>
     </Modal>
   );

@@ -903,6 +903,13 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
   );
 }
 
+async function setTaskResearch(taskId: string | null | undefined, minutesRaw: FormDataEntryValue | null) {
+  const minutes = Math.round(Number(minutesRaw ?? ''));
+  if (!taskId || !Number.isFinite(minutes) || minutes === 30) return; // 30 min is the default the database sets
+  const { error } = await (supabase as any).rpc('task_set_research', { p_task_id: taskId, p_minutes: Math.min(480, Math.max(5, minutes)) });
+  if (error) notify(`Task assigned, but the research time couldn’t be set: ${error.message}`, 'error', 7000);
+}
+
 async function setTaskEstimate(taskId: string | null | undefined, hoursRaw: FormDataEntryValue | null) {
   const hours = Number(hoursRaw ?? '');
   if (!taskId || !Number.isFinite(hours) || hours <= 0) return;
@@ -970,6 +977,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
       notify('Task assigned.', 'success');
       await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
       await setTaskEstimate(createdTaskId, fd.get('estimateHours'));
+      await setTaskResearch(createdTaskId, fd.get('researchMinutes'));
       void notifyTaskAssigned({ assigneeEmployeeId: to, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current, actorUserId: user.id });
       form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
@@ -1047,6 +1055,7 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
       if (error) throw error;
       await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
       await setTaskEstimate(createdTaskId, fd.get('estimateHours'));
+      await setTaskResearch(createdTaskId, fd.get('researchMinutes'));
       void notifyTaskAssigned({ assigneeEmployeeId: toId, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current?.id, actorUserId: user?.id ?? '' });
       assignRequestRef.current = null; notify('Task assigned.', 'success'); form.reset(); setAssignOpen(false); await onRefresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
@@ -1233,6 +1242,12 @@ function TaskAssignForm({
         <span className="label">Estimated effort <span className="font-normal text-ink-400">optional · hours</span></span>
         <input type="number" name="estimateHours" min={0.25} max={999} step={0.25} className="input" placeholder="e.g. 4" disabled={hasNoTargets} />
         <span className="block text-xs text-ink-400 mt-1.5">Compared with the time the assignee tracks.</span>
+      </label>
+
+      <label>
+        <span className="label">Research time <span className="font-normal text-ink-400">minutes · before the work starts</span></span>
+        <input type="number" name="researchMinutes" min={5} max={480} step={5} defaultValue={30} className="input" required disabled={hasNoTargets} />
+        <span className="block text-xs text-ink-400 mt-1.5">On top of the effort. They share links, findings and a plan before working.</span>
       </label>
 
       <div className="md:col-span-2 flex justify-end gap-2 pt-2">
@@ -2505,6 +2520,7 @@ function NotificationBell({
             if (next.recipient_id !== user.id) return;
             setItems((prev) => [next, ...prev.filter((x) => x.id !== next.id)]);
             notify(next.message, 'info', 4200, next.type as any);
+            window.dispatchEvent(new CustomEvent('ira:notification', { detail: next }));
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new as NotificationRecord;
             if (updated.recipient_id !== user.id) return;

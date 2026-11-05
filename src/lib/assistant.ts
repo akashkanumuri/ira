@@ -75,6 +75,8 @@ export interface Nudge {
   mood: BuddyMood;
   text: string;
   action?: { label: string; to?: string; kind?: 'notifications' | 'setup' };
+  /** A one-tap action done right in the bubble (e.g. approve research). */
+  quick?: { label: string; kind: 'approve-research'; taskId: string };
 }
 
 export interface NudgeInput {

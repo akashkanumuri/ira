@@ -191,6 +191,8 @@ export interface Task {
   reviewedAt?: string | null;
   /** Optional estimate set by the assigner (review flow). */
   estimateMinutes?: number | null;
+  /** Research time before work starts (minutes); null = no research step (older tasks). */
+  researchMinutes?: number | null;
 }
 
 export interface LeaveLedger {

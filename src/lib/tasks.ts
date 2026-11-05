@@ -29,7 +29,7 @@ export function fmtMinutes(min?: number | null) {
   return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
 }
 
-export interface TaskComment { id: string; task_id: string; author_id: string | null; body: string; created_at: string }
+export interface TaskComment { id: string; task_id: string; author_id: string | null; body: string; created_at: string; research_id?: string | null }
 export interface TaskTimeLog { id: string; task_id: string; employee_id: string; work_date: string; minutes: number; note: string | null; created_at: string }
 export interface TaskDependency { task_id: string; depends_on_id: string; created_at: string }
 export interface TaskEvent { id: string; task_id: string; event_type: string; actor_employee_id: string | null; metadata: any; created_at: string }

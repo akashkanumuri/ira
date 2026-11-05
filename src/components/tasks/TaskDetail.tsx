@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Ban, CheckCircle2, ExternalLink, FileText, Layers, Link2, MessageCircleQuestion, MessageSquare,
-  Pause, Play, RefreshCw, RotateCcw, Send, ShieldAlert, Timer, Undo2, UserRound,
+  Ban, BookOpenCheck, CheckCircle2, ExternalLink, FileText, Layers, Link2, MessageCircleQuestion, MessageSquare,
+  Pause, Play, RefreshCw, RotateCcw, Search, Send, ShieldAlert, Timer, Undo2, UserRound,
 } from 'lucide-react';
 import type { Employee, Task, TaskStatus } from '../../types/attendance';
 import { dateLabel } from '../../lib/v2';
@@ -15,6 +15,7 @@ import {
 } from '../../lib/tasks';
 import { MOODS, clockOf, meetingLabel, workApi, type ProgressCheck, type WorkSession } from '../../lib/work';
 import { useWork } from '../work/WorkTracker';
+import { RESEARCH_STATUS, researchApi, researchLeft, type TaskResearch } from '../../lib/research';
 import { Avatar, Badge, Progress, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
 
@@ -104,6 +105,10 @@ export function TaskDetail({
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [checks, setChecks] = useState<ProgressCheck[]>([]);
   const [tick, setTick] = useState(() => Date.now());
+  const [research, setResearch] = useState<TaskResearch | null>(null);
+  const [rvNote, setRvNote] = useState('');
+  const [rvOpen, setRvOpen] = useState(false);
+  const [rmEdit, setRmEdit] = useState<string | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
 
   // Employees can only read their own record; task_people adds the names of the people on their tasks.
@@ -129,11 +134,16 @@ export function TaskDetail({
 
   const reload = useCallback(async () => {
     try {
-      const [x, s, c] = await Promise.all([loadTaskExtras(task.id), workApi.taskSessions(task.id), workApi.taskChecks(task.id)]);
-      setExtras(x); setSessions(s); setChecks(c); setLoadError('');
+      const [x, s, c, r] = await Promise.all([loadTaskExtras(task.id), workApi.taskSessions(task.id), workApi.taskChecks(task.id), researchApi.forTask(task.id)]);
+      setExtras(x); setSessions(s); setChecks(c); setResearch(r); setLoadError('');
     } catch (e) { setLoadError(e instanceof Error ? e.message : 'Couldn’t load task details.'); }
   }, [task.id]);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    const on = () => void reload();
+    window.addEventListener('ira:research', on);
+    return () => window.removeEventListener('ira:research', on);
+  }, [reload]);
 
   const ws = work?.state ?? null;
   const running = ws?.current?.kind === 'task' && ws.current.task_id === task.id ? ws.current : null;
@@ -147,8 +157,12 @@ export function TaskDetail({
   const wasRunning = useRef(Boolean(running));
   useEffect(() => { if (wasRunning.current && !running) void reload(); wasRunning.current = Boolean(running); }, [running, reload]);
 
+  const researching = running?.phase === 'research';
+  const researchNeeded = task.researchMinutes != null && !research?.submitted_at;
   const runningSec = running ? Math.max(0, Math.floor((tick - Date.parse(running.started_at)) / 1000)) : 0;
-  const spentMin = (task.timeSpentMinutes ?? 0) + runningSec / 60;
+  const spentMin = (task.timeSpentMinutes ?? 0) + (researching ? 0 : runningSec / 60);
+  const researchSec = (research?.spent_seconds ?? 0) + (researching ? runningSec : 0);
+  const rLeft = researching ? researchLeft(running, tick) : null;
   const drafts = extras?.drafts ?? [];
   const rounds = extras?.clientRounds ?? [];
   const nextDraftNo = (drafts[0]?.draft_no ?? 0) + 1;
@@ -181,7 +195,7 @@ export function TaskDetail({
   if (!task.archivedAt) {
     if (isAssignee && ['assigned', 'accepted', 'in_progress', 'revision_required'].includes(task.status)) {
       if (isReviewer) actions.push({ key: 'done', label: 'Mark complete', icon: <CheckCircle2 className="w-4 h-4" />, kind: 'mint', onClick: () => setPrompt({ to: 'completed', title: 'Mark this task complete?', confirm: 'Mark complete' }) });
-      else actions.push({ key: 'handin', label: `Submit draft ${nextDraftNo}`, icon: <Send className="w-4 h-4" />, kind: 'primary', onClick: () => { setLink(''); setPrompt({ to: 'awaiting_review', title: `Submit draft ${nextDraftNo} for review`, link: true, noteLabel: 'What changed in this draft? (optional)', confirm: 'Submit draft' }); } });
+      else if (!researchNeeded) actions.push({ key: 'handin', label: `Submit draft ${nextDraftNo}`, icon: <Send className="w-4 h-4" />, kind: 'primary', onClick: () => { setLink(''); setPrompt({ to: 'awaiting_review', title: `Submit draft ${nextDraftNo} for review`, link: true, noteLabel: 'What changed in this draft? (optional)', confirm: 'Submit draft' }); } });
       if (task.status !== 'assigned') actions.push({ key: 'block', label: 'I’m blocked', icon: <ShieldAlert className="w-4 h-4" />, kind: 'secondary', onClick: () => setPrompt({ to: 'blocked', title: 'What’s blocking this task?', noteLabel: 'What do you need, and from whom?', noteRequired: true, confirm: 'Mark blocked' }) });
     }
     if (isReviewer && task.status === 'awaiting_review') {
@@ -267,16 +281,20 @@ export function TaskDetail({
           <div className="flex flex-wrap items-center gap-3">
             <span className={cx('w-10 h-10 rounded-2xl flex items-center justify-center shrink-0', running ? 'bg-brand-600 text-white' : 'bg-ink-50 text-ink-500')}><Timer className="w-5 h-5" /></span>
             <div className="flex-1 min-w-[150px]">
-              <p className="text-[12px] font-semibold text-ink-500">{running ? 'Timer running' : isAssignee ? 'Tracking' : 'Time on this task'}</p>
+              <p className="text-[12px] font-semibold text-ink-500">{researching ? 'Research running' : running ? 'Timer running' : isAssignee ? 'Tracking' : 'Time on this task'}</p>
               <p className="font-display text-[22px] font-bold text-ink-900 tnum leading-tight">
-                {running ? clock(runningSec) : fmtMinutes(Math.round(spentMin))}
-                {running && <span className="text-[12px] font-semibold text-ink-500 ml-2">· {fmtMinutes(Math.round(spentMin))} total</span>}
+                {researching && rLeft != null ? (rLeft >= 0 ? `${clock(Math.floor(rLeft))} left` : `+${clock(Math.floor(-rLeft))} over`) : running ? clock(runningSec) : fmtMinutes(Math.round(spentMin))}
+                {running && !researching && <span className="text-[12px] font-semibold text-ink-500 ml-2">· {fmtMinutes(Math.round(spentMin))} total</span>}
               </p>
             </div>
+            {canWork && work?.enabled && researching && (
+              <button type="button" className="btn-primary" disabled={Boolean(work.busy)} onClick={() => work.openResearch(task.id)}><BookOpenCheck className="w-4 h-4" />Done researching</button>
+            )}
             {canWork && work?.enabled && (running
               ? <button type="button" className="btn-secondary" disabled={Boolean(work.busy)} onClick={() => void work.pause()}><Pause className="w-4 h-4" />Pause</button>
               : <button type="button" className="btn-primary" disabled={Boolean(work.busy) || Boolean(startBlockedReason)} onClick={() => void work.startTask(task.id).then((ok) => { if (ok) void onChanged(); })}>
-                  {work.startingId === task.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}{task.status === 'revision_required' ? 'Start changes' : 'Start'}
+                  {work.startingId === task.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : researchNeeded ? <Search className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  {researchNeeded ? (research ? 'Continue research' : 'Start research') : task.status === 'revision_required' ? 'Start changes' : 'Start'}
                 </button>)}
           </div>
           {canWork && !running && (startBlockedReason || runningElsewhere) && (
@@ -349,6 +367,76 @@ export function TaskDetail({
 
         {loadError && <p className="text-[13px] text-rose-600">{loadError} <button className="underline font-semibold" onClick={() => void reload()}>Retry</button></p>}
 
+        {/* research (before the work starts) */}
+        {task.researchMinutes != null && (
+          <section aria-label="Research" className={cx('rounded-2xl border p-4 space-y-3', research?.status === 'submitted' ? 'border-amber-200 bg-amber-50/40' : researching ? 'border-violet-200 bg-violet-50/50' : 'border-ink-200')}>
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="flex items-center gap-2 text-[13px] font-bold text-ink-800"><Search className="w-4 h-4 text-violet-500" />Research</h4>
+              {research && <Badge tone={research.submitted_at ? RESEARCH_STATUS[research.status].tone : 'brand'} dot>{research.submitted_at ? RESEARCH_STATUS[research.status].label : 'In progress'}</Badge>}
+              <span className="text-[12px] text-ink-500 tnum ml-auto">
+                {researchSec > 0 ? `${fmtMinutes(Math.max(1, Math.round(researchSec / 60)))} of ` : ''}{fmtMinutes(task.researchMinutes)} planned · on top of the effort
+              </span>
+            </div>
+            {!research?.submitted_at ? (
+              <div className="space-y-2">
+                <p className="text-[13px] text-ink-600">
+                  {isAssignee
+                    ? <>Starting this task begins with <b>{fmtMinutes(task.researchMinutes)}</b> of research. When you’re done (or the time is up), share your links, findings and plan — then the work timer starts.</>
+                    : <>{task.assignedToName} researches first, then shares links, findings and a plan before starting the work. {research ? 'Research is in progress.' : 'Not started yet.'}</>}
+                </p>
+                {isAssignee && canWork && !researching && research && (
+                  <button type="button" className="btn-secondary btn-sm" disabled={Boolean(work?.busy)} onClick={() => work?.openResearch(task.id)}><BookOpenCheck className="w-3.5 h-3.5" />Done researching</button>
+                )}
+                {isReviewer && !isAssignee && !closed && (rmEdit == null
+                  ? <button type="button" className="text-[12px] font-semibold text-brand-700 hover:underline" onClick={() => setRmEdit(String(task.researchMinutes))}>Change research time</button>
+                  : (
+                    <div className="flex flex-wrap items-center gap-2 anim-fade">
+                      <input type="number" min={5} max={480} step={5} value={rmEdit} onChange={(e) => setRmEdit(e.target.value)} className="input !w-[110px] !min-h-[36px] !py-1.5" aria-label="Research minutes" />
+                      <span className="text-[12.5px] text-ink-500">minutes</span>
+                      <button type="button" className="btn-primary btn-sm" disabled={busy === 'rmin' || !(Number(rmEdit) >= 5 && Number(rmEdit) <= 480)}
+                        onClick={() => void run('rmin', () => researchApi.setMinutes(task.id, Math.round(Number(rmEdit))), 'Research time updated.').then((ok) => { if (ok) setRmEdit(null); })}>Save</button>
+                      <button type="button" className="btn-ghost btn-sm" onClick={() => setRmEdit(null)}>Cancel</button>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                <ul className="space-y-1.5">
+                  {research.links.map((l) => (
+                    <li key={l}><a href={l} target="_blank" rel="noreferrer noopener" className="flex items-center gap-2 text-[13px] text-brand-700 font-semibold hover:underline min-w-0">
+                      <Link2 className="w-4 h-4 shrink-0" /><span className="truncate">{l}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" /></a></li>
+                  ))}
+                </ul>
+                <div className="grid sm:grid-cols-2 gap-2.5">
+                  <div className="inset-tile px-3.5 py-2.5"><p className="text-[11px] font-semibold text-ink-500">Key findings</p><p className="text-[13px] text-ink-800 whitespace-pre-wrap mt-0.5">{research.findings}</p></div>
+                  <div className="inset-tile px-3.5 py-2.5"><p className="text-[11px] font-semibold text-ink-500">Plan</p><p className="text-[13px] text-ink-800 whitespace-pre-wrap mt-0.5">{research.plan}</p></div>
+                </div>
+                <p className="text-[11px] text-ink-400 tnum">Submitted {when(research.submitted_at)}{research.reviewed_at ? ` · reviewed ${when(research.reviewed_at)}${research.reviewed_by ? ` by ${byProfile.get(research.reviewed_by)?.name ?? 'Admin'}` : ''}` : ''}</p>
+                {isReviewer && !isAssignee && !task.archivedAt && (rvOpen ? (
+                  <div className="space-y-2 anim-fade">
+                    <textarea value={rvNote} onChange={(e) => setRvNote(e.target.value)} maxLength={2000} autoFocus className="input min-h-[64px]" placeholder={`Your comment for ${task.assignedToName} — it shows in the discussion`} />
+                    <div className="flex justify-end gap-2">
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => { setRvOpen(false); setRvNote(''); }} disabled={busy === 'rv'}>Cancel</button>
+                      <button type="button" className="btn-primary btn-sm" disabled={busy === 'rv' || !rvNote.trim()}
+                        onClick={() => void run('rv', () => researchApi.review(task.id, 'comment', rvNote.trim()), 'Comment sent.').then((ok) => { if (ok) { setRvOpen(false); setRvNote(''); window.dispatchEvent(new Event('ira:research')); } })}>
+                        <Send className="w-3.5 h-3.5" />Send comment</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {research.status !== 'approved' && (
+                      <button type="button" className="btn-mint btn-sm" disabled={Boolean(busy)}
+                        onClick={() => void run('rv', () => researchApi.review(task.id, 'approve'), 'Research approved.').then((ok) => { if (ok) window.dispatchEvent(new Event('ira:research')); })}>
+                        <CheckCircle2 className="w-3.5 h-3.5" />Approve</button>
+                    )}
+                    <button type="button" className="btn-secondary btn-sm" disabled={Boolean(busy)} onClick={() => setRvOpen(true)}><MessageSquare className="w-3.5 h-3.5" />Comment</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* drafts */}
         <section className="space-y-2">
           <h4 className="flex items-center gap-2 text-[13px] font-bold text-ink-800"><Layers className="w-4 h-4 text-ink-400" />Drafts
@@ -388,7 +476,7 @@ export function TaskDetail({
               <span className="text-[11px] text-ink-400 tnum">{fmtBytes(f.size_bytes)} · {dateLabel(f.created_at.slice(0, 10))}</span>
             </button>
           ))}
-          {!drafts.length && !task.submittedLink && !(extras?.files.length) && <p className="text-[13px] text-ink-400">{isAssignee ? 'When the work is ready, submit it as a draft with a link.' : 'No drafts submitted yet.'}</p>}
+          {!drafts.length && !task.submittedLink && !(extras?.files.length) && <p className="text-[13px] text-ink-400">{isAssignee ? (researchNeeded ? 'Finish the research first — then you can submit drafts.' : 'When the work is ready, submit it as a draft with a link.') : 'No drafts submitted yet.'}</p>}
         </section>
 
         {drafts.length > 0 && <TaskScorecard drafts={drafts} rounds={isReviewer ? rounds : []} />}
@@ -477,9 +565,10 @@ export function TaskDetail({
           {(extras?.comments ?? []).map((c: TaskComment) => (
             <div key={c.id} className="flex gap-3">
               <Avatar name={authorOf(c)} size={30} tone={c.author_id && byProfile.get(c.author_id)?.id === task.assignedTo ? 'mint' : 'brand'} />
-              <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md bg-ink-50 px-3.5 py-2.5">
-                <p className="text-[12px]"><b className="text-ink-900">{authorOf(c)}</b> <span className="text-ink-400">{when(c.created_at)}</span></p>
-                <p className="text-[13px] text-ink-800 whitespace-pre-wrap mt-0.5 break-words">{c.body}</p>
+              <div className={cx('min-w-0 flex-1 rounded-2xl rounded-tl-md px-3.5 py-2.5', c.research_id ? 'bg-violet-50 ring-1 ring-violet-100' : 'bg-ink-50')}>
+                <p className="text-[12px]"><b className="text-ink-900">{authorOf(c)}</b> <span className="text-ink-400">{when(c.created_at)}</span>
+                  {c.research_id && <span className="ml-1.5 inline-flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-wide text-violet-700"><Search className="w-3 h-3" />Research</span>}</p>
+                <p className="text-[13px] text-ink-800 whitespace-pre-wrap mt-0.5 break-words">{linkify(c.body)}</p>
               </div>
             </div>
           ))}
@@ -511,6 +600,14 @@ export function TaskDetail({
       </div>
     </Modal>
   );
+}
+
+/** Plain text with web links made clickable. */
+function linkify(text: string) {
+  const parts = text.split(/(https?:\/\/[^\s<>"]+)/g);
+  return parts.map((p, i) => (i % 2 === 1
+    ? <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-brand-700 font-semibold underline break-all">{p}</a>
+    : <React.Fragment key={i}>{p}</React.Fragment>));
 }
 
 const SESSION_END: Record<string, string> = {

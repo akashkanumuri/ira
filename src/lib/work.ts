@@ -27,7 +27,11 @@ export interface PendingCheck {
 export interface WorkState {
   now: string;
   checked_in: boolean; checked_out: boolean; attendance_state: 'working' | 'on_break' | 'completed' | null; check_in_at: string | null;
-  current: null | { kind: 'task' | 'meeting'; task_id: string | null; title: string | null; meeting_type: MeetingType | null; note: string | null; started_at: string };
+  current: null | {
+    kind: 'task' | 'meeting'; task_id: string | null; title: string | null; meeting_type: MeetingType | null; note: string | null; started_at: string;
+    /** 'research' while the research step of a task runs (before the work timer). */
+    phase?: 'work' | 'research'; research_minutes?: number | null; research_spent_seconds?: number | null;
+  };
   last_task: null | { id: string; title: string; ended_at: string; reason: string | null };
   idle_since: string | null; first_of_day: boolean; buffer_minutes: number;
   break_used_minutes: number; break_allow_minutes: number;
