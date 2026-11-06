@@ -4,8 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 export type BuddyMood = 'idle' | 'happy' | 'wave' | 'worried' | 'sleepy' | 'think' | 'celebrate' | 'alert' | 'point';
 
 /**
- * The SIGMA 1 mascot as a light 2D SVG (the 3D one stays on the sign-in page): faceted black helmet,
- * glass face screen with pink scan-line eyes, headphone ears with amber rings (fin on the left), charcoal hoodie.
+ * The SIGMA 1 mascot as a light 2D SVG (the 3D one stays on the sign-in page): wide glossy black helmet,
+ * glass face screen with pink scan-line eyes, flush headphone cups with amber rings, antenna on the right, grey hoodie.
  * Eyes follow the pointer; it blinks, bobs, and changes face with its mood.
  */
 export function Buddy({ mood = 'idle', size = 72, follow = true, className }: { mood?: BuddyMood; size?: number; follow?: boolean; className?: string }) {
@@ -39,7 +39,7 @@ export function Buddy({ mood = 'idle', size = 72, follow = true, className }: { 
 
   const eye = (cx: number, left: boolean) => {
     const x = cx + eyesShift.x;
-    const y = 50 + eyesShift.y;
+    const y = 53 + eyesShift.y;
     switch (mood) {
       case 'happy':
       case 'celebrate':
@@ -82,38 +82,39 @@ export function Buddy({ mood = 'idle', size = 72, follow = true, className }: { 
       </defs>
 
       <g className="buddy-body">
-        {/* hoodie shoulders + zip */}
-        <path d="M18 120 C18 96 34 86 60 86 C86 86 102 96 102 120 Z" fill="url(#bd-hood)" />
-        <path d="M60 90 L60 120" stroke="#c9ccd2" strokeWidth="1.6" />
-        <circle cx="60" cy="96" r="1.8" fill="#e9e9ec" />
-        {/* hood behind the head */}
-        <path d="M24 66 C22 34 40 16 60 16 C80 16 98 34 96 66 C96 80 86 92 60 92 C34 92 24 80 24 66 Z" fill="#3c3c42" />
-        {/* drawstrings */}
-        <path d="M50 88 L48 102" stroke="#e9e9ec" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M70 88 L72 102" stroke="#e9e9ec" strokeWidth="1.6" strokeLinecap="round" />
+        {/* hoodie: shoulders, collar and zip */}
+        <path d="M16 120 C16 98 32 88 60 88 C88 88 104 98 104 120 Z" fill="url(#bd-hood)" />
+        <path d="M40 90 Q60 100 80 90" stroke="#2a2a30" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <path d="M60 96 L60 120" stroke="#c9ccd2" strokeWidth="1.6" />
+        <circle cx="60" cy="101" r="1.8" fill="#e9e9ec" />
+        <path d="M52 92 L50 106" stroke="#e9e9ec" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M68 92 L70 106" stroke="#e9e9ec" strokeWidth="1.5" strokeLinecap="round" />
 
-        {/* headphone ears with amber rings; fin on the left ear */}
-        <path d="M22 46 L16 36 L24 42 Z" fill="#18191d" />
-        <circle cx="27" cy="54" r="9.5" fill="#2a2b30" />
-        <circle className="buddy-ear" cx="27" cy="54" r="6" fill="none" stroke="#ff9a2e" strokeWidth="2" />
-        <circle cx="93" cy="54" r="9.5" fill="#2a2b30" />
-        <circle className="buddy-ear" cx="93" cy="54" r="6" fill="none" stroke="#ff9a2e" strokeWidth="2" />
+        {/* antenna on the right, amber tip */}
+        <path d="M98 40 Q104 28 101 16" stroke="#18191d" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <circle className="buddy-ear" cx="101" cy="15" r="3.2" fill="#ff9a2e" />
 
-        {/* faceted helmet */}
-        <path d="M33 38 L44 26 L76 26 L87 38 L89 62 L80 76 L40 76 L31 62 Z" fill="url(#bd-helmet)" />
-        <path d="M44 26 L76 26 L70 32 L50 32 Z" fill="#ffffff" opacity="0.12" />
+        {/* headphone cups, flush with the helmet */}
+        <rect x="14" y="40" width="11" height="28" rx="5" fill="#2a2b30" />
+        <rect className="buddy-ear" x="17" y="45" width="5" height="18" rx="2.5" fill="none" stroke="#ff9a2e" strokeWidth="1.8" />
+        <rect x="95" y="40" width="11" height="28" rx="5" fill="#2a2b30" />
+        <rect className="buddy-ear" x="98" y="45" width="5" height="18" rx="2.5" fill="none" stroke="#ff9a2e" strokeWidth="1.8" />
+
+        {/* helmet: wide rounded block */}
+        <rect x="21" y="22" width="78" height="62" rx="20" fill="url(#bd-helmet)" />
+        <path d="M34 25 Q60 19 86 25" stroke="#ffffff" strokeOpacity="0.18" strokeWidth="3" fill="none" strokeLinecap="round" />
         {/* glass face screen */}
-        <rect x="38" y="36" width="44" height="30" rx="11" fill="url(#bd-glass)" />
-        <rect x="38" y="36" width="44" height="30" rx="11" fill="url(#bd-scan)" />
-        <path d="M42 40 Q50 37 58 38" stroke="#ffffff" strokeOpacity="0.25" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+        <rect x="29" y="34" width="62" height="38" rx="14" fill="url(#bd-glass)" />
+        <rect x="29" y="34" width="62" height="38" rx="14" fill="url(#bd-scan)" />
+        <path d="M35 39 Q45 36 55 37" stroke="#ffffff" strokeOpacity="0.22" strokeWidth="1.4" fill="none" strokeLinecap="round" />
         <g filter="url(#bd-glow)" className="buddy-eyes">
-          {eye(50, true)}
-          {eye(70, false)}
+          {eye(48, true)}
+          {eye(72, false)}
         </g>
-        {mood === 'worried' && <path d="M86 30 q3 5 0 7 q-3 -2 0 -7 Z" fill="#9be7ff" className="buddy-drop" />}
-        {mood === 'alert' && <text x="98" y="30" fontSize="20" fontWeight="800" fill="#f43f5e" fontFamily="system-ui">!</text>}
-        {mood === 'think' && <g fill="#a78bfa"><circle cx="94" cy="28" r="2.2" /><circle cx="100" cy="20" r="3" /><circle cx="108" cy="11" r="3.8" /></g>}
-        {mood === 'sleepy' && <text x="88" y="28" fontSize="13" fontWeight="800" fill="#a78bfa" fontFamily="system-ui" className="buddy-z">z</text>}
+        {mood === 'worried' && <path d="M90 26 q3 5 0 7 q-3 -2 0 -7 Z" fill="#9be7ff" className="buddy-drop" />}
+        {mood === 'alert' && <text x="104" y="34" fontSize="20" fontWeight="800" fill="#f43f5e" fontFamily="system-ui">!</text>}
+        {mood === 'think' && <g fill="#a78bfa"><circle cx="8" cy="30" r="2.2" /><circle cx="6" cy="21" r="3" /><circle cx="10" cy="11" r="3.8" /></g>}
+        {mood === 'sleepy' && <text x="6" y="28" fontSize="13" fontWeight="800" fill="#a78bfa" fontFamily="system-ui" className="buddy-z">z</text>}
       </g>
 
       {/* hand: waves, points, or celebrates */}
