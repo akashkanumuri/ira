@@ -321,8 +321,8 @@ export async function sendLocalTestPushNotification(
     const reg = await navigator.serviceWorker.ready;
     await reg.showNotification(title, {
       body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: '/brand/sigma1-icon-192.png',
+      badge: '/brand/sigma1-favicon-64.png',
       tag: 'ira-test-' + Date.now(),
       renotify: true,
       data: { url: actionUrl, timestamp: Date.now() },

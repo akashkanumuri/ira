@@ -297,7 +297,7 @@ async function showSystemNotification(p: PendingCheck) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const title = p.from_manager ? `${p.asked_by_name ?? 'Your manager'} asks` : 'Progress check';
   const body = p.from_manager ? `${p.question}${p.task_title ? ` — ${p.task_title}` : ''}` : `${p.question} Answer within 5 minutes.`;
-  const opts: NotificationOptions = { body, tag: `ira-check-${p.id}`, requireInteraction: true, data: { url: '/emp-tasks' }, icon: '/icon-192.png' } as NotificationOptions;
+  const opts: NotificationOptions = { body, tag: `ira-check-${p.id}`, requireInteraction: true, data: { url: '/emp-tasks' }, icon: '/brand/sigma1-icon-192.png' } as NotificationOptions;
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) { await reg.showNotification(title, opts); return; }

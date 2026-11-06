@@ -2,21 +2,22 @@
 //  Intro     the letters drop in one by one with a bouncy squash; the robot zooms in carrying the "1",
 //            drops it into place (dodging it) and hops on top.
 //  Idle      sits on the "1", swings its legs, waves and watches the cursor. After a few quiet seconds it
-//            does little gags (taps the G so it wobbles, polishes the hourglass).
+//            does little gags (taps the G so it wobbles, polishes the S).
 //  Away      if nobody touches the page for a while it goes off to play: runs, trips, platform-jumps
 //            across the letters, falls off the "1", bounces on the M. Any cursor move or key press and it
 //            flies straight back to the "1".
-//  Password  it "borrows" the Σ hourglass and holds it over its eyes; a faded ghost marks the gap.
+//  Password  it "borrows" the S mark and holds it over its eyes; a faded ghost marks the gap.
 //  Wrong     the "1" tips over and the robot catches it (sweat drop, red eyes); the other letters jump.
-//  Success   the Σ spins into a portal and the robot dives in.
+//  Success   the S spins into a portal and the robot dives in.
 import { THREE, createStage, watchForm, damp } from './common.js';
 import { buildHoodbot } from './hoodbot.js';
 
 // ---------- logo artwork (original SIGMA 1 logo, measured in artwork px; 134 px = 1 unit tall)
 const Z = (zx, zy) => [zx / 2 + 150, zy / 2 + 437];
 const ART = {
-  hgTop: [Z(20, 18), Z(282, 18), Z(151, 150)],
-  hgBot: [Z(20, 282), Z(151, 150), Z(282, 282)],
+  // S mark: two interlocking chevrons that meet at the waist (146.5, 148.6)
+  hgTop: [Z(87.5, 21.9), Z(15, 90.3), Z(104.2, 187.5), Z(146.5, 148.6), Z(102.8, 91), Z(205.2, 90.3), Z(278, 22.6)],
+  hgBot: [Z(146.5, 148.6), Z(188.5, 205.6), Z(87.2, 206.1), Z(14.5, 274.7), Z(205.8, 275.2), Z(277, 206.3), Z(188.5, 109.8)],
   I: [Z(308, 18), Z(375, 18), Z(375, 280), Z(308, 280)],
   M: [Z(690, 280), Z(690, 18), Z(829, 152), Z(968, 18), Z(968, 280), Z(903, 280), Z(903, 170), Z(829, 238), Z(755, 170), Z(755, 280)],
   A: [Z(988, 280), Z(1119, 18), Z(1250, 280), Z(1175, 280), Z(1166, 262), Z(1074, 262), Z(1065, 280)],
@@ -66,8 +67,8 @@ export function mount({ container, frameEl, reduced = false, startHidden = false
   addLetter('M', [new THREE.Shape(ART.M.map(v2))]);
   { const a = new THREE.Shape(ART.A.map(v2)); a.holes.push(new THREE.Path(ART.Ahole.map(v2))); addLetter('A', [a]); }
   addLetter('one', [new THREE.Shape(ART.one.map(v2))]);
-  // Σ hourglass (pivots at its waist) + a faded ghost that marks the gap when the robot borrows it
-  const waist = v2(Z(151, 150));
+  // S mark (pivots at its waist) + a faded ghost that marks the gap when the robot borrows it
+  const waist = v2(Z(146.5, 148.6));
   const hg = new THREE.Group(); hg.position.set(waist.x, waist.y, 0); world.add(hg);
   const ghost = new THREE.Group(); ghost.position.copy(hg.position); world.add(ghost);
   const ghostMat = new THREE.MeshBasicMaterial({ color: 0x0b0b10, transparent: true, opacity: 0, depthWrite: false });
@@ -75,7 +76,7 @@ export function mount({ container, frameEl, reduced = false, startHidden = false
     const g = ex([new THREE.Shape(pts.map(v2))]); g.translate(-waist.x, -waist.y, 0);
     const m = new THREE.Mesh(g, black); m.castShadow = true; hg.add(m); ghost.add(new THREE.Mesh(g, ghostMat));
   });
-  hg.userData = phys(hg.position.clone(), (282 - 20) / 2 * U, 1);
+  hg.userData = phys(hg.position.clone(), (278 - 14.5) / 2 * U, 1);
   L.hg = hg;
   const keys = ['hg', 'I', 'G', 'M', 'A', 'one'];
 
@@ -96,15 +97,20 @@ export function mount({ container, frameEl, reduced = false, startHidden = false
   world.add(sun); world.add(sun.target);
   const fill = new THREE.DirectionalLight(0xffd2a8, .9); fill.position.set(4, 2, 3); world.add(fill);
 
-  // ---------- background: slow-drifting soft Σ triangles and mini hourglasses
+  // ---------- background: slow-drifting soft triangles and mini S marks
   const bg = new THREE.Group(); scene.add(bg);
   const triGeo = (() => { const s = new THREE.Shape([new THREE.Vector2(-.5, .43), new THREE.Vector2(.5, .43), new THREE.Vector2(0, -.43)]); return new THREE.ExtrudeGeometry(s, { depth: .12, bevelEnabled: true, bevelSize: .03, bevelThickness: .03, bevelSegments: 2 }); })();
+  // mini S mark, ~1 unit wide, centred on its waist
+  const sGeo = (() => {
+    const k = 1 / 263.5, sh = [ART.hgTop, ART.hgBot].map((pts) => new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(((x - 150) * 2 - 146.5) * k, (148.6 - (y - 437) * 2) * k))));
+    return new THREE.ExtrudeGeometry(sh, { depth: .12, bevelEnabled: true, bevelSize: .02, bevelThickness: .02, bevelSegments: 2 });
+  })();
   const pastel = [0xa78bfa, 0xf9a8d4, 0x9ca3af, 0x67e8f9, 0xc4b5fd];
   const floaters = [];
   for (let i = 0; i < (S.low ? 8 : 16); i++) {
     const mat = new THREE.MeshPhysicalMaterial({ color: pastel[i % pastel.length], roughness: .25, clearcoat: 1, transparent: true, opacity: .7 });
     let m;
-    if (i % 3 === 0) { m = new THREE.Group(); const a = new THREE.Mesh(triGeo, mat); const b = new THREE.Mesh(triGeo, mat); b.rotation.z = Math.PI; b.position.y = -.86; m.add(a, b); }
+    if (i % 3 === 0) m = new THREE.Mesh(sGeo, mat);
     else m = new THREE.Mesh(triGeo, mat);
     m.userData = { x: Math.random(), y: Math.random(), z: -4 - Math.random() * 10, s: .3 + Math.random() * .8, sp: .02 + Math.random() * .04, r: new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(.6), ph: Math.random() * 6 };
     bg.add(m); floaters.push(m);
@@ -528,7 +534,7 @@ export function mount({ container, frameEl, reduced = false, startHidden = false
     }
     if (st.atOne && !cur) sitPose(T);
 
-    // borrowed hourglass over the eyes while the password field is active
+    // borrowed S mark over the eyes while the password field is active
     const hgWant = st.field === 'password' && st.atOne && !cur && !st.error && !st.success ? 1 : 0;
     st.hgK = damp(st.hgK, hgWant, hgWant ? 5 : 8, dt);
     if (st.hgK > .02) Object.assign(P, { aLx: -2.0 * st.hgK, aRx: -2.0 * st.hgK, aLz: .38 * st.hgK - .12 * (1 - st.hgK), aRz: -.38 * st.hgK + .12 * (1 - st.hgK), headX: .12 });
