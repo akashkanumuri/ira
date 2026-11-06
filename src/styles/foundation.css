@@ -256,7 +256,10 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 .ira-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-/* ---------- Motion (calm, purposeful) ---------- */
+/* ---------- Motion (calm, purposeful) ----------
+   Entrance animations use fill-mode `backwards`, not `both`: a finished animation that keeps
+   holding opacity/transform turns the element into a stacking context, which traps popups,
+   menus and fixed elements underneath the sticky header. */
 @keyframes ui-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ui-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes ui-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
@@ -265,13 +268,13 @@ textarea.input { min-height: 96px; resize: vertical; }
 @keyframes ui-pulse-dot { 0%, 100% { box-shadow: 0 0 0 0 rgb(52 168 119 / 0.45); } 50% { box-shadow: 0 0 0 5px rgb(52 168 119 / 0); } }
 
 @keyframes ui-slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
-.anim-fade { animation: ui-fade 0.18s ease-out both; }
-.anim-slide { animation: ui-slide-in 0.28s var(--ease-out) both; }
-.rise { animation: ui-rise 0.42s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms); }
-.ira-section-transition { animation: ui-fade 0.2s ease-out both; }
-.grow-x { transform-origin: left; animation: ui-grow-x 0.8s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.anim-fade { animation: ui-fade 0.18s ease-out backwards; }
+.anim-slide { animation: ui-slide-in 0.28s var(--ease-out) backwards; }
+.rise { animation: ui-rise 0.42s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+.ira-section-transition { animation: ui-fade 0.2s ease-out backwards; }
+.grow-x { transform-origin: left; animation: ui-grow-x 0.8s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
 @keyframes ui-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.grow-y { transform-origin: bottom; animation: ui-grow-y 0.7s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.grow-y { transform-origin: bottom; animation: ui-grow-y 0.7s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
 .skeleton {
   border-radius: 10px;
   background: linear-gradient(90deg, #efeef5 0%, #f7f6fb 50%, #efeef5 100%);
