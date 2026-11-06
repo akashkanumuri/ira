@@ -523,22 +523,62 @@ begin
 end $function$;
 
 -- ============================================================== client: sign + Term 1
+-- Acceptance rows are immutable, so the typed signer name is written at insert time
+-- (passed through a transaction-local setting). Accepting also requests Term 1 once,
+-- whichever path the client used.
+create or replace function public.client_accept_contract(p_contract_id uuid, p_version_no integer, p_acknowledged boolean, p_user_agent text default null)
+ returns jsonb language plpgsql security definer set search_path to ''
+as $function$
+declare k public.contracts; v public.contract_versions; v_ack text :=
+  'I have read and agree to the terms and conditions of this contract.';
+  v_activated int; v_signer text := nullif(btrim(coalesce(current_setting('sigma.signer_name', true), '')), '');
+begin
+  select * into k from public.contracts where id = p_contract_id and deleted_at is null for update;
+  perform private.require(found and k.client_id = private.current_client_id(), 'Contract not found');
+  perform private.require(private.has_permission('client.contract.accept'), 'Your account is not permitted to accept contracts. Ask your organisation admin.');
+  perform private.require(k.status in ('Sent','Viewed','Awaiting Acceptance'), 'This contract is not awaiting acceptance');
+  perform private.require(p_version_no = k.current_version_no, 'A newer version of this contract has been issued. Please review the latest version.');
+  perform private.require(p_acknowledged is true, 'You must confirm that you have read and agree to the terms');
+  perform private.require(k.end_date is null or k.end_date >= private.today_ist(), 'This contract has already passed its end date');
+  select * into v from public.contract_versions where contract_id = k.id and version_no = k.current_version_no;
+
+  insert into public.contract_acceptances(contract_id, project_id, version, url, who, event, note, user_id, client_id,
+    contract_version_id, version_no, ip_address, user_agent, acknowledgement, signer_name)
+  values (k.id, k.project_id, 'v' || k.current_version_no, coalesce(v.document_url, k.url, ''),
+          coalesce((select full_name from public.client_users where profile_id = auth.uid()), 'Client user'),
+          'Accepted', null, auth.uid(), k.client_id, v.id, k.current_version_no, private.request_ip(),
+          left(p_user_agent, 400), v_ack, left(v_signer, 120));
+
+  update public.contracts set status = 'Accepted', accepted_at = now(), accepted_url = coalesce(v.document_url, k.url),
+    updated_at = now() where id = k.id;
+
+  -- COMMIT → ASSIGN: draft deliverables under this contract become active.
+  update public.deliverables set status = 'Pending'
+  where project_id = k.project_id and status = 'Draft' and deleted_at is null
+    and (contract_id is null or contract_id = k.id);
+  get diagnostics v_activated = row_count;
+
+  -- Accepting requests Term 1 of the payment plan (once).
+  update public.payment_installments set requested_at = now(), requested_by = auth.uid(),
+    due_date = private.today_ist() + coalesce(k.first_term_due_days, 7)
+  where contract_id = k.id and term_no = 1 and deleted_at is null and requested_at is null;
+
+  perform private.notify_project_staff(k.project_id, 'contract', 'Contract accepted',
+    k.title || ' v' || k.current_version_no || ' was accepted by the client' || coalesce(' (signed by ' || v_signer || ')', '') || '.',
+    '/admin/clients', 'contract-accepted:' || k.id || ':' || k.current_version_no);
+  return jsonb_build_object('status', 'Accepted', 'version_no', k.current_version_no, 'deliverables_activated', v_activated);
+end $function$;
+
 create or replace function public.client_sign_contract(p_contract_id uuid, p_version_no integer, p_signer_name text, p_user_agent text default null)
  returns jsonb language plpgsql security definer set search_path to ''
 as $function$
-declare v_name text := btrim(coalesce(p_signer_name, '')); r jsonb; k public.contracts; v_first boolean;
+declare v_name text := btrim(coalesce(p_signer_name, '')); r jsonb; v_first boolean;
 begin
   perform private.require(length(v_name) between 3 and 120, 'Type your full name to sign');
-  select * into k from public.contracts where id = p_contract_id and deleted_at is null;
-  v_first := found and not exists (select 1 from public.contract_acceptances a where a.contract_id = k.id and a.event = 'Accepted');
+  v_first := not exists (select 1 from public.contract_acceptances a where a.contract_id = p_contract_id and a.event = 'Accepted');
+  perform set_config('sigma.signer_name', v_name, true);
   r := public.client_accept_contract(p_contract_id, p_version_no, true, p_user_agent);
-  update public.contract_acceptances set signer_name = v_name
-  where id = (select id from public.contract_acceptances where contract_id = p_contract_id and user_id = auth.uid() and event = 'Accepted'
-              order by created_at desc limit 1);
-  -- accepting requests Term 1 (once)
-  update public.payment_installments set requested_at = now(), requested_by = auth.uid(),
-    due_date = private.today_ist() + coalesce(k.first_term_due_days, 7)
-  where contract_id = p_contract_id and term_no = 1 and deleted_at is null and requested_at is null;
+  perform set_config('sigma.signer_name', '', true);
   return r || jsonb_build_object('first_acceptance', v_first);
 end $function$;
 
