@@ -46,7 +46,8 @@ import {
   type ClientPage,
   type WorkspaceProject,
 } from './ClientWorkspaceViews';
-import { AWAITING_CLIENT_CONTRACT, errorMessage, loadProjectWorkspace, type ProjectWorkspace } from '../../lib/sigma';
+import { AWAITING_CLIENT_CONTRACT, errorMessage, loadProjectWorkspace, rpc, type ProjectWorkspace } from '../../lib/sigma';
+import { ALLOWED_PAGES, ClientGate, isGated, type ClientPortalState } from './ClientGate';
 
 export type ClientNavPage = ClientPage;
 
@@ -108,6 +109,8 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
 
   const [notifications, setNotifications] = useState<ClientNotificationItem[]>([]);
   const [ws, setWs] = useState<ProjectWorkspace | null>(null);
+  // Where this client is in the journey (contract → Term 1 → open / paused). The database enforces it; this shapes the screens.
+  const [portal, setPortal] = useState<ClientPortalState | null>(null);
 
   /* ---------- Projects (RLS limits rows to this client organisation) ---------- */
   const loadProjects = useCallback(async () => {
@@ -175,7 +178,12 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
   /* ---------- Project workspace ---------- */
   const loadWorkspace = useCallback(async (projectId: string) => {
     try {
-      setWs(await loadProjectWorkspace(projectId));
+      const [w, st] = await Promise.all([
+        loadProjectWorkspace(projectId),
+        rpc<ClientPortalState>('client_portal_state', { p_project_id: projectId }).catch(() => null),
+      ]);
+      setWs(w);
+      setPortal(st);
       setLoadError(null);
     } catch (err) {
       setLoadError(errorMessage(err));
@@ -184,8 +192,20 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
 
   useEffect(() => {
     setWs(null);
+    setPortal(null);
     if (selectedProject?.id) void loadWorkspace(selectedProject.id);
   }, [selectedProject?.id, loadWorkspace]);
+
+  // Re-check access when the client comes back to the tab (e.g. after paying, or once the team verifies).
+  useEffect(() => {
+    const onFocus = () => { if (selectedProject?.id) void loadWorkspace(selectedProject.id); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [selectedProject?.id, loadWorkspace]);
+
+  const stage = portal?.stage ?? null;
+  const gated = isGated(stage);
+  const allowed = stage ? ALLOWED_PAGES[stage] : null;
 
   const reload = useCallback(async () => {
     if (selectedProject?.id) await loadWorkspace(selectedProject.id);
@@ -230,17 +250,15 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
      Navigation
   ========================================================================= */
 
+  const projectItems = [
+    { id: 'contracts', label: gated ? 'Contract' : 'Sign Contract', icon: FileSignature, badge: contractPending ? 1 : undefined },
+    { id: 'deliverables', label: 'Deliverables', icon: Package, badge: reviewCount || undefined },
+    { id: 'progress', label: 'Progress Tracker', icon: TrendingUp, badge: pendingDependencyCount || undefined },
+    { id: 'payments', label: 'Billing & Payment', icon: CreditCard, badge: paymentDueCount || undefined },
+  ].filter(i => !allowed || allowed.includes(i.id as ClientNavPage));
   const navGroups: ShellNavGroup[] = [
-    { items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
-    {
-      label: 'My project',
-      items: [
-        { id: 'contracts', label: 'Sign Contract', icon: FileSignature, badge: contractPending ? 1 : undefined },
-        { id: 'deliverables', label: 'Deliverables', icon: Package, badge: reviewCount || undefined },
-        { id: 'progress', label: 'Progress Tracker', icon: TrendingUp, badge: pendingDependencyCount || undefined },
-        { id: 'payments', label: 'Billing & Payment', icon: CreditCard, badge: paymentDueCount || undefined },
-      ],
-    },
+    { items: [{ id: 'dashboard', label: gated ? 'Start here' : 'Dashboard', icon: LayoutDashboard }] },
+    ...(projectItems.length ? [{ label: 'My project', items: projectItems }] : []),
     {
       label: 'Account',
       items: [
@@ -304,6 +322,9 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
     }
 
     const props = { user, project: selectedProject, ws, reload, go: setPage };
+    if (portal && gated && (page === 'dashboard' || (allowed && !allowed.includes(page)))) {
+      return <ClientGate state={portal} projectName={selectedProject.name} userName={user.name ?? ''} go={setPage} />;
+    }
     switch (page) {
       case 'dashboard':
         return <ClientDashboard {...props} />;
@@ -326,7 +347,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
       groups={navGroups}
       active={page}
       onNavigate={id => setPage(id as ClientNavPage)}
-      mobilePrimary={['dashboard', 'deliverables', 'progress', 'payments']}
+      mobilePrimary={gated ? (['dashboard', 'contracts', 'payments', 'support'] as ClientNavPage[]).filter(p => !allowed || allowed.includes(p)) : ['dashboard', 'deliverables', 'progress', 'payments']}
       user={{
         name: user.primaryContact || user.name,
         subtitle: user.companyName || 'Client',

@@ -45,11 +45,17 @@ export interface ClientRound {
   id: string; deliverable_id: string; project_id: string; task_id: string | null; draft_id: string | null; round_no: number;
   link: string | null; message: string | null; sent_by: string | null; sent_at: string; status: ClientRoundStatus;
   client_comment: string | null; decided_at: string | null; forwarded_at: string | null; forward_note: string | null;
+  /** Sent after the included drafts were used up (billable). */
+  is_extra?: boolean;
 }
 /** Client view of a version (no staff identities, link hidden while payment-locked). */
 export interface ClientVersion {
   id: string; round_no: number; link: string | null; message: string | null; sent_at: string; status: ClientRoundStatus;
   client_comment: string | null; decided_at: string | null; link_locked: boolean;
+  /** Sent after the included drafts were used up (billable). */
+  is_extra?: boolean;
+  /** How many drafts the price includes (default 3). */
+  included_drafts?: number;
 }
 export const DRAFT_DECISION: Record<DraftDecision, { label: string; tone: Tone }> = {
   pending: { label: 'Waiting for review', tone: 'amber' },
@@ -159,11 +165,14 @@ export const reviewApi = {
   },
   sendToClient: (deliverableId: string, link: string | null, message: string | null, taskId: string | null) =>
     rcall<string>('staff_send_to_client', { p_deliverable_id: deliverableId, p_link: link, p_message: message, p_task_id: taskId }),
+  /** Take back a draft the client hasn't answered yet (wrong link, etc.). It doesn't count as a draft. */
+  withdraw: (reviewId: string) => rcall('staff_withdraw_draft', { p_review_id: reviewId }),
   forward: (reviewId: string, note: string | null, taskId?: string | null) =>
     rcall('staff_forward_client_feedback', { p_review_id: reviewId, p_note: note, p_task_id: taskId ?? null }),
   clientVersions: (deliverableId: string) => rcall<ClientVersion[]>('client_deliverable_reviews', { p_deliverable_id: deliverableId }),
-  clientDecide: (reviewId: string, approve: boolean, comment: string | null) =>
-    rcall('client_decide_review', { p_review_id: reviewId, p_approve: approve, p_comment: comment }),
+  /** extraAck: the client confirmed that changes after the last included draft are charged extra. */
+  clientDecide: (reviewId: string, approve: boolean, comment: string | null, extraAck = false) =>
+    rcall('client_decide_review', { p_review_id: reviewId, p_approve: approve, p_comment: comment, p_extra_ack: extraAck }),
   metrics: (employeeId?: string | null, from?: string | null, to?: string | null) =>
     rcall<ReviewMetrics>('employee_review_metrics', { p_employee_id: employeeId ?? null, p_from: from ?? null, p_to: to ?? null }),
   teamMetrics: (from?: string | null, to?: string | null) =>

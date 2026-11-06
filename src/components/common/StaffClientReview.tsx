@@ -33,6 +33,9 @@ export function StaffClientReview({ deliverableId, deliverableStatus, nameOf, on
   useEffect(() => { void load(); }, [load]);
 
   const approved = tasks.filter((t) => t.status === 'completed');
+  // Drafts are numbered like the client sees them: withdrawn ones don't count.
+  const live = (rounds ?? []).filter((r) => r.status !== 'withdrawn').sort((a, b) => a.round_no - b.round_no);
+  const draftNo = (id: string) => live.findIndex((r) => r.id === id) + 1;
   const pending = rounds?.find((r) => r.status === 'pending');
   const canSend = !pending && !['Draft', 'Cancelled'].includes(deliverableStatus);
   const chosen = approved.find((t) => t.id === form.taskId);
@@ -65,7 +68,7 @@ export function StaffClientReview({ deliverableId, deliverableStatus, nameOf, on
     <section>
       <div className="flex items-center justify-between mb-2 gap-2">
         <h3 className="text-[13px] font-semibold">Client review</h3>
-        {canSend && !sending && <Button size="sm" variant="primary" icon={Send} onClick={() => { setSending(true); setForm({ taskId: approved[0]?.id ?? '', link: '', message: '' }); }}>Send version {(rounds?.[0]?.round_no ?? 0) + 1}</Button>}
+        {canSend && !sending && <Button size="sm" variant="primary" icon={Send} onClick={() => { setSending(true); setForm({ taskId: approved[0]?.id ?? '', link: '', message: '' }); }}>Send draft {live.length + 1}</Button>}
       </div>
       {error && !/switch on/i.test(error) && <p className="text-xs text-err mb-2">{error}</p>}
 
@@ -103,12 +106,22 @@ export function StaffClientReview({ deliverableId, deliverableStatus, nameOf, on
           {rounds.map((r) => (
             <li key={r.id} className="rounded-2xl border border-ink-200 p-3 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[13px] font-semibold">Version {r.round_no}</span>
+                <span className="text-[13px] font-semibold">{r.status === 'withdrawn' ? 'Withdrawn draft' : `Draft ${draftNo(r.id)}`}</span>
                 <Badge tone={TONE[r.status]}>{CLIENT_ROUND[r.status].label}</Badge>
+                {r.is_extra && r.status !== 'withdrawn' && <Badge tone="info">Extra (billable)</Badge>}
                 <span className="text-[11px] text-ink-3 ml-auto">{when(r.sent_at)}</span>
               </div>
               {r.link && <a href={r.link} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1 max-w-full"><ExternalLink size={12} className="shrink-0" /><span className="truncate">{r.link}</span></a>}
               {r.client_comment && <p className="text-xs text-ink-2 whitespace-pre-line"><b>Client:</b> {r.client_comment}</p>}
+              {r.status === 'pending' && (
+                <Button size="sm" variant="ghost" disabled={busy} onClick={async () => {
+                  if (!window.confirm('Withdraw this draft? The client won’t be able to review it, and it won’t count as a draft.')) return;
+                  setBusy(true);
+                  try { await reviewApi.withdraw(r.id); toast('Draft withdrawn.'); await Promise.all([load(), onChanged()]); }
+                  catch (e) { toast(e instanceof Error ? e.message : 'Couldn’t withdraw.', 'err'); }
+                  finally { setBusy(false); }
+                }}>Withdraw</Button>
+              )}
               {r.status === 'changes_requested' && (r.forwarded_at ? (
                 <p className="text-[11px] text-ink-3">Forwarded to the team {when(r.forwarded_at)}{r.forward_note ? ` · “${r.forward_note}”` : ''}</p>
               ) : fwd?.id === r.id ? (

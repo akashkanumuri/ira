@@ -84,6 +84,7 @@ import { DeliverableThread } from '../common/DeliverableThread';
 import { ClientVersions } from './ClientVersions';
 import { Gauge, Ring } from '../../ui/charts';
 import { greeting } from '../../ui/motion';
+import { PaymentDetailsBox, usePaymentDetails } from './ClientGate';
 
 export type ClientPage = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications' | 'support';
 
@@ -409,10 +410,11 @@ export function ClientDashboard({ user, project, ws, go }: ViewProps) {
    2. Sign Contract
 ========================================================================= */
 
-export function ClientContracts({ user, project, ws, reload }: ViewProps) {
+export function ClientContracts({ user, project, ws, reload, go }: ViewProps) {
   const toast = useToast();
   const contract = currentContract(ws);
   const [agree, setAgree] = useState(false);
+  const [signer, setSigner] = useState('');
   const [dlg, setDlg] = useState<'accept' | 'decline' | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -421,6 +423,7 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
   const version = contract ? ws.contractVersions.find(v => v.contract_id === contract.id && v.version_no === contract.current_version_no) : null;
   const docFile = version?.document_file_id ? ws.files.find(f => f.id === version.document_file_id) : null;
   const awaiting = contract ? AWAITING_CLIENT_CONTRACT.includes(contract.status) : false;
+  const plan = contract ? ws.installments.filter(i => i.contract_id === contract.id && i.term_no != null).sort((a, b) => (a.term_no ?? 0) - (b.term_no ?? 0)) : [];
 
   useEffect(() => {
     if (contract && contract.status === 'Sent' && viewedRef.current !== contract.id) {
@@ -452,15 +455,16 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
   const accept = async () => {
     setBusy(true);
     try {
-      await rpc('client_accept_contract', {
+      await rpc('client_sign_contract', {
         p_contract_id: contract.id,
         p_version_no: contract.current_version_no,
-        p_acknowledged: agree,
+        p_signer_name: signer.trim(),
         p_user_agent: navigator.userAgent.slice(0, 400),
       });
-      toast('Contract accepted. Your acceptance has been recorded.');
+      toast('Contract signed. Next: pay the first payment to start the work.');
       setDlg(null);
       await reload();
+      if (plan.length > 0) go('payments');
     } catch (e) {
       toast(errorMessage(e), 'err');
       await reload();
@@ -491,6 +495,7 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
 
   const history = ws.acceptances.filter(a => a.contract_id === contract.id);
   const versions = ws.contractVersions.filter(v => v.contract_id === contract.id);
+  const hasDocument = Boolean(docFile || version?.document_url || contract.url);
 
   return (
     <>
@@ -514,7 +519,7 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
             <KV
               cols={3}
               items={[
-                ['Contract value', contract.contract_value != null ? `${inr(contract.contract_value)}${contract.tax_note ? ' ' + contract.tax_note : ''}` : '—'],
+                ['Contract value', contract.contract_value != null ? `${inr(contract.contract_value)} · GST incl.` : '—'],
                 ['Start date', fmtDate(contract.start_date)],
                 ['End date', fmtDate(contract.end_date)],
                 ['Renewal date', fmtDate(contract.renewal_date)],
@@ -533,11 +538,37 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
                 <Alert title={`What changed in v${contract.current_version_no}`}>{version.change_note}</Alert>
               </div>
             )}
-            <div className="mt-5">
-              <Button icon={docFile ? Download : ExternalLink} onClick={openDocument}>
-                {docFile ? 'View contract document' : 'Open contract'}
-              </Button>
-            </div>
+            {version?.terms_body && (
+              <div className="mt-5 pt-5 border-t border-line">
+                <div className="text-xs text-ink-3 mb-2">Terms & conditions</div>
+                <div className="max-h-[420px] overflow-y-auto rounded-2xl bg-ink-50/60 p-4 text-[13.5px] leading-relaxed text-ink-800 whitespace-pre-line" tabIndex={0} aria-label="Contract terms">
+                  {version.terms_body}
+                </div>
+              </div>
+            )}
+            {plan.length > 0 && (
+              <div className="mt-5 pt-5 border-t border-line">
+                <div className="text-xs text-ink-3 mb-2">Payment plan</div>
+                <ul className="divide-y divide-line rounded-2xl border border-line">
+                  {plan.map(t => (
+                    <li key={t.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-[13px]">
+                      <span className="min-w-0 truncate">{t.term_no}. {t.name} <span className="text-ink-3">· {t.percentage}%</span></span>
+                      <span className="font-semibold tabular-nums shrink-0">{inr(t.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[12px] text-ink-3 mt-2">
+                  {plan[0].name} is due {contract.first_term_due_days ? `within ${contract.first_term_due_days} days of signing` : 'when you sign'}. Work starts once it’s received. The team asks for later payments as the work progresses.
+                </p>
+              </div>
+            )}
+            {hasDocument && (
+              <div className="mt-5">
+                <Button icon={docFile ? Download : ExternalLink} onClick={openDocument}>
+                  {docFile ? 'View contract document' : 'Open contract document'}
+                </Button>
+              </div>
+            )}
           </Card>
 
           {contract.status === 'Accepted' ? (
@@ -552,14 +583,19 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
             <Alert tone="warn" title={`Contract ${contract.status.toLowerCase()}`}>Please contact the IRA team.about renewal.</Alert>
           ) : awaiting ? (
             <Card>
-              <CardHead title="Your response" desc="Open and read the document above before accepting." />
+              <CardHead title="Sign the contract" desc="Read the terms above, tick the box and type your full name." />
               <Checkbox checked={agree} onChange={setAgree} label="I have read and agree to the terms and conditions of this contract." />
+              <div className="mt-3 max-w-sm">
+                <Field label="Your full name" required hint="Typing your name signs the contract.">
+                  <Input value={signer} onChange={e => setSigner(e.target.value)} autoComplete="name" placeholder={user.name ?? 'Full name'} />
+                </Field>
+              </div>
               {user.clientRole === 'client_user' && (
                 <p className="text-xs text-ink-3 mt-3">Only your organisation’s client admin can accept or decline contracts.</p>
               )}
               <div className="flex flex-wrap gap-2 mt-4">
-                <Button variant="primary" icon={CheckCircle2} disabled={!agree || user.clientRole === 'client_user'} onClick={() => setDlg('accept')}>
-                  Accept contract
+                <Button variant="primary" icon={CheckCircle2} disabled={!agree || signer.trim().length < 3 || user.clientRole === 'client_user'} onClick={() => setDlg('accept')}>
+                  Sign contract
                 </Button>
                 <Button variant="ghost" disabled={user.clientRole === 'client_user'} onClick={() => setDlg('decline')}>
                   Decline
@@ -603,12 +639,12 @@ export function ClientContracts({ user, project, ws, reload }: ViewProps) {
       <Dialog
         open={dlg === 'accept'}
         onClose={() => !busy && setDlg(null)}
-        title="Accept this contract?"
-        desc={`You are accepting ${contract.ref} version ${contract.current_version_no} on behalf of ${user.companyName ?? 'your organisation'}. Your account, the time and your network address are recorded.`}
+        title="Sign this contract?"
+        desc={`${signer.trim()} is signing ${contract.ref} version ${contract.current_version_no} on behalf of ${user.companyName ?? 'your organisation'}. Your name, account, the time and your network address are recorded.${plan.length ? ` ${plan[0].name} (${inr(plan[0].amount)}) is then requested.` : ''}`}
         footer={
           <>
             <Button onClick={() => setDlg(null)} disabled={busy}>Review again</Button>
-            <Button variant="primary" loading={busy} onClick={accept}>Confirm acceptance</Button>
+            <Button variant="primary" loading={busy} onClick={accept}>Sign</Button>
           </>
         }
       />
@@ -1138,7 +1174,10 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
   const pending = (id: string) => ws.payments.filter(p => p.installment_id === id && p.status === 'Submitted');
   const outstanding = (i: InstallmentRow) =>
     Math.max(0, installmentTotal(i) - Number(i.amount_paid) - pending(i.id).reduce((s, p) => s + Number(p.amount), 0));
-  const canPay = (i: InstallmentRow) => user.clientRole !== 'client_user' && !['Paid', 'Cancelled', 'Waived'].includes(i.status) && outstanding(i) > 0;
+  /** Plan terms the team hasn't asked for yet can't be paid (and don't count as billed). */
+  const notRequested = (i: InstallmentRow) => i.term_no != null && !i.requested_at && Number(i.amount_paid) === 0;
+  const canPay = (i: InstallmentRow) => user.clientRole !== 'client_user' && !notRequested(i) && !['Paid', 'Cancelled', 'Waived'].includes(i.status) && outstanding(i) > 0;
+  const payDetails = usePaymentDetails(ws.installments.some(i => canPay(i)));
 
   const startPay = (i: InstallmentRow) => {
     setInstId(i.id);
@@ -1188,7 +1227,7 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
     <>
       <PageHeader title="Billing & Payment" desc="Milestones are marked paid only after finance verifies the receipt against the bank statement." />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <Stat label="Contract value" value={contract?.contract_value != null ? inr(contract.contract_value) : '—'} sub={contract?.tax_note ?? undefined} />
+        <Stat label="Contract value" value={contract?.contract_value != null ? inr(contract.contract_value) : '—'} sub="GST included" />
         <Stat label="Amount paid" value={inr(paid)} sub="Verified receipts" />
         <Stat label="Amount due" value={inr(Math.max(0, total - paid))} sub={`of ${inr(total)} billed`} />
         <Stat label="Overdue" value={inr(overdue.reduce((s, i) => s + installmentTotal(i) - Number(i.amount_paid), 0))} sub={`${overdue.length} milestone${overdue.length === 1 ? '' : 's'}`} tone={overdue.length ? 'err' : undefined} />
@@ -1197,6 +1236,12 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
         <div className="mb-4">
           <Alert tone="err" title="Downloads temporarily unavailable">{LOCK_MESSAGE} Access is restored automatically once payment is verified.</Alert>
         </div>
+      )}
+      {ws.installments.some(i => canPay(i)) && (
+        <Card className="mb-5">
+          <CardHead title="How to pay" desc="Pay by bank transfer or UPI, then press “Submit payment” and add the reference number." />
+          <PaymentDetailsBox details={payDetails} />
+        </Card>
       )}
       <Tabs
         value={tab}
@@ -1217,7 +1262,7 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
             { key: 'a', head: 'Amount', align: 'right', render: r => <span className="font-semibold">{inr(installmentTotal(r))}</span> },
             { key: 'p', head: 'Paid', align: 'right', render: r => <span className="tnum text-ink-2">{inr(r.amount_paid)}</span> },
             { key: 'd', head: 'Due', render: r => <span className="text-xs text-ink-2">{fmtDate(r.due_date)}</span> },
-            { key: 's', head: 'Status', render: r => <span className="flex gap-1.5 flex-wrap"><Status s={r.status} />{pending(r.id).length > 0 && <Badge tone="info">Verification pending</Badge>}</span> },
+            { key: 's', head: 'Status', render: r => <span className="flex gap-1.5 flex-wrap">{notRequested(r) ? <Badge tone="neutral">Later</Badge> : <Status s={r.status} />}{pending(r.id).length > 0 && <Badge tone="info">Verification pending</Badge>}</span> },
             { key: 'i', head: 'Invoice', render: r => <span className="font-mono text-xs text-ink-2">{r.invoice_number ?? '—'}</span> },
           ]}
           actions={r => (canPay(r) ? <Button size="sm" onClick={() => startPay(r)}>Submit payment</Button> : null)}

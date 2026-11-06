@@ -7,6 +7,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DeliverableThread } from '../common/DeliverableThread';
 import { StaffClientReview } from '../common/StaffClientReview';
+import { ContractWizard } from './ContractWizard';
+import { ClientAccessCard, ExtraChargesCard, PaymentDetailsCard, RequestPaymentDialog } from './BillingExtras';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -316,7 +318,7 @@ export function ProjectOperations({ projectId, projectName, clientId, employees,
         ]}
       />
       {tab === 'overview' && <Overview ws={ws} go={setTab} />}
-      {tab === 'contract' && <ContractTab ws={ws} projectId={projectId} reload={reload} />}
+      {tab === 'contract' && <ContractTab ws={ws} projectId={projectId} projectName={projectName} clientId={clientId} reload={reload} />}
       {tab === 'deliverables' && <DeliverablesTab ws={ws} projectId={projectId} employees={employees} reload={reload} />}
       {tab === 'modifications' && <ModificationsTab ws={ws} reload={reload} />}
       {tab === 'dependencies' && <DependenciesTab ws={ws} reload={reload} />}
@@ -398,9 +400,13 @@ function Overview({ ws, go }: { ws: ProjectWorkspace; go: (t: string) => void })
 type ContractForm = { title: string; ref: string; url: string; value: string; taxNote: string; start: string; end: string; renewal: string; terms: string; note: string };
 const emptyContract: ContractForm = { title: '', ref: '', url: '', value: '', taxNote: '+ GST', start: '', end: '', renewal: '', terms: '', note: '' };
 
-function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectId: string; reload: () => Promise<void> }) {
+function ContractTab({ ws, projectId, projectName, clientId, reload }: { ws: ProjectWorkspace; projectId: string; projectName: string; clientId: string | null; reload: () => Promise<void> }) {
   const { busy, run } = useBusy();
   const contract = ws.contracts[0] ?? null;
+  const [wizard, setWizard] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const plan = contract ? ws.installments.filter(i => i.contract_id === contract.id && i.term_no != null).sort((a, b) => (a.term_no ?? 0) - (b.term_no ?? 0)) : [];
+  const editableDraft = !!contract && contract.status === 'Draft' && !contract.sent_at;
   const [panel, setPanel] = useState<'create' | 'revise' | null>(null);
   const [form, setForm] = useState<ContractForm>(emptyContract);
   const [docFile, setDocFile] = useState<File | null>(null);
@@ -445,18 +451,12 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
         await rpc('staff_revise_contract', {
           p_contract_id: contract.id,
           p_change_note: form.note.trim(),
-          p_title: form.title.trim() || null,
-          p_document_url: form.url.trim() || null,
           p_document_file_id: fid,
-          p_contract_value: numOrNull(form.value),
-          p_start_date: form.start || null,
-          p_end_date: form.end || null,
-          p_renewal_date: form.renewal || null,
-          p_terms_summary: form.terms.trim() || null,
         });
         setPanel(null);
         await reload();
-      }, 'New contract version created as draft.');
+        setWizard(true);
+      }, 'New version created. Update the terms, then send it.');
     }
   };
 
@@ -467,8 +467,8 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
           <Empty
             icon={FileSignature}
             title="No contract yet"
-            desc="Create the contract that defines this project's scope and commercial terms."
-            action={<Button variant="primary" icon={Plus} onClick={() => { setForm(emptyContract); setDocFile(null); setPanel('create'); }}>Create contract</Button>}
+            desc="Write the terms, set the payment plan (e.g. 50/30/20) and send it. The client gets full access after accepting and paying Term 1."
+            action={<Button variant="primary" icon={Plus} onClick={() => setWizard(true)}>Write contract</Button>}
           />
         </Card>
       ) : (
@@ -482,7 +482,7 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
             <KV
               cols={3}
               items={[
-                ['Value', contract.contract_value != null ? `${inr(contract.contract_value)} ${contract.tax_note ?? ''}` : '—'],
+                ['Value', contract.contract_value != null ? `${inr(contract.contract_value)} · GST incl.` : '—'],
                 ['Start', fmtDate(contract.start_date)],
                 ['End', fmtDate(contract.end_date)],
                 ['Renewal', fmtDate(contract.renewal_date)],
@@ -494,13 +494,43 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
             />
             {contract.status === 'Declined' && <div className="mt-4"><Alert tone="err" title="Declined by client">{contract.decline_reason}</Alert></div>}
             {current?.terms_summary && <p className="mt-4 text-[13px] text-ink-2 whitespace-pre-line">{current.terms_summary}</p>}
+            {current?.terms_body && (
+              <div className="mt-4 rounded-2xl border border-line p-4">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h3 className="text-[13px] font-semibold">Terms & conditions</h3>
+                  <button type="button" className="text-[12px] font-semibold text-primary" onClick={() => setShowTerms(v => !v)}>{showTerms ? 'Show less' : 'Show all'}</button>
+                </div>
+                <div className={showTerms ? 'whitespace-pre-line text-[13px] leading-relaxed text-ink-2' : 'whitespace-pre-line text-[13px] leading-relaxed text-ink-2 max-h-32 overflow-hidden [mask-image:linear-gradient(to_bottom,black_60%,transparent)]'}>{current.terms_body}</div>
+              </div>
+            )}
+            <div className="mt-4 rounded-2xl border border-line p-4">
+              <h3 className="text-[13px] font-semibold mb-2">Payment plan</h3>
+              {plan.length === 0 ? (
+                <p className="text-[13px] text-ink-3">No payment plan yet. {editableDraft ? 'Add it with Edit & send.' : ''}</p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {plan.map(t => (
+                    <li key={t.id} className="py-2 flex items-center justify-between gap-3 text-[13px]">
+                      <span className="min-w-0 truncate">{t.term_no}. {t.name} <span className="text-ink-3">· {t.percentage}%</span></span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="font-semibold tabular-nums">{inr(t.amount)}</span>
+                        <Status s={t.requested_at || Number(t.amount_paid) > 0 ? t.status : 'Not requested'} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              {['Draft', 'Declined'].includes(contract.status) && (
+              {editableDraft && (
+                <Button variant="primary" icon={Send} onClick={() => setWizard(true)}>Edit & send</Button>
+              )}
+              {contract.status === 'Declined' && (
                 <Button variant="primary" icon={Send} loading={busy === 'send'} onClick={() => run('send', async () => { await rpc('staff_send_contract', { p_contract_id: contract.id }); await reload(); }, 'Contract sent to the client.')}>
-                  Send to client
+                  Send again
                 </Button>
               )}
-              {!['Terminated', 'Expired'].includes(contract.status) && (
+              {!['Terminated', 'Expired'].includes(contract.status) && !editableDraft && (
                 <Button
                   icon={FileText}
                   onClick={() => {
@@ -544,17 +574,30 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
         </div>
       )}
 
+      <ContractWizard
+        open={wizard}
+        onClose={() => setWizard(false)}
+        projectId={projectId}
+        projectName={projectName}
+        clientId={clientId}
+        contract={editableDraft ? contract : null}
+        version={editableDraft ? current ?? null : null}
+        plan={editableDraft ? ws.installments.filter(i => i.contract_id === contract!.id) : []}
+        onSaved={reload}
+      />
+
       <SidePanel
         open={!!panel}
         onClose={() => setPanel(null)}
         title={panel === 'create' ? 'Create contract' : 'Create revised version'}
         sub={panel === 'revise' ? 'The current version stays on record; the client must accept the new one.' : 'Saved as a draft until you send it.'}
-        footer={<><Button onClick={() => setPanel(null)}>Cancel</Button><Button variant="primary" loading={busy === 'save'} disabled={!valid || (panel === 'revise' && form.note.trim().length < 3)} onClick={save}>Save draft</Button></>}
+        footer={<><Button onClick={() => setPanel(null)}>Cancel</Button><Button variant="primary" loading={busy === 'save'} disabled={!valid || (panel === 'revise' && form.note.trim().length < 3)} onClick={save}>{panel === 'revise' ? 'Create new version' : 'Save draft'}</Button></>}
       >
         <div className="space-y-4">
-          <Field label="Title" required><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Master Services Agreement" /></Field>
+          {panel === 'create' && <Field label="Title" required><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Master Services Agreement" /></Field>}
           {panel === 'create' && <Field label="Reference" hint="Leave blank to generate one."><Input value={form.ref} onChange={e => setForm({ ...form, ref: e.target.value })} /></Field>}
-          {panel === 'revise' && <Field label="What changed" required><Textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></Field>}
+          {panel === 'revise' && <Field label="What changed" required hint="The client sees this note. Next you can edit the terms and value, then send the new version."><Textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></Field>}
+{panel === 'create' && (<>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Contract value (₹)"><Input type="number" min={0} step="0.01" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} /></Field>
             <Field label="Tax note"><Input value={form.taxNote} onChange={e => setForm({ ...form, taxNote: e.target.value })} placeholder="+ GST" /></Field>
@@ -566,6 +609,7 @@ function ContractTab({ ws, projectId, reload }: { ws: ProjectWorkspace; projectI
           <Field label="Document link" hint="Share the contract as an https:// link (Drive, Dropbox, DocuSign…) with view access for the client.">
             <Input value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://" />
           </Field>
+</>)}
         </div>
       </SidePanel>
 
@@ -1021,7 +1065,10 @@ function BillingTab({ ws, projectId, clientId, mode, reload }: { ws: ProjectWork
   const [verify, setVerify] = useState<{ id: string; approve: boolean } | null>(null);
   const [reason, setReason] = useState('');
   const [override, setOverride] = useState<string | null>(null);
+  const [reqId, setReqId] = useState<string | null>(null);
   const inst = ws.installments.find(i => i.id === sel) ?? null;
+  /** Plan terms stay 'Upcoming' until you ask the client to pay them. */
+  const notRequested = (i: InstallmentRow) => i.term_no != null && !i.requested_at && Number(i.amount_paid) === 0;
   const submitted = ws.payments.filter(p => p.status === 'Submitted');
 
   const billable = ws.installments.filter(i => !['Cancelled', 'Waived'].includes(i.status));
@@ -1068,11 +1115,13 @@ function BillingTab({ ws, projectId, clientId, mode, reload }: { ws: ProjectWork
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Contract value" value={contract?.contract_value != null ? inr(contract.contract_value) : '—'} sub={contract?.tax_note ?? undefined} />
+        <Stat label="Contract value" value={contract?.contract_value != null ? inr(contract.contract_value) : '—'} sub="GST included" />
         <Stat label="Billed" value={inr(billed)} sub={plannedPct ? `${plannedPct}% of contract in % milestones` : undefined} />
         <Stat label="Collected" value={inr(collected)} sub="Verified payments" />
         <Stat label="Overdue" value={inr(overdue)} tone={overdue ? 'err' : undefined} sub={overdue ? 'Past due date' : 'None'} />
       </div>
+
+      {mode === 'admin' && clientId && <ClientAccessCard projectId={projectId} refreshKey={ws} />}
 
       {submitted.length > 0 && (
         <Card>
@@ -1117,12 +1166,20 @@ function BillingTab({ ws, projectId, clientId, mode, reload }: { ws: ProjectWork
           { key: 'a', head: 'Total', align: 'right', render: r => inr(installmentTotal(r)) },
           { key: 'p', head: 'Paid', align: 'right', render: r => inr(r.amount_paid) },
           { key: 'd', head: 'Due', render: r => <span className="text-xs">{fmtDate(r.due_date)}</span> },
-          { key: 's', head: 'Status', render: r => <Status s={r.status} /> },
+          { key: 's', head: 'Status', render: r => notRequested(r) ? <Status s="Not requested" /> : <Status s={r.status} /> },
           { key: 'i', head: 'Invoice', render: r => <span className="font-mono text-xs">{r.invoice_number ?? '—'}</span> },
+          ...(mode === 'admin' ? [{ key: 'r', head: '', align: 'right' as const, render: (r: InstallmentRow) => notRequested(r)
+            ? <Button size="sm" icon={Send} onClick={(e: React.MouseEvent) => { e.stopPropagation(); setReqId(r.id); }}>Request</Button>
+            : null }] : []),
         ]}
       />
 
+      {mode === 'admin' && <ExtraChargesCard projectId={projectId} onChanged={reload} />}
+
       {mode === 'admin' && clientId && <BillingRules clientId={clientId} />}
+      {mode === 'admin' && <PaymentDetailsCard />}
+
+      <RequestPaymentDialog inst={ws.installments.find(i => i.id === reqId) ?? null} open={!!reqId} onClose={() => setReqId(null)} onDone={reload} />
 
       <SidePanel
         open={!!inst}
@@ -1131,6 +1188,7 @@ function BillingTab({ ws, projectId, clientId, mode, reload }: { ws: ProjectWork
         sub={inst ? `Milestone ${inst.installment_number}` : undefined}
         footer={inst && mode === 'admin' ? (
           <>
+            {inst.term_no != null && !['Paid', 'Cancelled', 'Waived'].includes(inst.status) && <Button icon={Send} onClick={() => setReqId(inst.id)}>{inst.requested_at ? 'Change due date' : 'Request payment'}</Button>}
             {!inst.invoice_number && !['Cancelled', 'Waived'].includes(inst.status) && <Button loading={busy === 'inv'} onClick={() => run('inv', async () => { await rpc('finance_issue_invoice', { p_installment_id: inst.id }); await reload(); }, 'Invoice number issued and client notified.')}>Issue invoice</Button>}
             {!['Paid', 'Cancelled', 'Waived'].includes(inst.status) && <Button variant="primary" onClick={() => { setPf({ amount: String(installmentTotal(inst) - Number(inst.amount_paid)), reference: '', paidOn: todayIST(), method: 'bank_transfer', notes: '', key: idempotencyKey('rec') }); setPayDlg(true); }}>Record payment</Button>}
           </>

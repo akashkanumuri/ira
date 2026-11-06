@@ -106,6 +106,8 @@ export interface ContractRow {
   accepted_at: string | null;
   declined_at: string | null;
   decline_reason: string | null;
+  /** Days the client has to pay Term 1 after accepting. */
+  first_term_due_days?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -118,6 +120,8 @@ export interface ContractVersionRow {
   document_url: string | null;
   document_file_id: string | null;
   terms_summary: string | null;
+  /** Full contract text written in SIGMA (terms & conditions). */
+  terms_body?: string | null;
   contract_value: number | null;
   start_date: string | null;
   end_date: string | null;
@@ -260,6 +264,12 @@ export interface InstallmentRow {
   paid_on: string | null;
   invoice_number: string | null;
   invoice_issued_at: string | null;
+  /** Payment-plan term (1, 2, 3…) when this row came from the contract's plan. */
+  term_no?: number | null;
+  /** When the payment was asked for (plan terms stay 'Upcoming' until requested). */
+  requested_at?: string | null;
+  /** Extra drafts billed into this term. */
+  extra_amount?: number | null;
   created_at: string;
 }
 
