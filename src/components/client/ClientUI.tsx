@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, {
   createContext,
   useContext,
@@ -848,9 +849,9 @@ export function Dialog({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div
-      className="ira-modal-overlay !z-50 !items-end sm:!items-center !p-0 sm:!p-6"
+      className="ira-modal-overlay !z-[95] !items-end sm:!items-center !p-0 sm:!p-6"
       onClick={onClose}
     >
       <div
@@ -876,7 +877,8 @@ export function Dialog({
           {footer}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -903,9 +905,9 @@ export function SidePanel({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div
-      className="ira-modal-overlay !z-50 !items-end sm:!items-center !p-0 sm:!p-6"
+      className="ira-modal-overlay !z-[95] !items-end sm:!items-center !p-0 sm:!p-6"
       onClick={onClose}
     >
       <aside
@@ -935,7 +937,8 @@ export function SidePanel({
           </footer>
         )}
       </aside>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -956,7 +959,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="fixed bottom-4 right-4 left-4 sm:left-auto z-[60] flex flex-col gap-2 items-end pointer-events-none"
+        className="fixed bottom-4 right-4 left-4 sm:left-auto z-[130] flex flex-col gap-2 items-end pointer-events-none"
       >
         {items.map(t => {
           const I = toneIcon[t.tone] ?? Info;
