@@ -3,7 +3,7 @@ import { Briefcase, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronR
 import type { AuthUser } from '../../contexts/AuthContext';
 import type { AttendanceRecord, Holiday, LeaveRequest, WfhRequest } from '../../types/attendance';
 import { performCheckIn, performCheckOut, performResumeWork, performStartBreak, fetchAttendanceRecord } from '../../lib/attendance';
-import { OFF_REASON_TEXT, useWorkContext } from '../../lib/workContext';
+import { OFF_REASON_TEXT, isPlannedHomeDay, useWorkContext } from '../../lib/workContext';
 import { GeoError, fetchOffice, fmtDistance, getFix, locationHelp, type Fix, type OfficeLocation } from '../../lib/officeLocation';
 import { classifyDay, formatKolkataTime, getKolkataDateString } from '../../lib/workingDays';
 import { dateLabel, duration } from '../../lib/v2';
@@ -85,10 +85,13 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
   const ctx = useWorkContext(user.id);
   const rules = ctx?.rules ?? null;
   const isRemote = rules ? rules.location === 'home' : user.workMode === 'remote';
+  // Hybrid employee on one of their home days: check in from home by default (no location needed);
+  // they can still pick Office if they come in.
+  const homeDay = isPlannedHomeDay(rules);
   const approvedWfhToday = wfhRequests.find((r) => r.date === today() && r.status === 'approved');
   const wfhOffered = isRemote || !ctx || ctx.wfh.allowed || Boolean(approvedWfhToday);
   const visitOffered = Boolean(rules?.field_visit) && !isRemote;
-  const [checkInMode, setCheckInMode] = useState<'office' | 'wfh' | 'visit'>(isRemote || approvedWfhToday ? 'wfh' : 'office');
+  const [checkInMode, setCheckInMode] = useState<'office' | 'wfh' | 'visit'>(isRemote || approvedWfhToday || homeDay ? 'wfh' : 'office');
   const [visitReason, setVisitReason] = useState('');
   // Late rule: this month's lates so far, to warn before a late check-in and explain it after.
   const { status: lateS } = useLateStatus(null, null, Boolean(user.employeeDbId));
@@ -100,8 +103,8 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
     return () => window.clearInterval(t);
   }, []);
   useEffect(() => {
-    setCheckInMode(isRemote || Boolean(approvedWfhToday) ? 'wfh' : 'office');
-  }, [isRemote, approvedWfhToday?.id]);
+    setCheckInMode(isRemote || Boolean(approvedWfhToday) || (homeDay && wfhOffered) ? 'wfh' : 'office');
+  }, [isRemote, approvedWfhToday?.id, homeDay, wfhOffered]);
   useEffect(() => { if (checkInMode === 'wfh' && !wfhOffered) setCheckInMode('office'); }, [checkInMode, wfhOffered]);
 
   const current = attendance.find((a) => a.date === today());
@@ -244,7 +247,7 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
               <p className="eyebrow">Today</p>
               <h2 className="font-display text-2xl font-bold text-ink-950 mt-1">{dateLabel(today(), { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
               <p className="text-[13px] text-ink-500 mt-1">
-                {isRemote ? 'Remote · WFH check-in' : approvedWfhToday ? 'Approved WFH today' : rules?.location === 'either' ? 'Hybrid · office or home today' : rules?.location_mode === 'hybrid' ? 'Office day' : (rules ? rules.working_day : todayClass.isWorkingDay) ? 'Working day' : todayClass.label}
+                {isRemote ? 'Remote · WFH check-in' : approvedWfhToday ? 'Approved WFH today' : homeDay ? `Hybrid · home day${rules?.office_days?.must_come?.length ? ` (office ${rules.office_days.must_come.map((d) => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d - 1]).join(', ')})` : ''}` : rules?.location === 'either' ? 'Hybrid · office or home today' : rules?.location_mode === 'hybrid' ? 'Office day' : (rules ? rules.working_day : todayClass.isWorkingDay) ? 'Working day' : todayClass.label}
                 {rules && (rules.schedule === 'flexible' || rules.schedule === 'flexible_core') ? ` · Flexible hours · ${Math.round(rules.full_day_minutes / 6) / 10} h a day` : user.shift ? ` · Shift ${user.shift.slice(0, 5)}–${(user.shiftEnd ?? '').slice(0, 5)}` : ''}
               </p>
             </div>

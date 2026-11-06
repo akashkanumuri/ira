@@ -18,7 +18,16 @@ export interface DayRules {
   earliest_checkin: string | null;
   full_day_minutes: number;
   features: Record<FeatureKey, boolean>;
+  /** Hybrid set-up: the fixed office days (ISO weekday 1=Mon … 7=Sun) and how many a period needs. */
+  office_days?: { count: number | null; period: 'week' | 'month'; extra_wfh: string | null; must_come: number[] | null } | null;
 }
+
+/** Hybrid with fixed office days, and today isn't one of them: a planned home day. */
+export const isPlannedHomeDay = (r: DayRules | null | undefined) => {
+  if (!r || r.location_mode !== 'hybrid' || r.location !== 'either' || !r.working_day) return false;
+  const fixed = r.office_days?.must_come ?? [];
+  return fixed.length > 0 && fixed.length >= (r.office_days?.count ?? 0);
+};
 export interface HybridStatus {
   period: 'week' | 'month'; from: string; to: string; required: number; configured: number; working_days: number;
   office_done: number; home_done: number; home_allowed: number; home_left: number; office_left: number;
