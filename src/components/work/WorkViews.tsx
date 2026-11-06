@@ -49,7 +49,7 @@ export function DayView({ employeeId, date, onDate, title }: { employeeId: strin
     const id = window.setInterval(() => void reload(), 60000);
     return () => window.clearInterval(id);
   }, [isToday, reload]);
-  useLiveRefresh(load);
+  useLiveRefresh(reload);
   const segs = d?.segments ?? [];
   const span = segs.length ? Date.parse(segs[segs.length - 1].end) - Date.parse(segs[0].start) : 0;
 
