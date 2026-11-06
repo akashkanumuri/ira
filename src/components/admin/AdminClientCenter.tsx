@@ -23,10 +23,14 @@ import {
   ShieldCheck,
   Lock,
   UserPlus,
+  Link2,
+  KeyRound,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { invokeClientAdmin } from '../../lib/v2';
 import { ClientCreationModal } from './ClientCreationModal';
+import { SetupLinkDialog, type SetupLink } from '../common/SetupLinkDialog';
+import { closePasswordRequests, listPasswordRequests, type PasswordRequest } from '../../lib/passwordRequests';
 import { ProjectOperations } from './ProjectOperations';
 import { errorMessage } from '../../lib/sigma';
 import {
@@ -165,8 +169,19 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
   const [selectedMgrId, setSelectedMgrId] = useState('');
   const [toggleAccessDialogOpen, setToggleAccessDialogOpen] = useState(false);
   const [resendingClient, setResendingClient] = useState<string | null>(null);
-  // The new link, shown when it couldn't be emailed (or for the admin to share directly).
-  const [linkInfo, setLinkInfo] = useState<{ email: string; url: string; kind: 'invite' | 'reset'; sent: boolean } | null>(null);
+  // The one-time link the admin shares (no emails are ever sent).
+  const [linkInfo, setLinkInfo] = useState<SetupLink | null>(null);
+  // Clients who pressed "Forgot password" on the login page.
+  const [pwRequests, setPwRequests] = useState<PasswordRequest[]>([]);
+  const [pwBusy, setPwBusy] = useState<string | null>(null);
+  const loadPwRequests = useCallback(async () => setPwRequests(await listPasswordRequests()), []);
+  useEffect(() => {
+    void loadPwRequests();
+    const onNote = () => void loadPwRequests();
+    window.addEventListener('ira:notification', onNote);
+    window.addEventListener('focus', onNote);
+    return () => { window.removeEventListener('ira:notification', onNote); window.removeEventListener('focus', onNote); };
+  }, [loadPwRequests]);
 
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId) || null;
@@ -185,27 +200,38 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
     return matchesStatus && matchesSearch;
   });
 
+  /** New one-time link for the client's primary contact: setup if they never signed in, reset otherwise. */
   const handleResendInvitation = async (c: any) => {
     setResendingClient(c.id);
     try {
-      const res = await invokeClientAdmin({
-        action: 'resend_invitation',
-        clientId: c.profile_id,
-      });
-      if (res?.success) {
-        const kind: 'invite' | 'reset' = res.kind === 'reset' ? 'reset' : 'invite';
-        const sent = Boolean(res.emailDelivery?.sent);
-        if (res.invitationUrl) setLinkInfo({ email: c.email, url: res.invitationUrl, kind, sent });
-        toast(sent
-          ? `${kind === 'reset' ? 'Password reset link' : 'Invitation'} emailed to ${c.email}.`
-          : 'New link ready — copy it and send it to the client.');
-      } else {
-        toast(res?.error || 'Failed to resend invitation.', 'err');
-      }
+      const res = await invokeClientAdmin({ action: 'resend_invitation', clientId: c.profile_id });
+      if (!res?.invitationUrl) throw new Error(res?.error || 'No link came back. Try again.');
+      setLinkInfo({ name: c.primary_contact, email: c.email, url: res.invitationUrl, kind: res.kind === 'reset' ? 'reset' : 'invite' });
+      void closePasswordRequests(c.email).then(loadPwRequests);
     } catch (e) {
-      toast('Failed to resend invitation.', 'err');
+      toast(errorMessage(e) || 'Unable to create the link.', 'err');
     } finally {
       setResendingClient(null);
+    }
+  };
+
+  /** Answer a "forgot password" request: create the person's reset link and show it. */
+  const handlePwRequest = async (r: PasswordRequest) => {
+    setPwBusy(r.id);
+    try {
+      const c = clients.find(x => x.id === r.client_id);
+      const isPrimary = !r.client_user_id || (c?.email ?? '').toLowerCase() === r.email.toLowerCase();
+      const res = isPrimary && c?.profile_id
+        ? await invokeClientAdmin({ action: 'resend_invitation', clientId: c.profile_id })
+        : await invokeClientAdmin({ action: 'resend_client_user_invitation', clientUserId: r.client_user_id });
+      if (!res?.invitationUrl) throw new Error(res?.error || 'No link came back. Try again.');
+      setLinkInfo({ name: r.person, email: r.email, url: res.invitationUrl, kind: res.kind === 'reset' ? 'reset' : 'invite' });
+      await closePasswordRequests(r.email);
+      await loadPwRequests();
+    } catch (e) {
+      toast(errorMessage(e) || 'Unable to create the link.', 'err');
+    } finally {
+      setPwBusy(null);
     }
   };
 
@@ -313,6 +339,28 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
 
   return (
     <div className="space-y-6">
+      {pwRequests.length > 0 && (
+        <div className="mx-4 sm:mx-6 mt-4 rounded-3xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5" role="region" aria-label="Password requests">
+          <div className="flex items-center gap-2.5">
+            <span className="grid place-items-center w-9 h-9 rounded-full bg-amber-100 text-amber-700"><KeyRound className="w-4 h-4" /></span>
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold text-ink-950">{pwRequests.length === 1 ? '1 client forgot their password' : `${pwRequests.length} clients forgot their password`}</p>
+              <p className="text-[12.5px] text-ink-600">Create a reset link and share it with them. No email is sent.</p>
+            </div>
+          </div>
+          <ul className="mt-3 divide-y divide-amber-200/70">
+            {pwRequests.map(r => (
+              <li key={r.id} className="py-2.5 flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-semibold text-ink-900 truncate">{r.person} <span className="font-normal text-ink-500">· {r.company_name}</span></p>
+                  <p className="text-[12px] text-ink-500 truncate">{r.email} · asked {new Date(r.requested_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</p>
+                </div>
+                <Button variant="primary" size="sm" icon={Link2} loading={pwBusy === r.id} onClick={() => void handlePwRequest(r)}>Create link</Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {/* Top Navigation Tabs for Client Work Center */}
       <div className="border-b border-line bg-surface px-4 sm:px-6 pt-2">
         <div className="flex items-center justify-between pb-3 flex-wrap gap-3">
@@ -489,11 +537,11 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
                       )}
                       <div className="flex flex-wrap gap-2 mt-5">
                         <Button
-                          icon={RefreshCw}
+                          icon={Link2}
                           loading={resendingClient === selectedClient.id}
                           onClick={() => handleResendInvitation(selectedClient)}
                         >
-                          {selectedClient.status === 'active' ? 'Send password reset link' : 'Resend Invitation Link'}
+                          {selectedClient.status === 'active' ? 'Get reset link' : 'Get setup link'}
                         </Button>
                         <Button
                           variant="danger"
@@ -846,24 +894,9 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
         </Field>
       </Dialog>
 
+      {linkInfo && <SetupLinkDialog link={linkInfo} onClose={() => setLinkInfo(null)} />}
+
       {/* Toggle Client Access Dialog */}
-      <Dialog
-        open={Boolean(linkInfo)}
-        onClose={() => setLinkInfo(null)}
-        title={linkInfo?.kind === 'reset' ? 'Password reset link' : 'Invitation link'}
-        desc={`Send this link to ${linkInfo?.email ?? 'the client'} privately (WhatsApp or your own email).`}
-        footer={
-          <>
-            <Button onClick={() => setLinkInfo(null)}>Close</Button>
-            <Button variant="primary" onClick={() => { if (linkInfo) { void navigator.clipboard?.writeText(linkInfo.url); toast('Link copied.'); } }}>Copy link</Button>
-          </>
-        }
-      >
-        <p className="text-[13px] text-[#5e5a80] mb-2">
-          Anyone with this link can set the password for {linkInfo?.email}. It works once and expires in {linkInfo?.kind === 'reset' ? '24 hours' : '72 hours'}. Older links for this person stop working.
-        </p>
-        <input readOnly className="input font-mono text-[12px] w-full" value={linkInfo?.url ?? ''} onFocus={(e) => e.currentTarget.select()} />
-      </Dialog>
 
       <Dialog
         open={toggleAccessDialogOpen}

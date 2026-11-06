@@ -49,7 +49,6 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
     };
   } | null>(null);
   const [copied, setCopied] = useState(false);
-  const [retryingEmail, setRetryingEmail] = useState(false);
   const [retryFeedback, setRetryFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const activeEmployees = employees.filter(e => e.status !== 'inactive');
@@ -61,44 +60,6 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleRetryEmail = async () => {
-    if (!createdInfo?.clientId) return;
-    setRetryingEmail(true);
-    setRetryFeedback(null);
-    try {
-      const res = await invokeClientAdmin({
-        action: 'resend_invitation',
-        clientId: createdInfo.clientId,
-      });
-
-      if (res?.success) {
-        setCreatedInfo(prev =>
-          prev
-            ? {
-                ...prev,
-                invitationUrl: res.invitationUrl || prev.invitationUrl,
-                emailDelivery: res.emailDelivery,
-              }
-            : null
-        );
-
-        if (res.emailDelivery?.sent) {
-          setRetryFeedback({ type: 'success', text: `Invitation email sent successfully to ${createdInfo.email}!` });
-        } else {
-          setRetryFeedback({
-            type: 'error',
-            text: res.emailDelivery?.error || res.emailDelivery?.reason || 'Email provider delivery failed.',
-          });
-        }
-      } else {
-        setRetryFeedback({ type: 'error', text: res?.error || 'Failed to resend invitation.' });
-      }
-    } catch (err) {
-      setRetryFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Unable to resend email.' });
-    } finally {
-      setRetryingEmail(false);
-    }
-  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -214,38 +175,15 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
                 </div>
               </div>
 
-              {/* Email Delivery Status Banner */}
-              {createdInfo.emailDelivery?.sent ? (
-                <div className="p-4 sm:p-5 rounded-2xl bg-blue-50 border border-blue-200 text-sm text-blue-900 flex items-start gap-3">
-                  <MailCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block text-sm sm:text-base">Invitation Email Delivered</span>
-                    <span className="text-blue-700 leading-relaxed block mt-0.5">
-                      An onboarding email with password setup instructions was sent to <b>{createdInfo.email}</b>.
-                    </span>
-                  </div>
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm text-slate-700 flex items-start gap-3">
+                <Mail className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block text-slate-800 text-sm sm:text-base">Share this link with the client</span>
+                  <span className="text-slate-600 leading-relaxed block mt-0.5">
+                    SIGMA 1 doesn’t send emails. Copy the setup link (or share it on WhatsApp). The client opens it, chooses a password and signs in with <b>{createdInfo.email}</b>.
+                  </span>
                 </div>
-              ) : createdInfo.emailDelivery?.attempted ? (
-                <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 text-sm text-amber-900 flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block text-sm sm:text-base">Automated Email Not Delivered</span>
-                    <span className="text-amber-800 leading-relaxed block mt-0.5">
-                      {createdInfo.emailDelivery.error || 'Email dispatch failed'}. The invitation was still created safely. Please use the copyable link below to share it manually.
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm text-slate-700 flex items-start gap-3">
-                  <Mail className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block text-slate-800 text-sm sm:text-base">Send this link to the client</span>
-                    <span className="text-slate-600 leading-relaxed block mt-0.5">
-                      Copy the setup link below and send it to the client privately (WhatsApp or your own email). They open it, choose a password, and can sign in.
-                    </span>
-                  </div>
-                </div>
-              )}
+              </div>
 
               {/* Invitation Link Box */}
               <div className="p-5 sm:p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
@@ -267,6 +205,14 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
                     {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     {copied ? 'Copied Link' : 'Copy Link'}
                   </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`Hi, welcome to SIGMA 1. Open this link to set your password (it works once and expires in 72 hours):\n${createdInfo.invitationUrl}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-14 px-6 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-bold hover:bg-slate-50 shrink-0 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    WhatsApp
+                  </a>
                 </div>
                 <p className="text-xs text-slate-500">
                   The client will choose their permanent password upon clicking this link. No permanent password has been stored in plaintext.
@@ -291,19 +237,7 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
               )}
 
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3">
-                {false ? (
-                  <button
-                    type="button"
-                    onClick={handleRetryEmail}
-                    disabled={retryingEmail}
-                    className="h-13 sm:h-14 px-5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-bold flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${retryingEmail ? 'animate-spin' : ''}`} />
-                    {retryingEmail ? 'Sending...' : 'Retry Sending Email'}
-                  </button>
-                ) : (
-                  <div />
-                )}
+                <div />
 
                 <button
                   type="button"

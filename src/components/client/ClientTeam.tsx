@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { MailPlus, RefreshCw, UserPlus } from 'lucide-react';
+import { Link2, RefreshCw, UserPlus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { invokeClientAdmin } from '../../lib/v2';
 import { isMissingSchema } from '../../lib/tasks';
 import { notify } from '../../lib/toast';
-import { Avatar, Badge, Button, Notice, cx } from '../../ui';
+import { Avatar, Badge, Button, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
+import { SetupLinkDialog, type SetupLink } from '../common/SetupLinkDialog';
+import { closePasswordRequests } from '../../lib/passwordRequests';
 
 interface Member { id: string; profile_id: string; role: 'client_admin' | 'client_user'; status: 'invited' | 'active' | 'inactive'; full_name: string | null; email: string; created_at: string }
 
@@ -28,7 +30,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [link, setLink] = useState<{ email: string; url: string; reset?: boolean } | null>(null);
+  const [link, setLink] = useState<SetupLink | null>(null);
   const [primary, setPrimary] = useState<string | null>(primaryProfileId ?? null);
 
   const load = useCallback(async () => {
@@ -53,15 +55,18 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
     finally { setBusy(null); }
   }
 
-  async function resend(m: Member) {
+  /** Creates a fresh one-time link (setup for invited people, reset for active ones) and shows it. No email is sent. */
+  async function getLink(m: Member, isPrimary: boolean) {
     setBusy(m.id);
     try {
-      const res = await invokeClientAdmin({ action: 'resend_client_user_invitation', clientUserId: m.id });
-      const reset = res?.kind === 'reset';
-      if (res?.invitationUrl) setLink({ email: m.email, url: res.invitationUrl, reset });
-      const what = reset ? 'Password reset link' : 'Invitation';
-      notify(`${what} ready — copy it and send it to ${m.email}.`, 'success');
-    } catch (e) { notify(e instanceof Error ? e.message : 'Unable to resend.', 'error'); }
+      // The primary contact's login belongs to the client account itself.
+      const res = isPrimary && mode === 'admin'
+        ? await invokeClientAdmin({ action: 'resend_invitation', clientId: m.profile_id })
+        : await invokeClientAdmin({ action: 'resend_client_user_invitation', clientUserId: m.id });
+      if (!res?.invitationUrl) throw new Error('No link came back. Try again.');
+      setLink({ name: m.full_name, email: m.email, url: res.invitationUrl, kind: res?.kind === 'reset' ? 'reset' : 'invite' });
+      if (mode === 'admin') void closePasswordRequests(m.email);
+    } catch (e) { notify(e instanceof Error ? e.message : 'Unable to create the link.', 'error'); }
     finally { setBusy(null); }
   }
 
@@ -91,8 +96,8 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
                 <Badge tone={m.status === 'active' ? 'mint' : m.status === 'invited' ? 'amber' : 'rose'} dot>{m.status === 'invited' ? 'Invited' : m.status === 'active' ? 'Active' : 'No access'}</Badge>
                 {!locked && (
                   <div className="flex gap-1.5 w-full sm:w-auto justify-end">
-                    {m.status === 'invited' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void resend(m)}><MailPlus className="w-3.5 h-3.5" /> Resend</button>}
-                    {m.status === 'active' && !isPrimary && mode === 'admin' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void resend(m)}><MailPlus className="w-3.5 h-3.5" /> Reset password</button>}
+                    {m.status === 'invited' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void getLink(m, isPrimary)}><Link2 className="w-3.5 h-3.5" /> Get setup link</button>}
+                    {m.status === 'active' && mode === 'admin' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void getLink(m, isPrimary)}><Link2 className="w-3.5 h-3.5" /> Get reset link</button>}
                     {m.status === 'active' && <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void update(m, { role: m.role === 'client_admin' ? 'client_user' : 'client_admin' })}>{m.role === 'client_admin' ? 'Make member' : 'Make admin'}</button>}
                     {m.status !== 'inactive'
                       ? <button type="button" className="btn-ghost btn-sm text-rose-600" disabled={busy === m.id} onClick={() => void update(m, { status: 'inactive' })}>Remove access</button>
@@ -105,24 +110,13 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
         </ul>
       )}
       {!canManage && mode === 'client' && <p className="text-[12px] text-ink-400 mt-2">Only your organisation’s admins can add or remove people.</p>}
-      {inviting && <InviteDialog clientId={clientId} mode={mode} onClose={() => setInviting(false)} onDone={async (res) => { setInviting(false); if (res) setLink(res); await load(); }} />}
-      {link && (
-        <Modal title={link.reset ? 'Password reset link' : 'Setup link'} onClose={() => setLink(null)}>
-          <div className="space-y-3">
-            <Notice tone="amber" title="Share this privately">Anyone with this link can set the password for {link.email}. It works once and expires in {link.reset ? '24 hours' : '72 hours'}.</Notice>
-            <input readOnly className="input font-mono text-[12px]" value={link.url} onFocus={(e) => e.currentTarget.select()} />
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setLink(null)}>Close</Button>
-              <Button onClick={() => { void navigator.clipboard?.writeText(link.url); notify('Link copied.', 'success'); }}>Copy link</Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {inviting && <InviteDialog clientId={clientId} mode={mode} onClose={() => setInviting(false)} onDone={async (res) => { setInviting(false); if (res) setLink({ ...res, kind: 'invite' }); await load(); }} />}
+      {link && <SetupLinkDialog link={link} onClose={() => setLink(null)} />}
     </div>
   );
 }
 
-function InviteDialog({ clientId, mode, onClose, onDone }: { clientId: string; mode: 'client' | 'admin'; onClose: () => void; onDone: (link: { email: string; url: string } | null) => Promise<void> }) {
+function InviteDialog({ clientId, mode, onClose, onDone }: { clientId: string; mode: 'client' | 'admin'; onClose: () => void; onDone: (link: { name: string; email: string; url: string } | null) => Promise<void> }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Member['role']>('client_user');
@@ -133,8 +127,8 @@ function InviteDialog({ clientId, mode, onClose, onDone }: { clientId: string; m
     setBusy(true);
     try {
       const res = await invokeClientAdmin({ action: 'invite_client_user', fullName: name.trim(), email: email.trim(), role, clientId: mode === 'admin' ? clientId : undefined });
-      notify(`Added — copy the setup link and send it to ${email.trim()}.`, 'success');
-      await onDone(res?.invitationUrl ? { email: email.trim(), url: res.invitationUrl } : null);
+      notify(`${name.trim()} added. Share the setup link with them.`, 'success');
+      await onDone(res?.invitationUrl ? { name: name.trim(), email: email.trim(), url: res.invitationUrl } : null);
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Unable to add this person.', 'error');
     } finally { setBusy(false); }
@@ -151,8 +145,8 @@ function InviteDialog({ clientId, mode, onClose, onDone }: { clientId: string; m
             </button>
           ))}
         </div>
-        <p className="text-[12px] text-ink-400">They’ll get an email to set their own password. The link works once and expires in 72 hours.</p>
-        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button loading={busy} onClick={() => void send()}>Send invitation</Button></div>
+        <p className="text-[12px] text-ink-400">No email is sent. You’ll get a one-time setup link to share with them (it expires in 72 hours).</p>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button loading={busy} onClick={() => void send()}>Add and get link</Button></div>
       </div>
     </Modal>
   );

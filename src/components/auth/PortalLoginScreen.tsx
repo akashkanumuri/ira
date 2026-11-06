@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { takeSignOutNotice } from '../../lib/deviceLock';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, UserRound, AlertCircle, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { requestPasswordLink } from '../../lib/passwordRequests';
 import { AuthLayout, AuthField } from '../../ui/AuthLayout';
 import { PillTabs } from '../../ui';
 
@@ -47,6 +48,11 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
   const { signIn } = useAuth();
   const [activePortal, setActivePortal] = useState<Portal>(portal);
   const [screen, setScreen] = useState<'login' | 'forgot'>('login');
+  // Client "forgot password": asks the admins for a new link (no email is sent by SIGMA).
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetDone, setResetDone] = useState<string | null>(null);
+  const [resetError, setResetError] = useState('');
 
   // Login form state
   const [identifier, setIdentifier] = useState('');
@@ -141,17 +147,58 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
           <div>
             <h2 className="font-display text-[32px] font-bold leading-tight text-ink-950">Reset password</h2>
             <p className="mt-2 text-sm text-ink-500">
-              {activePortal === 'client' ? 'Your IRA account manager can send you a new link.' : 'For security, staff passwords are reset by your administrator.'}
+              {activePortal === 'client' ? 'Your account manager will share a new link with you.' : 'For security, staff passwords are reset by your administrator.'}
             </p>
           </div>
           <div className="space-y-5">
-            <div className="inset-tile p-4 text-[13px] text-ink-600 leading-relaxed">
-              {activePortal === 'client'
-                ? 'Contact your IRA account manager and ask for a password reset link. Open the link they send you, choose a new password, and sign in with your email address. The link works once and expires in 24 hours.'
-                : activePortal === 'employee'
+            {activePortal === 'client' ? (
+              resetDone ? (
+                <div className="rise flex items-start gap-2.5 rounded-2xl bg-emerald-50 px-4 py-3.5 text-[13.5px] text-emerald-800" role="status">
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{resetDone} Open the link they share with you, choose a new password and sign in. The link works once and expires in 24 hours.</span>
+                </div>
+              ) : (
+                <form
+                  className="space-y-4"
+                  noValidate
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    const v = resetEmail.trim();
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { setResetError('Enter the email you sign in with.'); return; }
+                    setResetBusy(true); setResetError('');
+                    try { setResetDone(await requestPasswordLink(v)); }
+                    catch (err) { setResetError(err instanceof Error ? err.message : 'Something went wrong. Try again.'); }
+                    finally { setResetBusy(false); }
+                  }}
+                >
+                  {resetError && errorBox(resetError)}
+                  <p className="text-[13px] text-ink-600 leading-relaxed">Enter your sign-in email. We’ll tell your account manager, and they’ll share a new password link with you.</p>
+                  <AuthField
+                    icon={<UserRound className="w-[18px] h-[18px]" />}
+                    id="ira-reset-email"
+                    type="email"
+                    value={resetEmail}
+                    onChange={e => { setResetEmail(e.target.value); if (resetError) setResetError(''); }}
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    inputMode="email"
+                    placeholder="Email address"
+                    aria-label="Email address"
+                  />
+                  <button type="submit" disabled={resetBusy} className="btn-primary w-full !min-h-[52px]">
+                    {resetBusy ? 'Sending request…' : 'Ask for a new link'}
+                  </button>
+                </form>
+              )
+            ) : (
+              <div className="inset-tile p-4 text-[13px] text-ink-600 leading-relaxed">
+                {activePortal === 'employee'
                   ? 'Ask your HR or system administrator to reset your password. They will give you a temporary password, which you can change from your Profile after signing in.'
                   : 'Ask the system owner to reset the administrator password.'}
-            </div>
+              </div>
+            )}
             <button type="button" onClick={() => setScreen('login')} className="btn-secondary w-full !min-h-[52px]">
               <ArrowLeft className="w-4 h-4" /> Back to sign in
             </button>
@@ -202,7 +249,7 @@ export const PortalLoginScreen: React.FC<{ portal?: Portal }> = ({ portal = 'emp
               }
             />
             <div className="flex justify-end">
-              <button type="button" onClick={() => { setScreen('forgot'); setError(''); }} className="text-[13px] font-semibold text-brand-700 hover:text-brand-800">
+              <button type="button" onClick={() => { setScreen('forgot'); setError(''); setResetDone(null); setResetError(''); if (isClient && identifier.includes('@')) setResetEmail(identifier.trim()); }} className="text-[13px] font-semibold text-brand-700 hover:text-brand-800">
                 Forgot password?
               </button>
             </div>
