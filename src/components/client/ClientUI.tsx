@@ -904,12 +904,16 @@ export function SidePanel({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-ink-950/35 backdrop-blur-[3px] anim-fade" onClick={onClose}>
+    <div
+      className="ira-modal-overlay !z-50 !items-end sm:!items-center !p-0 sm:!p-6"
+      onClick={onClose}
+    >
       <aside
         role="dialog"
+        aria-modal="true"
         aria-label={title}
         onClick={e => e.stopPropagation()}
-        className="absolute right-0 top-0 bottom-0 sm:top-3 sm:bottom-3 sm:right-3 w-full sm:w-[460px] bg-surface sm:rounded-[28px] flex flex-col anim-slide shadow-[-20px_0_60px_-20px_rgb(20_17_43/0.35)] overflow-hidden"
+        className="ira-modal w-full sm:max-w-[600px] max-h-[92dvh] sm:max-h-[86vh] !p-0 !rounded-b-none sm:!rounded-[28px] bg-surface flex flex-col overflow-hidden"
       >
         <header className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 border-b border-ink-100 bg-surface">
           <div className="min-w-0">
