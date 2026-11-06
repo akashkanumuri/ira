@@ -3,6 +3,7 @@ import { Landmark, Lock, PauseCircle, PlayCircle, Receipt, Send, Unlock } from '
 import { supabase } from '../../lib/supabase';
 import { errorMessage, fmtDate, inr, rpc, todayIST, type InstallmentRow } from '../../lib/sigma';
 import { Badge, Button, Card, CardHead, Dialog, Field, Input, Select, Textarea, useToast, type Tone } from '../client/ClientUI';
+import { useLiveRefresh } from '../../lib/live';
 
 const db = supabase as any;
 
@@ -31,6 +32,7 @@ export function useClientStage(projectId: string, refreshKey?: unknown) {
   const load = useCallback(async () => {
     try { setState(await rpc<PortalState>('client_portal_state', { p_project_id: projectId })); } catch { setState(null); }
   }, [projectId]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load, refreshKey]);
   return { state, reload: load };
 }
@@ -149,6 +151,7 @@ export function ExtraChargesCard({ projectId, onChanged }: { projectId: string; 
       .eq('project_id', projectId).order('created_at', { ascending: false });
     setRows(Array.isArray(data) ? data : []);
   }, [projectId]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
   if (rows.length === 0) return null;
   const open = rows.filter(r => r.status === 'to_bill');

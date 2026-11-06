@@ -8,6 +8,7 @@ import { Avatar, Badge, Button, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
 import { SetupLinkDialog, type SetupLink } from '../common/SetupLinkDialog';
 import { closePasswordRequests } from '../../lib/passwordRequests';
+import { useLiveRefresh } from '../../lib/live';
 
 interface Member { id: string; profile_id: string; role: 'client_admin' | 'client_user'; status: 'invited' | 'active' | 'inactive'; full_name: string | null; email: string; created_at: string }
 
@@ -42,6 +43,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
     if (c.data?.profile_id) setPrimary(c.data.profile_id);
     setLoading(false);
   }, [clientId, primaryProfileId]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   async function update(m: Member, patch: { status?: 'active' | 'inactive'; role?: Member['role'] }) {

@@ -49,6 +49,7 @@ import {
   type FileRow,
   type ModificationRow,
 } from '../../lib/sigma';
+import { useLiveRefresh } from '../../lib/live';
 
 interface Props {
   user: AuthUser;
@@ -175,6 +176,7 @@ function MyDeliverables({ user }: { user: AuthUser }) {
       setRows([]);
     }
   }, [user.employeeDbId]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   const act = async (key: string, fn: () => Promise<unknown>, ok: string) => {

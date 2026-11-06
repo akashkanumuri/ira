@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, History, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Avatar, Badge, Card, EmptyState, Notice, Page, PageHeader, PillTabs, Skeleton, cx, type Tone } from '../../ui';
+import { useLiveRefresh } from '../../lib/live';
 
 const PAGE = 50;
 
@@ -142,6 +143,7 @@ export function ActivityLogPage() {
       setLoading(false);
     }
   }, [fetchPage, resolveNames]);
+  useLiveRefresh(reload);
 
   useEffect(() => {
     void reload();

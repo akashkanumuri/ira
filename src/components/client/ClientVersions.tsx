@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, ExternalLink, Layers, Lock, Undo2 } from 'lucide-react';
 import { CLIENT_ROUND, isMissingSchema, reviewApi, type ClientVersion } from '../../lib/tasks';
 import { Badge, Button, Checkbox, Textarea, cx, useToast } from './ClientUI';
+import { useLiveRefresh } from '../../lib/live';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const TONE = { pending: 'warn', approved: 'ok', changes_requested: 'err', withdrawn: 'neutral' } as const;
@@ -27,6 +28,7 @@ export function ClientVersions({ deliverableId, canReview, onChanged }: { delive
       setRows([]);
     }
   }, [deliverableId]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   if (unavailable || rows === null || rows.length === 0) return null;

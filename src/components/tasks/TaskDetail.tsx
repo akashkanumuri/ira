@@ -18,6 +18,7 @@ import { useWork } from '../work/WorkTracker';
 import { RESEARCH_STATUS, researchApi, researchLeft, type TaskResearch } from '../../lib/research';
 import { Avatar, Badge, Progress, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
+import { useLiveRefresh } from '../../lib/live';
 
 type Extras = Awaited<ReturnType<typeof loadTaskExtras>>;
 type Prompt = null | { to: TaskStatus; title: string; noteLabel?: string; noteRequired?: boolean; link?: boolean; confirm: string; danger?: boolean };
@@ -138,6 +139,7 @@ export function TaskDetail({
       setExtras(x); setSessions(s); setChecks(c); setResearch(r); setLoadError('');
     } catch (e) { setLoadError(e instanceof Error ? e.message : 'Couldn’t load task details.'); }
   }, [task.id]);
+  useLiveRefresh(reload);
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
     const on = () => void reload();

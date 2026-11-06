@@ -5,6 +5,7 @@ import { notify } from '../../lib/toast';
 import { Badge, Button, Card, EmptyState, Notice, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
 import { SupportConversation } from '../common/SupportConversation';
+import { useLiveRefresh } from '../../lib/live';
 
 const FAQ: Array<[string, string]> = [
   ['How do I approve a deliverable?', 'Open Deliverables, choose the item marked “Ready for your review” and use Review work. You can approve it or ask for changes with a note.'],
@@ -27,6 +28,7 @@ export function ClientSupport({ projects }: { projects: Array<{ id: string; name
     try { setRows(await supportApi.list()); setState('ready'); }
     catch (e) { setError(e instanceof Error ? e.message : 'Unable to load your requests.'); setState('error'); }
   }, []);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
   const open = rows.find((r) => r.id === openId) ?? null;
 

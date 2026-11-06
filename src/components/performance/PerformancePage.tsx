@@ -11,6 +11,7 @@ import { Modal } from '../../ui/Modal';
 import { GrowthTimeline } from './GrowthTimeline';
 import { ReviewScorecard, TeamReviewMetrics } from './ReviewMetrics';
 import { PunctualityCard, TeamPunctuality } from './Punctuality';
+import { useLiveRefresh } from '../../lib/live';
 
 type Data = { cycles: Cycle[]; reviews: Review[]; kras: Kra[] };
 
@@ -36,6 +37,7 @@ export function PerformancePage({ user, employees = [] }: { user: AuthUser; empl
       setState('error');
     }
   }, [me, reports]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   const cycleOf = (id: string) => data.cycles.find((c) => c.id === id);

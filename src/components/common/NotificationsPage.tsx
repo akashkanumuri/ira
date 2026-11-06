@@ -5,6 +5,7 @@ import type { AuthUser } from '../../contexts/AuthContext';
 import { deleteNotification, fetchUserNotifications, markAllNotificationsAsRead, markNotificationAsRead, type NotificationRecord, type NotificationType } from '../../lib/notifications';
 import { notify } from '../../lib/toast';
 import { Card, EmptyState, Page, PageHeader, PillTabs, Skeleton, cx, type Tone } from '../../ui';
+import { useLiveRefresh } from '../../lib/live';
 
 const TYPE_META: Record<NotificationType, { label: string; icon: React.ReactNode; tone: Tone }> = {
   leave: { label: 'Leave', icon: <CalendarDays className="w-4 h-4" />, tone: 'amber' },
@@ -50,6 +51,7 @@ export function NotificationsPage({ user, onOpen }: { user: AuthUser; onOpen: (u
       setLoading(false);
     }
   }, [user.id]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   const unread = items.filter((n) => !n.read_at).length;

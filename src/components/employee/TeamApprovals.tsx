@@ -6,6 +6,7 @@ import { notify } from '../../lib/toast';
 import { dateLabel } from '../../lib/v2';
 import { Avatar, Badge, Button, Card, EmptyState, Notice, Page, PageHeader, PillTabs, Skeleton, StatusBadge } from '../../ui';
 import { Modal } from '../../ui/Modal';
+import { useLiveRefresh } from '../../lib/live';
 
 /** Reporting managers review their team's leave here. */
 export function TeamApprovals({ onRefresh }: { onRefresh?: () => Promise<void> }) {
@@ -28,6 +29,7 @@ export function TeamApprovals({ onRefresh }: { onRefresh?: () => Promise<void> }
       setState('error');
     }
   }, []);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   const waiting = useMemo(() => rows.filter((r) => r.status === 'pending' && r.manager_status === 'pending'), [rows]);

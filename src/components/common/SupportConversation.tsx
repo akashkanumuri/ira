@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { SUPPORT_STATUS, supportApi, type SupportMessage, type SupportRequest, type SupportStatus } from '../../lib/support';
 import { notify } from '../../lib/toast';
 import { Badge, cx } from '../../ui';
+import { useLiveRefresh } from '../../lib/live';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -21,6 +22,7 @@ export function SupportConversation({ request, staff, assignees = [], onChanged 
   const load = useCallback(async () => {
     try { setMessages(await supportApi.messages(request.id)); } catch (e) { notify(e instanceof Error ? e.message : 'Unable to load messages.', 'error'); }
   }, [request.id]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); void supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null)); }, [load]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest' }); }, [messages.length]);
 

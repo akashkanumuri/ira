@@ -5,6 +5,7 @@ import { inr } from '../../lib/sigma';
 import { dateLabel } from '../../lib/v2';
 import { getKolkataDateString } from '../../lib/workingDays';
 import { Card, EmptyState, Notice, Page, PageHeader, PillTabs, SearchInput, SkeletonPage, Stat, StatusBadge } from '../../ui';
+import { useLiveRefresh } from '../../lib/live';
 
 interface Milestone {
   id: string;
@@ -101,6 +102,7 @@ export function FinancePage({ onSelectTab }: { onSelectTab: (tab: string) => voi
     setError(null);
     setLoading(false);
   }, []);
+  useLiveRefresh(load);
 
   useEffect(() => {
     void load();

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ExternalLink, Send, Undo2 } from 'lucide-react';
 import { CLIENT_ROUND, reviewApi, type ClientRound } from '../../lib/tasks';
 import { Badge, Button, Field, Input, Select, Textarea, useToast } from '../client/ClientUI';
+import { useLiveRefresh } from '../../lib/live';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const TONE = { pending: 'warn', approved: 'ok', changes_requested: 'err', withdrawn: 'neutral' } as const;
@@ -30,6 +31,7 @@ export function StaffClientReview({ deliverableId, deliverableStatus, nameOf, on
       setRounds(r); setTasks(t); setError('');
     } catch (e) { setError(e instanceof Error ? e.message : 'Couldn’t load client reviews.'); setRounds([]); }
   }, [deliverableId]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   const approved = tasks.filter((t) => t.status === 'completed');

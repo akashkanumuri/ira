@@ -11,6 +11,7 @@ import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Notice, Page, Page
 import { Modal } from '../../ui/Modal';
 import { confirmDialog } from '../../ui/confirm';
 import { GrowthTimeline, MilestoneDialog } from './GrowthTimeline';
+import { useLiveRefresh } from '../../lib/live';
 
 export function PerformanceAdmin({ employees = [], designations = [] }: { employees?: Employee[]; designations?: Designation[] }) {
   const [tab, setTab] = useState<'cycles' | 'quality' | 'punctuality' | 'promotions' | 'growth'>('cycles');
@@ -341,6 +342,7 @@ function Promotions({ designations }: { designations: Designation[] }) {
     catch (e) { notify(e instanceof Error ? e.message : 'Unable to load promotions.', 'error'); }
     finally { setLoading(false); }
   }, []);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   async function save() {

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { isMissingSchema } from '../../lib/tasks';
 import { notify } from '../../lib/toast';
 import { cx } from '../../ui';
+import { useLiveRefresh } from '../../lib/live';
 
 interface Comment { id: string; author_id: string | null; author_kind: 'client' | 'staff'; author_name: string | null; body: string; visibility: 'client' | 'internal'; created_at: string }
 
@@ -27,6 +28,7 @@ export function DeliverableThread({ deliverableId, staff }: { deliverableId: str
     setItems(data ?? []);
     setState('ready');
   }, [deliverableId]);
+  useLiveRefresh(load);
   useEffect(() => { void load(); void supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null)); }, [load]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest' }); }, [items.length]);
 

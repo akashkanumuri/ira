@@ -48,6 +48,7 @@ import {
 } from './ClientWorkspaceViews';
 import { AWAITING_CLIENT_CONTRACT, errorMessage, loadProjectWorkspace, rpc, type ProjectWorkspace } from '../../lib/sigma';
 import { ALLOWED_PAGES, ClientGate, isGated, type ClientPortalState } from './ClientGate';
+import { useLiveRefresh } from '../../lib/live';
 
 export type ClientNavPage = ClientPage;
 
@@ -211,6 +212,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
     if (selectedProject?.id) await loadWorkspace(selectedProject.id);
     void loadNotifications();
   }, [selectedProject?.id, loadWorkspace, loadNotifications]);
+  useLiveRefresh(reload);
 
   const markNotificationRead = async (id: string) => {
     const { error } = await (supabase as any)

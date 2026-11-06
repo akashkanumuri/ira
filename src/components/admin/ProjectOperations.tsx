@@ -83,6 +83,7 @@ import {
   type ModificationRow,
   type ProjectWorkspace,
 } from '../../lib/sigma';
+import { useLiveRefresh } from '../../lib/live';
 
 interface Emp {
   id: string;
@@ -281,6 +282,7 @@ export function ProjectOperations({ projectId, projectName, clientId, employees,
       setError(errorMessage(e));
     }
   }, [projectId]);
+  useLiveRefresh(reload);
 
   useEffect(() => {
     setWs(null);

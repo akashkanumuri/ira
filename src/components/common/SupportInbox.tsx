@@ -4,6 +4,7 @@ import type { Employee } from '../../types/attendance';
 import { SUPPORT_CATEGORY, SUPPORT_STATUS, supportApi, type SupportRequest } from '../../lib/support';
 import { Badge, Card, EmptyState, Notice, Page, PageHeader, PillTabs, SearchInput, Skeleton, cx } from '../../ui';
 import { SupportConversation } from './SupportConversation';
+import { useLiveRefresh } from '../../lib/live';
 
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
@@ -26,6 +27,7 @@ export function SupportInbox({ employees = [] }: { employees?: Employee[]; canAs
     try { setRows(await supportApi.list()); setState('ready'); }
     catch (e) { setError(e instanceof Error ? e.message : 'Unable to load support requests.'); setState('error'); }
   }, []);
+  useLiveRefresh(load);
   useEffect(() => { void load(); }, [load]);
 
   const active = rows.filter((r) => !['resolved', 'closed'].includes(r.status));
