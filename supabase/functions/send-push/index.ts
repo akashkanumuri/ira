@@ -72,9 +72,8 @@ Deno.serve(async (req) => {
 
     // Verify VAPID configuration: first check environment secrets, fallback to secure internal store
     let vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY') || ''
-    const vapidPublicKey =
-      Deno.env.get('VAPID_PUBLIC_KEY') ||
-      'BNWjdwx1DlkshpNNLzmJKNfIEpySs_Yru1_smlmVUuk3yLdUlpvcAjf3NWwwffSh0QquTUKgPZwtsZic4N23KR0'
+    // Set with: supabase secrets set VAPID_PUBLIC_KEY=... (never hardcode keys in source)
+    const vapidPublicKey = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim()
     const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:admin@ira-presence.local'
 
     if (!vapidPrivateKey) {
@@ -84,8 +83,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!vapidPrivateKey) {
-      console.error('[send-push] VAPID_PRIVATE_KEY is not configured')
+    if (!vapidPrivateKey || !vapidPublicKey) {
+      console.error('[send-push] VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY is not configured')
       return new Response(JSON.stringify({ error: 'Push notification service not configured' }), {
         status: 500,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },

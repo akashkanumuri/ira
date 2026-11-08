@@ -7,3 +7,11 @@ dist-ssr
 !.env.example
 .DS_Store
 supabase/.temp/
+
+# Secrets and credentials — never commit
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+supabase/functions/.env

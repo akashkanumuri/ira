@@ -2,9 +2,8 @@
 import { supabase } from './supabase';
 
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : ({} as Record<string, any>);
-export const VAPID_PUBLIC_KEY =
-  (env.VITE_VAPID_PUBLIC_KEY as string | undefined) ||
-  'BNWjdwx1DlkshpNNLzmJKNfIEpySs_Yru1_smlmVUuk3yLdUlpvcAjf3NWwwffSh0QquTUKgPZwtsZic4N23KR0';
+/** Public Web Push (VAPID) key from the environment (VITE_VAPID_PUBLIC_KEY). Without it, push stays off. */
+export const VAPID_PUBLIC_KEY = ((env.VITE_VAPID_PUBLIC_KEY as string | undefined) || '').trim();
 
 /**
  * Desktop/phone alerts are tied to one web address. A browser that opened both the live site and a
@@ -119,7 +118,7 @@ export async function syncExistingPushSubscription(userId: string): Promise<bool
     let subscription = await reg.pushManager.getSubscription();
 
     // If notification permission was already granted by user, but PushManager subscription is missing or expired, renew it
-    if (!subscription && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    if (!subscription && VAPID_PUBLIC_KEY && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
         const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
         subscription = await reg.pushManager.subscribe({
@@ -219,6 +218,9 @@ export async function subscribeToPush(
     }
 
     // 3. Subscribe with PushManager
+    if (!VAPID_PUBLIC_KEY) {
+      return { success: false, error: 'Notifications aren’t configured on this site yet (missing VITE_VAPID_PUBLIC_KEY).' };
+    }
     const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
     let subscription = await registration.pushManager.getSubscription();
 

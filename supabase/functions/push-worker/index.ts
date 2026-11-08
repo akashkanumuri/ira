@@ -7,9 +7,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
 
 const APP_URL = (Deno.env.get('APP_URL') || 'https://ira-eta-two.vercel.app').replace(/\/$/, '')
-const VAPID_PUBLIC =
-  Deno.env.get('VAPID_PUBLIC_KEY') ||
-  'BNWjdwx1DlkshpNNLzmJKNfIEpySs_Yru1_smlmVUuk3yLdUlpvcAjf3NWwwffSh0QquTUKgPZwtsZic4N23KR0'
+// Set with: supabase secrets set VAPID_PUBLIC_KEY=... (never hardcode keys in source)
+const VAPID_PUBLIC = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim()
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:admin@ira-presence.local'
 
 let hookSecret: string | null = null
@@ -45,7 +44,7 @@ Deno.serve(async (req) => {
       const { data } = await db.rpc('get_vapid_private_key')
       priv = (data as string) || ''
     }
-    if (!priv) return json({ error: 'VAPID key not configured' }, 500)
+    if (!priv || !VAPID_PUBLIC) return json({ error: 'VAPID keys not configured' }, 500)
     webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, priv)
     vapidReady = true
   }
