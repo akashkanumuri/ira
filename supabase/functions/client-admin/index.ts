@@ -81,7 +81,6 @@ function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null;
   if (origin === 'https://ira-eta-two.vercel.app') return origin;
   if (/^https:\/\/ira-[a-z0-9-]+-satisfyinginventior-1459s-projects\.vercel\.app$/i.test(origin)) return origin;
-  if (/^https:\/\/ira-[a-z0-9-]+\.vercel\.app$/i.test(origin)) return origin;
   if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)) return origin;
   return null;
 }
