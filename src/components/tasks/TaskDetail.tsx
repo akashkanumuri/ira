@@ -19,6 +19,7 @@ import { RESEARCH_STATUS, researchApi, researchLeft, type TaskResearch } from '.
 import { Avatar, Badge, Progress, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
 import { useLiveRefresh } from '../../lib/live';
+import { safeHref } from '../../lib/safeUrl';
 
 type Extras = Awaited<ReturnType<typeof loadTaskExtras>>;
 type Prompt = null | { to: TaskStatus; title: string; noteLabel?: string; noteRequired?: boolean; link?: boolean; confirm: string; danger?: boolean };
@@ -405,7 +406,7 @@ export function TaskDetail({
               <div className="space-y-2.5">
                 <ul className="space-y-1.5">
                   {research.links.map((l) => (
-                    <li key={l}><a href={l} target="_blank" rel="noreferrer noopener" className="flex items-center gap-2 text-[13px] text-brand-700 font-semibold hover:underline min-w-0">
+                    <li key={l}><a href={safeHref(l)} target="_blank" rel="noreferrer noopener" className="flex items-center gap-2 text-[13px] text-brand-700 font-semibold hover:underline min-w-0">
                       <Link2 className="w-4 h-4 shrink-0" /><span className="truncate">{l}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" /></a></li>
                   ))}
                 </ul>
@@ -454,7 +455,7 @@ export function TaskDetail({
                   {d.on_time === false && <Badge tone="rose">Late</Badge>}
                   <span className="text-[11px] text-ink-400 tnum ml-auto">{when(d.submitted_at)}</span>
                 </div>
-                <a href={d.link} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-brand-700 font-semibold hover:underline min-w-0">
+                <a href={safeHref(d.link)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-brand-700 font-semibold hover:underline min-w-0">
                   <Link2 className="w-4 h-4 shrink-0" /><span className="truncate">{d.link}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" />
                 </a>
                 {d.note && <p className="text-[13px] text-ink-600 whitespace-pre-wrap"><span className="text-ink-400">Note: </span>{d.note}</p>}
@@ -467,7 +468,7 @@ export function TaskDetail({
             );
           })}
           {!drafts.length && task.submittedLink && (
-            <a href={task.submittedLink} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl border border-ink-200 px-3 py-2.5 text-[13px] text-brand-700 font-semibold hover:bg-brand-50/50">
+            <a href={safeHref(task.submittedLink)} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl border border-ink-200 px-3 py-2.5 text-[13px] text-brand-700 font-semibold hover:bg-brand-50/50">
               <Link2 className="w-4 h-4 shrink-0" /><span className="truncate flex-1">{task.submittedLink}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" />
             </a>
           )}
@@ -608,7 +609,7 @@ export function TaskDetail({
 function linkify(text: string) {
   const parts = text.split(/(https?:\/\/[^\s<>"]+)/g);
   return parts.map((p, i) => (i % 2 === 1
-    ? <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-brand-700 font-semibold underline break-all">{p}</a>
+    ? <a key={i} href={safeHref(p)} target="_blank" rel="noreferrer noopener" className="text-brand-700 font-semibold underline break-all">{p}</a>
     : <React.Fragment key={i}>{p}</React.Fragment>));
 }
 

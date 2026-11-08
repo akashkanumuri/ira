@@ -23,7 +23,7 @@ export function SetupLinkDialog({ link, onClose }: { link: SetupLink; onClose: (
   const [copied, setCopied] = useState(false);
   const reset = link.kind === 'reset';
   const who = link.name?.trim() || link.email;
-  const life = link.expires ?? (reset ? '24 hours' : '72 hours');
+  const life = link.expires ?? (reset ? '15 minutes' : '72 hours');
   const message = reset
     ? `Hi ${who}, here is your SIGMA 1 password reset link. It works once and expires in ${life}:\n${link.url}`
     : `Hi ${who}, welcome to SIGMA 1. Open this link to set your password (it works once and expires in ${life}):\n${link.url}`;

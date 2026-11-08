@@ -44,6 +44,7 @@ export function RecoveryGate() {
       if (await isLeaked(password)) { setError('This password has appeared in a data breach. Choose a different one.'); return; }
       const { error: e } = await supabase.auth.updateUser({ password });
       if (e) { setError(e.message); return; }
+      await supabase.auth.signOut({ scope: 'others' }).catch(() => undefined);
       clearUrl();
       setState(null);
       notify('Password updated. You’re signed in.', 'success');

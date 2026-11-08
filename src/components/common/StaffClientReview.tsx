@@ -3,6 +3,7 @@ import { ExternalLink, Send, Undo2 } from 'lucide-react';
 import { CLIENT_ROUND, reviewApi, type ClientRound } from '../../lib/tasks';
 import { Badge, Button, Field, Input, Select, Textarea, useToast } from '../client/ClientUI';
 import { useLiveRefresh } from '../../lib/live';
+import { safeHref } from '../../lib/safeUrl';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const TONE = { pending: 'warn', approved: 'ok', changes_requested: 'err', withdrawn: 'neutral' } as const;
@@ -90,7 +91,7 @@ export function StaffClientReview({ deliverableId, deliverableStatus, nameOf, on
               <Input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} placeholder="https://…" inputMode="url" />
             </Field>
           )}
-          {chosen?.submitted_link && <a href={chosen.submitted_link} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1"><ExternalLink size={12} /> Check the link first</a>}
+          {chosen?.submitted_link && <a href={safeHref(chosen.submitted_link)} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1"><ExternalLink size={12} /> Check the link first</a>}
           <Field label="Message to the client (optional)">
             <Textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} maxLength={2000} placeholder="What should they look at?" />
           </Field>
@@ -113,7 +114,7 @@ export function StaffClientReview({ deliverableId, deliverableStatus, nameOf, on
                 {r.is_extra && r.status !== 'withdrawn' && <Badge tone="info">Extra (billable)</Badge>}
                 <span className="text-[11px] text-ink-3 ml-auto">{when(r.sent_at)}</span>
               </div>
-              {r.link && <a href={r.link} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1 max-w-full"><ExternalLink size={12} className="shrink-0" /><span className="truncate">{r.link}</span></a>}
+              {r.link && <a href={safeHref(r.link)} target="_blank" rel="noreferrer" className="text-xs text-info hover:underline inline-flex items-center gap-1 max-w-full"><ExternalLink size={12} className="shrink-0" /><span className="truncate">{r.link}</span></a>}
               {r.client_comment && <p className="text-xs text-ink-2 whitespace-pre-line"><b>Client:</b> {r.client_comment}</p>}
               {r.status === 'pending' && (
                 <Button size="sm" variant="ghost" disabled={busy} onClick={async () => {

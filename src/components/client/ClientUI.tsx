@@ -26,6 +26,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
+import { safeHref } from '../../lib/safeUrl';
 
 export const cx = (...a: (string | false | undefined | null)[]) => a.filter(Boolean).join(' ');
 
@@ -419,7 +420,7 @@ export const Skeleton = ({ className }: { className?: string }) => (
 export function LinkRef({ url, label }: { url: string; label?: string }) {
   return (
     <a
-      href={url}
+      href={safeHref(url)}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-1.5 text-[13px] text-info hover:underline max-w-full"

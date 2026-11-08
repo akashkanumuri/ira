@@ -515,6 +515,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error: reauthError } = await supabase.auth.signInWithPassword({ email: reauthEmail, password: currentPassword });
     if (reauthError) return { error: 'Current password is incorrect.' };
     const { error } = await supabase.auth.updateUser({ password: newPassword });
+    // A new password ends every other session (other devices, or anyone who had the old password).
+    if (!error) await supabase.auth.signOut({ scope: 'others' }).catch(() => undefined);
     return { error: error?.message ?? null };
   }, [user?.role, user?.loginId, user?.email]);
 

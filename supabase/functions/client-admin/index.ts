@@ -352,7 +352,7 @@ async function resendClientInvitation(
       email: client.email,
       token_hash: tokenHash,
       created_by: actorId,
-      ...(kind === 'reset' ? { expires_at: new Date(Date.now() + 24 * 3600_000).toISOString() } : {}),
+      ...(kind === 'reset' ? { expires_at: new Date(Date.now() + 15 * 60_000).toISOString() } : {}),
     });
 
   if (inviteError) throw new Error(`Failed to generate new invitation: ${inviteError.message}`);
@@ -392,7 +392,7 @@ async function issueClientUserInvitation(
     email: params.email,
     token_hash: tokenHash,
     created_by: params.actorId,
-    ...(params.kind === 'reset' ? { expires_at: new Date(Date.now() + 24 * 3600_000).toISOString() } : {}),
+    ...(params.kind === 'reset' ? { expires_at: new Date(Date.now() + 15 * 60_000).toISOString() } : {}),
   });
   if (inviteError) throw new Error(`Failed to create the invitation: ${inviteError.message}`);
   const invitationUrl = `${trustedBaseUrl}/client/setup?token=${rawToken}`;

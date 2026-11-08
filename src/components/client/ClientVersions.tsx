@@ -3,6 +3,7 @@ import { CheckCircle2, ExternalLink, Layers, Lock, Undo2 } from 'lucide-react';
 import { CLIENT_ROUND, isMissingSchema, reviewApi, type ClientVersion } from '../../lib/tasks';
 import { Badge, Button, Checkbox, Textarea, cx, useToast } from './ClientUI';
 import { useLiveRefresh } from '../../lib/live';
+import { safeHref } from '../../lib/safeUrl';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const TONE = { pending: 'warn', approved: 'ok', changes_requested: 'err', withdrawn: 'neutral' } as const;
@@ -68,7 +69,7 @@ export function ClientVersions({ deliverableId, canReview, onChanged }: { delive
             </div>
             {r.message && <p className="text-xs text-ink-2 whitespace-pre-line"><b className="text-ink">IRA team:</b> {r.message}</p>}
             {r.link ? (
-              <a href={r.link} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:underline max-w-full">
+              <a href={safeHref(r.link)} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:underline max-w-full">
                 <ExternalLink size={13} className="shrink-0" /><span className="truncate">Open draft {r.round_no}</span>
               </a>
             ) : r.link_locked ? (
