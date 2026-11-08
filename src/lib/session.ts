@@ -1,5 +1,6 @@
 import { UserRole, AuthSession } from '../types/attendance';
 import { supabase, isSupabaseConfigured } from './supabase';
+import { log } from './log';
 
 const ACTIVE_SESSION_ID_KEY = 'ira_presence_active_auth_session_id_v1';
 
@@ -57,7 +58,7 @@ export async function startNewSession(
     .single();
 
   if (error || !data) {
-    console.error('[Session] Failed to persist login session:', error);
+    log.error('[Session] Failed to persist login session:', error);
     return null;
   }
 

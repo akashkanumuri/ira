@@ -1,5 +1,6 @@
 import { createSupabaseContext } from 'npm:@supabase/server'
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { logError, logWarn } from '../_shared/log.ts'
 
 type CreateEmployeeInput = {
   action: 'create_employee'
@@ -45,13 +46,27 @@ type ResetPasswordInput = {
   employeeId: string
 }
 
+type ResetLinkInput = {
+  action: 'reset_link'
+  employeeId: string
+  /** Where the link should land: the SIGMA page the admin is using (checked against the allowed origins). */
+  appOrigin?: string | null
+}
+
+type ErasePersonInput = {
+  action: 'erase_person'
+  /** The person's login (profiles.id) — an employee or a client contact. */
+  profileId: string
+  confirm: string
+}
+
 type StatusInput = {
   action: 'set_status'
   employeeId: string
   status: 'active' | 'inactive'
 }
 
-type Input = CreateEmployeeInput | UpdateEmployeeInput | ResetPasswordInput | StatusInput
+type Input = CreateEmployeeInput | UpdateEmployeeInput | ResetPasswordInput | ResetLinkInput | ErasePersonInput | StatusInput
 
 const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -519,6 +534,66 @@ async function resetPassword(input: ResetPasswordInput, admin: ReturnType<typeof
   return { loginId: employee.login_id, temporaryPassword }
 }
 
+/**
+ * One-time password reset link (no password is created, shown or sent). The employee opens it,
+ * chooses a new password in SIGMA, and the link stops working. Supabase stores only the hash.
+ */
+async function resetLink(input: ResetLinkInput, admin: ReturnType<typeof createClient>, origin: string | null) {
+  const { data: employee, error } = await admin
+    .from('employees')
+    .select('profile_id,login_id,status')
+    .eq('id', input.employeeId)
+    .maybeSingle()
+  if (error || !employee) throw new Error('Employee not found.')
+  if (employee.status !== 'active') throw new Error('Activate this employee before creating a reset link.')
+
+  const { data: authUser, error: userError } = await admin.auth.admin.getUserById(employee.profile_id)
+  if (userError || !authUser?.user?.email) throw new Error('This employee has no login yet.')
+
+  const base = allowedOrigin(input.appOrigin ?? null) ?? allowedOrigin(origin) ?? 'https://ira-eta-two.vercel.app'
+  const { data, error: linkError } = await admin.auth.admin.generateLink({
+    type: 'recovery',
+    email: authUser.user.email,
+    options: { redirectTo: `${base}/?set-password=1` },
+  })
+  if (linkError || !data?.properties?.action_link) throw new Error(linkError?.message ?? 'Could not create the reset link.')
+  return { loginId: employee.login_id, url: data.properties.action_link }
+}
+
+/**
+ * Erase a deactivated person's personal data. The database function does the records (and checks the
+ * caller is an admin, the person is deactivated and the confirmation); this clears their files and login.
+ */
+async function erasePerson(input: ErasePersonInput, admin: ReturnType<typeof createClient>, userClient: ReturnType<typeof createClient>) {
+  if (!input.profileId) throw new Error('Choose a person.')
+  const { data, error } = await userClient.rpc('staff_erase_person', { p_profile: input.profileId, p_confirm: input.confirm })
+  if (error) throw error
+  const result = data as { role: string; files: { bucket: string; path: string }[]; counts: Record<string, number> }
+
+  const failures: string[] = []
+  const byBucket = new Map<string, string[]>()
+  for (const f of result.files ?? []) {
+    if (!f?.bucket || !f?.path) continue
+    byBucket.set(f.bucket, [...(byBucket.get(f.bucket) ?? []), f.path])
+  }
+  for (const [bucket, paths] of byBucket) {
+    const { error: rmError } = await admin.storage.from(bucket).remove(paths)
+    if (rmError) failures.push(`files (${bucket})`)
+  }
+
+  // The login: no email, no name, no usable password, and blocked.
+  const { error: authError } = await admin.auth.admin.updateUserById(input.profileId, {
+    email: `erased-${crypto.randomUUID()}@erased.invalid`,
+    email_confirm: true,
+    password: crypto.randomUUID() + crypto.randomUUID(),
+    user_metadata: {},
+    ban_duration: '876000h',
+  })
+  if (authError) failures.push('login')
+
+  return { erased: true, counts: result.counts, files: (result.files ?? []).length, incomplete: failures }
+}
+
 async function setStatus(input: StatusInput, admin: ReturnType<typeof createClient>) {
   const { data: employee, error: employeeError } = await admin
     .from('employees')
@@ -582,7 +657,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle()
 
     if (profileError) {
-      console.error('[employee-admin] profile lookup failed', profileError)
+      logError('[employee-admin] profile lookup failed', profileError)
       return json({ error: 'Unable to verify administrator account.' }, 500, origin)
     }
 
@@ -598,14 +673,19 @@ Deno.serve(async (req: Request) => {
       case 'update_employee':
         return json(await updateEmployee(input, admin, actorId), 200, origin)
       case 'reset_password':
+        // Kept only until the new SIGMA screens are live everywhere; they use reset_link instead.
         return json(await resetPassword(input, admin), 200, origin)
+      case 'reset_link':
+        return json(await resetLink(input, admin, origin), 200, origin)
+      case 'erase_person':
+        return json(await erasePerson(input, admin, ctx.supabase), 200, origin)
       case 'set_status':
         return json(await setStatus(input, admin), 200, origin)
       default:
         return json({ error: 'Unsupported action' }, 400, origin)
     }
   } catch (error) {
-    console.error('[employee-admin]', error)
+    logError('[employee-admin]', error)
     return json({ error: friendlyError(error) }, 400, origin)
   }
 })

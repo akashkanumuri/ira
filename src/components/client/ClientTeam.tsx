@@ -9,6 +9,7 @@ import { Modal } from '../../ui/Modal';
 import { SetupLinkDialog, type SetupLink } from '../common/SetupLinkDialog';
 import { closePasswordRequests } from '../../lib/passwordRequests';
 import { useLiveRefresh } from '../../lib/live';
+import { ErasePersonDialog } from '../admin/ErasePersonDialog';
 
 interface Member { id: string; profile_id: string; role: 'client_admin' | 'client_user'; status: 'invited' | 'active' | 'inactive'; full_name: string | null; email: string; created_at: string }
 
@@ -31,6 +32,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [erasing, setErasing] = useState<Member | null>(null);
   const [link, setLink] = useState<SetupLink | null>(null);
   const [primary, setPrimary] = useState<string | null>(primaryProfileId ?? null);
 
@@ -74,6 +76,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
 
   return (
     <div>
+      {erasing && <ErasePersonDialog profileId={erasing.profile_id} name={erasing.full_name || erasing.email} kind="client" onClose={() => setErasing(null)} onDone={load} />}
       <div className="flex items-center justify-between gap-3 mb-3">
         <p className="text-[13px] text-ink-500">{members.filter((m) => m.status !== 'inactive').length} with access</p>
         <div className="flex gap-2">
@@ -104,6 +107,7 @@ export function ClientTeam({ clientId, primaryProfileId, mode, canManage, curren
                     {m.status !== 'inactive'
                       ? <button type="button" className="btn-ghost btn-sm text-rose-600" disabled={busy === m.id} onClick={() => void update(m, { status: 'inactive' })}>Remove access</button>
                       : <button type="button" className="btn-ghost btn-sm" disabled={busy === m.id} onClick={() => void update(m, { status: 'active' })}>Restore access</button>}
+                    {m.status === 'inactive' && mode === 'admin' && <button type="button" className="btn-ghost btn-sm text-rose-700" disabled={busy === m.id} onClick={() => setErasing(m)}>Erase personal data</button>}
                   </div>
                 )}
               </li>

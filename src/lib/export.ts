@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { supabase, isSupabaseConfigured } from './supabase';
+import { log } from './log';
 
 export interface ExportFilters {
   startDate?: string;
@@ -80,7 +81,7 @@ export async function fetchAttendanceData(filters: ExportFilters): Promise<Expor
   for (let from = 0; ; from += pageSize) {
     const { data: page, error } = await query.range(from, from + pageSize - 1);
     if (error) {
-      console.error('[Export] Query failed:', error);
+      log.error('[Export] Query failed:', error);
       throw new Error('Failed to load real attendance records for export.');
     }
     allRows.push(...(page ?? []));

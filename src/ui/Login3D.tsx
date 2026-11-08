@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { log } from '../lib/log';
 
 export type LoginScene = 'portal' | 'bot' | 'sigma';
 
@@ -53,7 +54,7 @@ export function Login3D({ scene, frameRef, formRef, above = false, onFail, start
         api = mod.mount({ container: el, frameEl, formEl, reduced, startHidden, onRobotClick: () => clickRef.current?.() });
         onReady?.(api!);
       })
-      .catch((e) => { console.warn('[login3d] falling back', e); if (!cancelled) onFail(); });
+      .catch((e) => { log.warn('[login3d] falling back', e); if (!cancelled) onFail(); });
     return () => { cancelled = true; api?.dispose(); };
   }, [scene]); // eslint-disable-line react-hooks/exhaustive-deps
   return <div ref={host} aria-hidden className={`fixed inset-0 ${above ? 'z-30 pointer-events-none' : 'z-0'}`} />;

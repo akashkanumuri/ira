@@ -11,6 +11,8 @@ export interface SetupLink {
   url: string;
   /** 'reset' = they already have a password; 'invite' = first-time setup. */
   kind: 'invite' | 'reset';
+  /** How long the link works, as shown to the admin (defaults: reset 24 hours, invite 72 hours). */
+  expires?: string;
 }
 
 /**
@@ -21,9 +23,10 @@ export function SetupLinkDialog({ link, onClose }: { link: SetupLink; onClose: (
   const [copied, setCopied] = useState(false);
   const reset = link.kind === 'reset';
   const who = link.name?.trim() || link.email;
+  const life = link.expires ?? (reset ? '24 hours' : '72 hours');
   const message = reset
-    ? `Hi ${who}, here is your SIGMA 1 password reset link. It works once and expires in 24 hours:\n${link.url}`
-    : `Hi ${who}, welcome to SIGMA 1. Open this link to set your password (it works once and expires in 72 hours):\n${link.url}`;
+    ? `Hi ${who}, here is your SIGMA 1 password reset link. It works once and expires in ${life}:\n${link.url}`
+    : `Hi ${who}, welcome to SIGMA 1. Open this link to set your password (it works once and expires in ${life}):\n${link.url}`;
 
   const copy = async () => {
     try {
@@ -51,7 +54,7 @@ export function SetupLinkDialog({ link, onClose }: { link: SetupLink; onClose: (
           aria-label="Link"
         />
         <Notice tone="amber" title="Share it privately">
-          Anyone with this link can set the password for {link.email}. It works once and expires in {reset ? '24 hours' : '72 hours'}.
+          Anyone with this link can set the password for {link.email}. It works once and expires in {life}.
         </Notice>
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Done</Button>

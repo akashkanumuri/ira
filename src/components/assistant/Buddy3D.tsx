@@ -1,5 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Buddy, type BuddyMood } from './Buddy';
+import { log } from '../../lib/log';
 
 export type BuddyAction = 'wave' | 'celebrate' | 'backflip' | 'worried' | 'yawn' | 'knock' | 'dance' | 'spin' | 'juggle' | 'look' | 'land' | 'peek' | 'stretch' | 'moonwalk'
   | 'header' | 'kick' | 'throw' | 'ollie' | 'boo' | 'startle' | 'facepalm' | 'victory' | 'squash' | 'dizzy' | 'annoyed' | 'sip' | 'munch' | 'party' | 'dj' | 'bye' | 'explode';
@@ -57,7 +58,7 @@ export const Buddy3D = forwardRef<Buddy3DApi | null, { mood: BuddyMood; classNam
         api.current = mod.mount({ container: el, reduced: false });
         api.current?.setMood(moodRef.current);
       })
-      .catch((e) => { console.warn('[buddy3d] using the flat robot', e); if (!cancelled) setFailed(true); });
+      .catch((e) => { log.warn('[buddy3d] using the flat robot', e); if (!cancelled) setFailed(true); });
     return () => { cancelled = true; api.current?.dispose(); api.current = null; };
   }, []);
 

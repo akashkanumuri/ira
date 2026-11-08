@@ -2,6 +2,7 @@
 // Server-Side Web Push Dispatcher with VAPID Authentication, Role-based Authorization & Lifecycle Pruning
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
+import { logError, logWarn } from '../_shared/log.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('[send-push] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+      logError('[send-push] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
       return new Response(JSON.stringify({ error: 'Server configuration error' }), {
         status: 500,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
     }
 
     if (!vapidPrivateKey || !vapidPublicKey) {
-      console.error('[send-push] VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY is not configured')
+      logError('[send-push] VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY is not configured')
       return new Response(JSON.stringify({ error: 'Push notification service not configured' }), {
         status: 500,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
@@ -248,7 +249,7 @@ Deno.serve(async (req) => {
       .eq('user_id', recipientId)
 
     if (subError) {
-      console.error('[send-push] Subscription query error:', subError.message)
+      logError('[send-push] Subscription query error:', subError.message)
       return new Response(JSON.stringify({ error: 'Failed to query recipient subscriptions' }), {
         status: 500,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
@@ -291,7 +292,7 @@ Deno.serve(async (req) => {
         })
         delivered++
       } catch (err: any) {
-        console.warn(`[WebPush] Delivery failure for subscription ${sub.id}:`, err?.statusCode || err?.message)
+        logWarn(`[WebPush] Delivery failure for subscription ${sub.id}:`, err?.statusCode || err?.message)
         // HTTP 404 Not Found or 410 Gone indicates subscription has expired or was revoked
         if (err?.statusCode === 404 || err?.statusCode === 410) {
           await supabase.from('push_subscriptions').delete().eq('id', sub.id)
@@ -315,7 +316,7 @@ Deno.serve(async (req) => {
           })
           .eq('id', referencedNotification.id)
       } catch (metaErr) {
-        console.warn('[send-push] Failed to update notification pushed_at metadata:', metaErr)
+        logWarn('[send-push] Failed to update notification pushed_at metadata:', metaErr)
       }
     }
 
@@ -329,7 +330,7 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
     )
   } catch (err: any) {
-    console.error('[WebPush] Unexpected dispatch error:', err?.message)
+    logError('[WebPush] Unexpected dispatch error:', err?.message)
     return new Response(JSON.stringify({ error: 'Internal push dispatch error' }), {
       status: 500,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },

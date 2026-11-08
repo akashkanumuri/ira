@@ -2,6 +2,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notify } from './toast';
 import type { Database } from './database.types';
+import { log } from './log';
 
 export type NotificationType =
   | 'attendance' | 'leave' | 'wfh' | 'task' | 'holiday' | 'payroll' | 'system'
@@ -113,13 +114,13 @@ export async function fetchUserNotifications(userId: string, limit = 50): Promis
       .limit(limit);
 
     if (error) {
-      console.warn('[Notifications] Fetch warning (using local store fallback):', error.message);
+      log.warn('[Notifications] Fetch warning (using local store fallback):', error.message);
       return localFallbackStore.filter((n) => n.recipient_id === userId);
     }
 
     return (data ?? []) as NotificationRecord[];
   } catch (err) {
-    console.warn('[Notifications] Fetch exception:', err);
+    log.warn('[Notifications] Fetch exception:', err);
     return localFallbackStore.filter((n) => n.recipient_id === userId);
   }
 }
@@ -143,12 +144,12 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
       .eq('id', notificationId);
 
     if (error) {
-      console.warn('[Notifications] Mark read warning:', error.message);
+      log.warn('[Notifications] Mark read warning:', error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.warn('[Notifications] Mark read error:', err);
+    log.warn('[Notifications] Mark read error:', err);
     return false;
   }
 }
@@ -175,12 +176,12 @@ export async function markAllNotificationsAsRead(userId: string): Promise<boolea
       .is('read_at', null);
 
     if (error) {
-      console.warn('[Notifications] Mark all read warning:', error.message);
+      log.warn('[Notifications] Mark all read warning:', error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.warn('[Notifications] Mark all read error:', err);
+    log.warn('[Notifications] Mark all read error:', err);
     return false;
   }
 }
@@ -201,12 +202,12 @@ export async function deleteNotification(notificationId: string): Promise<boolea
       .eq('id', notificationId);
 
     if (error) {
-      console.warn('[Notifications] Delete warning:', error.message);
+      log.warn('[Notifications] Delete warning:', error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.warn('[Notifications] Delete error:', err);
+    log.warn('[Notifications] Delete error:', err);
     return false;
   }
 }
@@ -234,7 +235,7 @@ export async function dispatchPushToRecipient(
  */
 export async function createNotification(input: CreateNotificationInput): Promise<NotificationRecord | null> {
   if (!input.recipientId || !input.title || !input.message) {
-    console.warn('[Notifications] Missing required notification fields:', input);
+    log.warn('[Notifications] Missing required notification fields:', input);
     return null;
   }
 
@@ -301,13 +302,13 @@ export async function createNotification(input: CreateNotificationInput): Promis
           if (error.code === '23505') {
             return null;
           }
-          console.debug('[Notifications] Insert DB notice (using fallback store):', error.message);
+          log.debug('[Notifications] Insert DB notice (using fallback store):', error.message);
         } else if (data) {
           record.id = data.id;
         }
       }
     } catch (err) {
-      console.debug('[Notifications] Insert DB exception:', err);
+      log.debug('[Notifications] Insert DB exception:', err);
     }
   }
 

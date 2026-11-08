@@ -5,6 +5,8 @@ import { blockedMessage, claimDevice, releaseDevice, setSignOutNotice } from '..
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getKolkataDateString } from '../lib/workingDays';
 import type { UserRole } from '../types/attendance';
+import { log } from '../lib/log';
+import { isLeakedPassword, isStrongPassword } from '../lib/passwordSafety';
 
 export interface AuthUser {
   id: string;
@@ -158,7 +160,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
     .maybeSingle();
 
   if (profileError) {
-    console.error('[Auth] Profile lookup failed:', profileError);
+    log.error('[Auth] Profile lookup failed:', profileError);
     return {
       user: null,
       error: profileError.code === '42501'
@@ -172,10 +174,10 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
   if (!profile) {
     const metaRole = supabaseUser.app_metadata?.role || supabaseUser.user_metadata?.role;
     if (metaRole === 'client') {
-      console.warn('[Auth] Profiles row missing for client user, attempting fallback lookup...');
+      log.warn('[Auth] Profiles row missing for client user, attempting fallback lookup...');
       effectiveRole = 'client';
     } else {
-      console.error('[Auth] Profile record not found for user:', supabaseUser.id);
+      log.error('[Auth] Profile record not found for user:', supabaseUser.id);
       return { user: null, error: 'User profile record not found. Please contact the administrator.' };
     }
   }
@@ -209,7 +211,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
       .maybeSingle();
 
     if (clientError) {
-      console.error('[Auth] Client profile lookup failed:', clientError.message);
+      log.error('[Auth] Client profile lookup failed:', clientError.message);
       return {
         user: null,
         error: clientError.code === '42501'
@@ -224,7 +226,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
     }
 
     if (!client) {
-      console.error('[Auth] No client record found matching user:', supabaseUser.id);
+      log.error('[Auth] No client record found matching user:', supabaseUser.id);
       return { user: null, error: 'Client account record not found. Please contact your IRA project manager.' };
     }
 
@@ -258,7 +260,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
     .maybeSingle();
 
   if (employeeError) {
-    console.error('[Auth] Employee lookup failed:', employeeError);
+    log.error('[Auth] Employee lookup failed:', employeeError);
     return {
       user: null,
       error: employeeError.code === '42501'
@@ -268,7 +270,7 @@ const loadUserProfile = async (supabaseUser: User): Promise<{ user: AuthUser | n
   }
 
   if (!employee) {
-    console.error('[Auth] Employee lookup failed: no employee record found for user', supabaseUser.id);
+    log.error('[Auth] Employee lookup failed: no employee record found for user', supabaseUser.id);
     return { user: null, error: 'Employee account record not found. Please contact HR.' };
   }
 
@@ -477,7 +479,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(authUser);
       return { error: null };
     } catch (error) {
-      console.error('[Auth] Sign-in failed:', error);
+      log.error('[Auth] Sign-in failed:', error);
       return { error: 'Unable to sign in right now. Please try again.' };
     }
   }, []);
@@ -495,10 +497,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const changePassword = useCallback(async (newPassword: string, currentPassword = '') => {
     if (!isSupabaseConfigured) return { error: 'Unable to change password right now.' };
-    if (newPassword.length < 12 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+    if (!isStrongPassword(newPassword)) {
       return { error: 'Password must be at least 12 characters and include uppercase, lowercase, number and symbol.' };
     }
     if (!currentPassword) return { error: 'Current password is required.' };
+    try {
+      if (await isLeakedPassword(newPassword)) return { error: 'This password has appeared in a data breach. Choose a different one.' };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Password check is unavailable right now.' };
+    }
     const reauthEmail = user?.role === 'admin'
       ? ADMIN_AUTH_EMAIL
       : user?.role === 'client'

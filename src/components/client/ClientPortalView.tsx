@@ -49,6 +49,7 @@ import {
 import { AWAITING_CLIENT_CONTRACT, errorMessage, loadProjectWorkspace, rpc, type ProjectWorkspace } from '../../lib/sigma';
 import { ALLOWED_PAGES, ClientGate, isGated, type ClientPortalState } from './ClientGate';
 import { useLiveRefresh } from '../../lib/live';
+import { PrivacyCard } from '../common/PrivacyCard';
 
 export type ClientNavPage = ClientPage;
 
@@ -523,11 +524,12 @@ function ClientSettingsView({
   changePassword,
 }: {
   user: AuthUser;
-  changePassword: (newPass: string) => Promise<{ error: string | null }>;
+  changePassword: (newPass: string, currentPass?: string) => Promise<{ error: string | null }>;
 }) {
   const toast = useToast();
 
   // Password fields
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPass, setChangingPass] = useState(false);
@@ -544,11 +546,12 @@ function ClientSettingsView({
 
     setChangingPass(true);
     try {
-      const res = await changePassword(newPassword);
+      const res = await changePassword(newPassword, currentPassword);
       if (res.error) {
         toast(res.error, 'err');
       } else {
         toast('Password updated successfully');
+        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
       }
@@ -593,9 +596,17 @@ function ClientSettingsView({
           <Card>
             <CardHead
               title="Password"
-              desc="Set a secure password for your client portal account. Minimum 12 characters."
+              desc="12+ characters with an uppercase letter, a lowercase letter, a number and a symbol. Passwords found in known data breaches are refused."
             />
             <div className="space-y-4">
+              <Field label="Current password">
+                <PasswordInput
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  placeholder="Enter your current password"
+                  autoComplete="current-password"
+                />
+              </Field>
               <Field label="New password">
                 <PasswordInput
                   value={newPassword}
@@ -613,7 +624,7 @@ function ClientSettingsView({
               <Button
                 variant="primary"
                 loading={changingPass}
-                disabled={!newPassword || !confirmPassword}
+                disabled={!currentPassword || !newPassword || !confirmPassword}
                 onClick={handleUpdatePassword}
               >
                 Update password
@@ -629,6 +640,8 @@ function ClientSettingsView({
           <ClientTeam clientId={user.clientId} mode="client" canManage={user.clientRole === 'client_admin'} currentUserId={user.id} />
         </Card>
       )}
+
+      <PrivacyCard kind="client" className="card p-5 sm:p-6 mt-5" />
     </>
   );
 }

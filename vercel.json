@@ -11,7 +11,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'sha256-4baXyVKBWNrAfBOL458fqX6NxYT4oapgdytghrdQz4A='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://htxalzgotwsbicseyigu.supabase.co; connect-src 'self' https://htxalzgotwsbicseyigu.supabase.co wss://htxalzgotwsbicseyigu.supabase.co https://api.pwnedpasswords.com; media-src 'self' blob: https://htxalzgotwsbicseyigu.supabase.co; worker-src 'self'; manifest-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' 'sha256-4baXyVKBWNrAfBOL458fqX6NxYT4oapgdytghrdQz4A='; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://htxalzgotwsbicseyigu.supabase.co; connect-src 'self' https://htxalzgotwsbicseyigu.supabase.co wss://htxalzgotwsbicseyigu.supabase.co https://api.pwnedpasswords.com; media-src 'self' blob: https://htxalzgotwsbicseyigu.supabase.co; worker-src 'self'; manifest-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
         },
         {
           "key": "X-Frame-Options",

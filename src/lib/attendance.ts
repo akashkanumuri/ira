@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from './supabase';
 import type { AttendanceMode, AttendanceRecord, BreakEvent, AttendanceState } from '../types/attendance';
 import { formatKolkataTime, getKolkataDateString } from './workingDays';
 import { fmtDistance, type Fix, type GeoFail } from './officeLocation';
+import { log } from './log';
 
 interface Result {
   success: boolean;
@@ -174,7 +175,7 @@ export async function performCheckIn(params: {
   if (missing && params.fieldReason) return { success: false, error: 'Client visits aren’t switched on yet.' };
   if (!missing) {
     if (rpcError) {
-      console.error('[Attendance] Check-in failed', rpcError);
+      log.error('[Attendance] Check-in failed', rpcError);
       if (rpcError.code === '23505') return { success: false, error: 'You have already checked in for today.' };
       return { success: false, error: rpcError.message ?? 'Unable to record check-in.' };
     }
@@ -197,7 +198,7 @@ export async function performCheckIn(params: {
     .single();
 
   if (error || !data) {
-    console.error('[Attendance] Check-in failed', error);
+    log.error('[Attendance] Check-in failed', error);
     if (error?.code === '23505') return { success: false, error: 'You have already checked in for today.' };
     return { success: false, error: error?.message ?? 'Unable to record check-in.' };
   }
@@ -229,7 +230,7 @@ export async function performStartBreak(record: AttendanceRecord): Promise<Resul
     .single();
 
   if (error || !data) {
-    console.error('[Attendance] Start break failed', error);
+    log.error('[Attendance] Start break failed', error);
     return { success: false, error: error?.message ?? 'Unable to start break.' };
   }
 
@@ -268,7 +269,7 @@ export async function performResumeWork(record: AttendanceRecord): Promise<Resul
     .maybeSingle();
 
   if (error || !data) {
-    console.error('[Attendance] Resume failed', error);
+    log.error('[Attendance] Resume failed', error);
     return { success: false, error: error?.message ?? 'Unable to resume work.' };
   }
 
@@ -311,7 +312,7 @@ export async function performCheckOut(record: AttendanceRecord): Promise<Result>
     .maybeSingle();
 
   if (error || !data) {
-    console.error('[Attendance] Check-out failed', error);
+    log.error('[Attendance] Check-out failed', error);
     return { success: false, error: error?.message ?? 'Unable to record check-out.' };
   }
 

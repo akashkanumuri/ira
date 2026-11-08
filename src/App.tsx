@@ -41,6 +41,9 @@ import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { AppShell, type NavGroup } from './ui/AppShell';
 import { Avatar, Badge, EmptyState, IconChip, Notice as UiNotice, Page, PageHeader, PillTabs, SearchInput, SkeletonPage, Stat, StatusBadge as UiStatusBadge, cx } from './ui';
 import { Modal } from './ui/Modal';
+import { SetupLinkDialog, type SetupLink } from './components/common/SetupLinkDialog';
+import { ErasePersonDialog } from './components/admin/ErasePersonDialog';
+import { PrivacyCard } from './components/common/PrivacyCard';
 import { PasswordField } from './ui/PasswordField';
 import { ConfirmHost, confirmDialog } from './ui/confirm';
 import { ToastHost } from './components/common/ToastHost';
@@ -90,6 +93,7 @@ import {
 } from './lib/v2';
 import { classifyDay, formatKolkataTime, getKolkataDateString } from './lib/workingDays';
 import { performCheckIn, performStartBreak, performResumeWork, performCheckOut, recoverTodayAttendance, formatLiveTimer, fetchAttendanceRecord } from './lib/attendance';
+import { log } from './lib/log';
 
 const today = () => getKolkataDateString();
 const tomorrow = () => {
@@ -470,7 +474,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         ? `Some live modules could not be refreshed: ${failures.join(', ')}. Available data remains on screen.`
         : '');
     } catch (e) {
-      console.error('[Portal] load failed', e);
+      log.error('[Portal] load failed', e);
       setDataError(e instanceof Error ? e.message : 'Unable to load workspace data.');
     } finally {
       setLoadingData(false);
@@ -1463,7 +1467,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
 }
 
 function EmployeeModal({ mode, employee, departments, designations, employees, onClose, onSaved }: { mode: 'create' | 'edit'; employee: Employee | null; departments: Department[]; designations: Designation[]; employees: Employee[]; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false); const [resetBusy, setResetBusy] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState<{ loginId: string; password?: string } | null>(null);
+  const [busy, setBusy] = useState(false); const [resetBusy, setResetBusy] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState<{ loginId: string; password?: string } | null>(null); const [resetLink, setResetLink] = useState<SetupLink | null>(null); const [erasing, setErasing] = useState(false);
   const [docs, setDocs] = useState<{ type: string; file: File | null }[]>(ALL_DOCUMENT_TYPES.map(type => ({ type, file: null })));
   const [liveDesignations, setLiveDesignations] = useState<Designation[]>(designations);
   const [liveDepartments, setLiveDepartments] = useState<Department[]>(departments);
@@ -1581,9 +1585,11 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
       }
     } catch (err) { const message = err instanceof Error ? err.message : 'Unable to save employee.'; setError(message); notify(message, 'error') } finally { setBusy(false); }
   };
-  async function resetPassword() { if (!employee || resetBusy) return; setError(''); setResetBusy(true); try { const r = await invokeEmployeeAdmin({ action: 'reset_password', employeeId: employee.id }); setSuccess({ loginId: r.loginId, password: r.temporaryPassword }); notify('Temporary password generated.', 'success') } catch (e) { const message = e instanceof Error ? e.message : 'Unable to reset password.'; setError(message); notify(message, 'error') } finally { setResetBusy(false) } }
+  async function resetPassword() { if (!employee || resetBusy) return; setError(''); setResetBusy(true); try { const r = await invokeEmployeeAdmin({ action: 'reset_link', employeeId: employee.id, appOrigin: window.location.origin }) as { loginId: string; url: string }; setResetLink({ name: employee.name, email: `Login ID ${r.loginId}`, url: r.url, kind: 'reset', expires: '1 hour' }); } catch (e) { const message = e instanceof Error ? e.message : 'Unable to create a reset link.'; setError(message); notify(message, 'error') } finally { setResetBusy(false) } }
   async function viewDoc(doc: EmployeeDocument) { try { const url = await getSignedDocumentUrl(doc.storagePath); window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { const message = e instanceof Error ? e.message : 'Unable to open document.'; setError(message); notify(message, 'error') } }
   return <Modal title={mode === 'create' ? 'Add employee' : 'Edit employee'} onClose={onClose} closeDisabled={busy || resetBusy} wide>
+    {resetLink && <SetupLinkDialog link={resetLink} onClose={() => setResetLink(null)} />}
+    {erasing && employee?.profileId && <ErasePersonDialog profileId={employee.profileId} name={employee.name} kind="employee" onClose={() => setErasing(false)} onDone={async () => { await onSaved(); onClose(); }} />}
     {success && <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="flex items-center gap-2 text-emerald-800 font-bold text-sm"><CheckCircle2 className="w-4 h-4" />Employee account ready</div><p className="text-xs text-emerald-700 mt-2">Login ID: <b>{success.loginId}</b>{success.password && <> · Temporary password: <b>{success.password}</b></>}</p>{mode === 'create' && <p className="text-[11px] text-emerald-700 mt-2">Share the password securely. It is not stored in the employee record.</p>}</div>}
     {error && <Notice type="error" text={error} />}
     <form onSubmit={save} className="space-y-6">
@@ -1597,7 +1603,7 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
       {mode === 'create' && <FormSection title="Login" icon={<KeyRound className="w-4 h-4" />}><div className="grid md:grid-cols-3 gap-4"><Field label="Login ID"><input value={form.loginId} onChange={e => set('loginId', e.target.value)} className="input" autoComplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,31}" title="3–32 characters: letters, numbers, dot, underscore or hyphen" /></Field><Field label="Password"><PasswordField value={form.password} onChange={e => set('password', e.target.value)} autoComplete="new-password" minLength={12} required /></Field><Field label="Confirm password"><PasswordField value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} autoComplete="new-password" minLength={12} required /></Field></div><PasswordChecklist password={form.password} confirm={form.confirmPassword} /></FormSection>}
       {mode === 'create' && <FormSection title="HR onboarding documents" icon={<Upload className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold text-slate-700">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
       {mode === 'edit' && <FormSection title="HR documents" icon={<FileText className="w-4 h-4" />}><div className="space-y-2">{employeeDocs.map(d => <button type="button" key={d.id} onClick={() => void viewDoc(d)} className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-left"><span><span className="block text-xs font-bold">{d.documentType}</span><span className="block text-[10px] text-slate-500">{d.fileName}</span></span><Eye className="w-4 h-4 text-slate-400" /></button>)}{!employeeDocs.length && <p className="text-xs text-slate-500">No documents uploaded yet.</p>}</div><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
-      <div className="flex flex-col sm:flex-row justify-between gap-2 pt-2">{mode === 'edit' ? <button type="button" onClick={() => void resetPassword()} className="btn-secondary"><KeyRound className="w-4 h-4" />Reset password</button> : <span />}<div className="flex justify-end gap-2"><button type="button" disabled={busy || resetBusy} onClick={onClose} className="btn-secondary disabled:opacity-50">Cancel</button><button disabled={busy} className="btn-primary">{busy ? 'Saving…' : mode === 'create' ? 'Create employee' : 'Save changes'}</button></div></div>
+      <div className="flex flex-col sm:flex-row justify-between gap-2 pt-2">{mode === 'edit' ? <span className="flex flex-wrap gap-2"><button type="button" onClick={() => void resetPassword()} disabled={resetBusy || employee?.status !== 'active'} title={employee?.status !== 'active' ? 'Activate the employee first' : undefined} className="btn-secondary"><KeyRound className="w-4 h-4" />{resetBusy ? 'Creating link…' : 'Password reset link'}</button>{employee?.status === 'inactive' && employee.profileId && <button type="button" onClick={() => setErasing(true)} className="btn-ghost text-rose-700"><Trash2 className="w-4 h-4" />Erase personal data</button>}</span> : <span />}<div className="flex justify-end gap-2"><button type="button" disabled={busy || resetBusy} onClick={onClose} className="btn-secondary disabled:opacity-50">Cancel</button><button disabled={busy} className="btn-primary">{busy ? 'Saving…' : mode === 'create' ? 'Create employee' : 'Save changes'}</button></div></div>
     </form>
   </Modal>;
 }
@@ -2211,6 +2217,7 @@ function ProfileEmployee({ user, onRefresh }: any) {
             ))}</ul>
           ) : <EmptyState icon={<FileText className="w-6 h-6" />} title="No documents yet" text="Offer letters, payslips and other HR files appear here once uploaded." className="!py-10" />}
         </section>
+        <PrivacyCard kind="employee" className="card p-5 sm:p-6 rise" />
       </div>
     </PageShell>
   );
@@ -2487,7 +2494,7 @@ function NotificationBell({
       const records = await fetchUserNotifications(user.id, 40);
       setItems(records);
     } catch (e) {
-      console.warn('[NotificationBell] Load failed:', e);
+      log.warn('[NotificationBell] Load failed:', e);
     } finally {
       setLoading(false);
     }

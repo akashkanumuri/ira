@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { logError, logWarn } from '../_shared/log.ts'
 
 const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -207,7 +208,7 @@ Deno.serve(async (req: Request) => {
         .upsert({ id: updated.client_id, role: 'client' });
 
       if (authError) {
-        console.error('[client-setup] Auth password update failed:', authError.message);
+        logError('[client-setup] Auth password update failed:', authError.message);
         // Rollback token reservation to allow user retry
         const { error: rollbackError } = await admin
           .from('client_invitations')
@@ -215,7 +216,7 @@ Deno.serve(async (req: Request) => {
           .eq('id', updated.id);
 
         if (rollbackError) {
-          console.error('[client-setup] Failed to roll back token reservation:', rollbackError.message);
+          logError('[client-setup] Failed to roll back token reservation:', rollbackError.message);
         }
 
         return json(
@@ -234,7 +235,7 @@ Deno.serve(async (req: Request) => {
         .update({ status: 'active', updated_at: nowIso })
         .eq('profile_id', updated.client_id)
         .eq('status', 'invited');
-      if (memberError) console.error('[client-setup] Client user activation delayed:', memberError.message);
+      if (memberError) logError('[client-setup] Client user activation delayed:', memberError.message);
 
       // 4. Mark client record active with retry logic (up to 3 attempts)
       let clientActivated = false;
@@ -257,7 +258,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!clientActivated) {
-        console.error('[client-setup] Client status sync delayed after retries:', lastClientError?.message);
+        logError('[client-setup] Client status sync delayed after retries:', lastClientError?.message);
         // Do not falsely report failure: password was set and user can log in.
         return json({
           success: true,
@@ -271,7 +272,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ error: 'Unsupported action.' }, 400, origin);
   } catch (error) {
-    console.error('[client-setup] Error:', error instanceof Error ? error.message : error);
+    logError('[client-setup] Error:', error instanceof Error ? error.message : error);
     return json({ error: error instanceof Error ? error.message : 'Request failed.' }, 400, origin);
   }
 });

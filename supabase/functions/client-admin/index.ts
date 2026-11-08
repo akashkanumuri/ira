@@ -1,5 +1,6 @@
 import { createSupabaseContext } from 'npm:@supabase/server';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { logError, logWarn } from '../_shared/log.ts'
 
 interface CreateClientInput {
   action: 'create_client';
@@ -511,7 +512,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (profileError) {
-      console.error('[client-admin] profile lookup error:', profileError);
+      logError('[client-admin] profile lookup error:', profileError);
       return json({ error: 'Unable to verify authorization.' }, 500, origin);
     }
 
@@ -554,7 +555,7 @@ Deno.serve(async (req: Request) => {
         return json({ error: 'Unsupported action' }, 400, origin);
     }
   } catch (error) {
-    console.error('[client-admin] Execution error:', error instanceof Error ? error.message : error);
+    logError('[client-admin] Execution error:', error instanceof Error ? error.message : error);
     return json({ error: error instanceof Error ? error.message : 'Request failed' }, 400, origin);
   }
 });

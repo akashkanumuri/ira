@@ -4,6 +4,22 @@
    Display: Urbanist (headings, numbers) · Body: Manrope
    ========================================================= */
 
+/* Self-hosted (SIL Open Font License, see /fonts/*-OFL.txt) so no visitor IP or browser details reach Google. */
+@font-face {
+  font-family: "Manrope";
+  src: url("/fonts/manrope-var.woff") format("woff");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Urbanist";
+  src: url("/fonts/urbanist-var.woff") format("woff");
+  font-weight: 500 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
   --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Urbanist", "Manrope", ui-sans-serif, system-ui, sans-serif;

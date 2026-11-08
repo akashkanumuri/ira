@@ -1,5 +1,6 @@
 // IRA Presence V2 - Standards-based Web Push & Device Subscription Manager
 import { supabase } from './supabase';
+import { log } from './log';
 
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : ({} as Record<string, any>);
 /** Public Web Push (VAPID) key from the environment (VITE_VAPID_PUBLIC_KEY). Without it, push stays off. */
@@ -92,7 +93,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     ]);
     return registration;
   } catch (err) {
-    console.error('[WebPush] Service Worker registration failed:', err);
+    log.error('[WebPush] Service Worker registration failed:', err);
     return null;
   }
 }
@@ -104,7 +105,7 @@ export async function getExistingSubscription(): Promise<PushSubscription | null
     if (!reg) return null;
     return await reg.pushManager.getSubscription();
   } catch (err) {
-    console.warn('[WebPush] Error checking existing subscription:', err);
+    log.warn('[WebPush] Error checking existing subscription:', err);
     return null;
   }
 }
@@ -126,7 +127,7 @@ export async function syncExistingPushSubscription(userId: string): Promise<bool
           applicationServerKey: applicationServerKey as any,
         });
       } catch (renewErr) {
-        console.debug('[WebPush] Auto-renew subscription exception:', renewErr);
+        log.debug('[WebPush] Auto-renew subscription exception:', renewErr);
       }
     }
 
@@ -156,12 +157,12 @@ export async function syncExistingPushSubscription(userId: string): Promise<bool
     });
 
     if (error) {
-      console.warn('[WebPush] Background sync error:', error.message);
+      log.warn('[WebPush] Background sync error:', error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.debug('[WebPush] Background sync exception:', err);
+    log.debug('[WebPush] Background sync exception:', err);
     return false;
   }
 }
@@ -271,14 +272,14 @@ export async function subscribeToPush(
     });
 
     if (dbError) {
-      console.error('[WebPush] Database save failed:', dbError.message);
+      log.error('[WebPush] Database save failed:', dbError.message);
       return { success: false, error: `Failed to record device subscription: ${dbError.message}` };
     }
 
     return { success: true, subscription };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error during push subscription';
-    console.error('[WebPush] Subscribe error:', err);
+    log.error('[WebPush] Subscribe error:', err);
     return { success: false, error: message };
   }
 }
@@ -297,7 +298,7 @@ export async function unsubscribeFromPush(
           .delete()
           .eq('endpoint', endpoint);
       } catch (dbErr) {
-        console.warn('[WebPush] Error removing subscription from DB:', dbErr);
+        log.warn('[WebPush] Error removing subscription from DB:', dbErr);
       }
     }
     return { success: true };
@@ -332,7 +333,7 @@ export async function sendLocalTestPushNotification(
     } as any);
     return true;
   } catch (err) {
-    console.error('[WebPush] Local test notification failed:', err);
+    log.error('[WebPush] Local test notification failed:', err);
     return false;
   }
 }

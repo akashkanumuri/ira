@@ -7,6 +7,7 @@
  */
 import type { Buddy3DApi, BuddyAction } from './Buddy3D';
 import { Ball, Fx, Plane } from './fx';
+import { log } from '../../lib/log';
 
 export type StuntName =
   | 'rocket' | 'football' | 'hoverboard' | 'cleaner' | 'hide' | 'glitch' | 'hang' | 'plane'
@@ -340,7 +341,7 @@ export function createStage(d: StageDeps) {
       else { const at = read(); tidy(); const home = d.home(); d.commit(at, Math.hypot(at.x - home.x, at.y - home.y) > 4); }
       return true;
     } catch (e) {
-      if (!(e instanceof Cancelled)) console.warn('[sigma] stunt', name, e);
+      if (!(e instanceof Cancelled)) log.warn('[sigma] stunt', name, e);
       return false;
     }
   }
