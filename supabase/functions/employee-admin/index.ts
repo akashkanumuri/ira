@@ -8,7 +8,10 @@ type CreateEmployeeInput = {
   workEmail?: string | null
   phone?: string | null
   loginId: string
-  password: string
+  /** Not used any more: the employee chooses their own password through a one-time setup link. */
+  password?: string | null
+  /** Where the setup link should land (checked against the allowed origins). */
+  appOrigin?: string | null
   workMode: 'office' | 'remote'
   designationId?: string
   designationName?: string | null
@@ -103,39 +106,6 @@ function validateLoginId(loginId: string) {
   return /^[a-z0-9][a-z0-9._-]{2,31}$/.test(normalizeLoginId(loginId))
 }
 
-function validatePassword(password: string) {
-  return password.length >= 12
-    && /[A-Z]/.test(password)
-    && /[a-z]/.test(password)
-    && /\d/.test(password)
-    && /[^A-Za-z0-9]/.test(password)
-}
-
-async function isLeakedPassword(password: string): Promise<boolean> {
-  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(password));
-  const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
-  const prefix = hash.slice(0, 5);
-  const suffix = hash.slice(5);
-  const response = await fetch('https://api.pwnedpasswords.com/range/' + prefix, {
-    headers: {
-      'User-Agent': 'IRA-Hospitality-Password-Protection/1.0',
-      'Add-Padding': 'true',
-    },
-  });
-  if (!response.ok) throw new Error('Password security verification is temporarily unavailable. Please try again.');
-  const body = await response.text();
-  return body.split(/\r?\n/).some(line => line.split(':', 1)[0].trim().toUpperCase() === suffix);
-}
-
-async function assertPasswordSafe(password: string) {
-  if (!validatePassword(password)) {
-    throw new Error('Password must be at least 12 characters and include uppercase, lowercase, number and symbol.');
-  }
-  if (await isLeakedPassword(password)) {
-    throw new Error('Choose a different password. This password has appeared in known data breaches.');
-  }
-}
-
 function cleanText(value?: string | null) {
   const v = value?.trim()
   return v ? v : null
@@ -226,12 +196,23 @@ async function ensureEmployeeLedgers(
   }
 }
 
-async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<typeof createClient>, actorId: string) {
+/** A login nobody knows: random, never shown, replaced when the employee opens their setup link. */
+function unguessablePassword() {
+  return crypto.randomUUID() + 'Aa1!' + crypto.randomUUID()
+}
+
+async function setupLinkFor(admin: ReturnType<typeof createClient>, email: string, appOrigin: string | null | undefined, origin: string | null) {
+  const base = allowedOrigin(appOrigin ?? null) ?? allowedOrigin(origin) ?? 'https://ira-eta-two.vercel.app'
+  const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo: `${base}/?set-password=1` } })
+  if (error || !data?.properties?.action_link) return null
+  return data.properties.action_link as string
+}
+
+async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<typeof createClient>, actorId: string, origin: string | null) {
   const loginId = normalizeLoginId(input.loginId)
   if (!validateLoginId(loginId)) throw new Error('Login ID must be 3–32 characters: letters, numbers, dot, underscore or hyphen, starting with a letter or number (no spaces or @).')
   if (!input.name?.trim()) throw new Error('Employee name is required.')
   await assertWorkEmailFree(admin, cleanText(input.workEmail))
-  await assertPasswordSafe(input.password)
   if (!input.name.trim()) throw new Error('Employee name is required.')
   if (!input.designationId) throw new Error('Designation is required.')
   if (!input.joinDate) throw new Error('Join date is required.')
@@ -297,7 +278,7 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
   const { data: authUser, error: authError } = await admin.auth.admin.createUser({
     email: authEmail(loginId),
-    password: input.password,
+    password: unguessablePassword(),
     email_confirm: true,
     user_metadata: {
       name: input.name.trim(),
@@ -358,7 +339,10 @@ async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<type
 
     await ensureEmployeeLedgers(admin, employee.id, input.joinDate, kolkataToday())
 
-    return { employeeId: employee.id, empId, loginId }
+    // The employee sets their own password with this one-time link; if it can't be made now,
+    // the admin can create one later with "Password reset link".
+    const setupUrl = await setupLinkFor(admin, authEmail(loginId), input.appOrigin, origin)
+    return { employeeId: employee.id, empId, loginId, setupUrl }
   } catch (error) {
     try {
       if (createdEmployeeId) await admin.from('employees').delete().eq('id', createdEmployeeId)
@@ -519,14 +503,9 @@ async function resetLink(input: ResetLinkInput, admin: ReturnType<typeof createC
   const { data: authUser, error: userError } = await admin.auth.admin.getUserById(employee.profile_id)
   if (userError || !authUser?.user?.email) throw new Error('This employee has no login yet.')
 
-  const base = allowedOrigin(input.appOrigin ?? null) ?? allowedOrigin(origin) ?? 'https://ira-eta-two.vercel.app'
-  const { data, error: linkError } = await admin.auth.admin.generateLink({
-    type: 'recovery',
-    email: authUser.user.email,
-    options: { redirectTo: `${base}/?set-password=1` },
-  })
-  if (linkError || !data?.properties?.action_link) throw new Error(linkError?.message ?? 'Could not create the reset link.')
-  return { loginId: employee.login_id, url: data.properties.action_link }
+  const url = await setupLinkFor(admin, authUser.user.email, input.appOrigin, origin)
+  if (!url) throw new Error('Could not create the reset link.')
+  return { loginId: employee.login_id, url }
 }
 
 /**
@@ -638,7 +617,7 @@ Deno.serve(async (req: Request) => {
 
     switch (input.action) {
       case 'create_employee':
-        return json(await createEmployee(input, admin, actorId), 201, origin)
+        return json(await createEmployee(input, admin, actorId, origin), 201, origin)
       case 'update_employee':
         return json(await updateEmployee(input, admin, actorId), 200, origin)
       case 'reset_link':
