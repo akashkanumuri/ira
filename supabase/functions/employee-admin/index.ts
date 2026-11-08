@@ -41,11 +41,6 @@ type UpdateEmployeeInput = {
   monthlySalary: number
 }
 
-type ResetPasswordInput = {
-  action: 'reset_password'
-  employeeId: string
-}
-
 type ResetLinkInput = {
   action: 'reset_link'
   employeeId: string
@@ -66,7 +61,7 @@ type StatusInput = {
   status: 'active' | 'inactive'
 }
 
-type Input = CreateEmployeeInput | UpdateEmployeeInput | ResetPasswordInput | ResetLinkInput | ErasePersonInput | StatusInput
+type Input = CreateEmployeeInput | UpdateEmployeeInput | ResetLinkInput | ErasePersonInput | StatusInput
 
 const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -77,7 +72,6 @@ function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null
   if (origin === 'https://ira-eta-two.vercel.app') return origin
   if (/^https:\/\/ira-[a-z0-9-]+-satisfyinginventior-1459s-projects\.vercel\.app$/i.test(origin)) return origin
-  if (/^https:\/\/ira-[a-z0-9-]+\.vercel\.app$/i.test(origin)) return origin
   if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)) return origin
   return null
 }
@@ -140,10 +134,6 @@ async function assertPasswordSafe(password: string) {
   if (await isLeakedPassword(password)) {
     throw new Error('Choose a different password. This password has appeared in known data breaches.');
   }
-}
-
-function generateTemporaryPassword() {
-  return 'IRA@' + crypto.randomUUID().replace(/-/g, '').slice(0, 14) + '9a';
 }
 
 function cleanText(value?: string | null) {
@@ -513,27 +503,6 @@ async function updateEmployee(input: UpdateEmployeeInput, admin: ReturnType<type
   return { employeeId: input.employeeId }
 }
 
-async function resetPassword(input: ResetPasswordInput, admin: ReturnType<typeof createClient>) {
-  const { data: employee, error } = await admin
-    .from('employees')
-    .select('profile_id,name,login_id,status')
-    .eq('id', input.employeeId)
-    .maybeSingle()
-  if (error || !employee) throw new Error('Employee not found.')
-
-  let temporaryPassword = generateTemporaryPassword();
-  for (let attempt = 0; attempt < 3 && await isLeakedPassword(temporaryPassword); attempt += 1) {
-    temporaryPassword = generateTemporaryPassword();
-  }
-  await assertPasswordSafe(temporaryPassword);
-  const { error: authError } = await admin.auth.admin.updateUserById(employee.profile_id, {
-    password: temporaryPassword,
-  })
-  if (authError) throw new Error(authError.message)
-
-  return { loginId: employee.login_id, temporaryPassword }
-}
-
 /**
  * One-time password reset link (no password is created, shown or sent). The employee opens it,
  * chooses a new password in SIGMA, and the link stops working. Supabase stores only the hash.
@@ -672,9 +641,6 @@ Deno.serve(async (req: Request) => {
         return json(await createEmployee(input, admin, actorId), 201, origin)
       case 'update_employee':
         return json(await updateEmployee(input, admin, actorId), 200, origin)
-      case 'reset_password':
-        // Kept only until the new SIGMA screens are live everywhere; they use reset_link instead.
-        return json(await resetPassword(input, admin), 200, origin)
       case 'reset_link':
         return json(await resetLink(input, admin, origin), 200, origin)
       case 'erase_person':
