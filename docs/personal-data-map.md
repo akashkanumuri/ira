@@ -49,7 +49,7 @@ The database only calls outward to SIGMA's own push function.
    This applies in the browser (`src/lib/log.ts`) and in the server functions (`supabase/functions/_shared/log.ts`). Tested on sample data.
 2. **Passwords.**
    - The admin "Reset password" button used to create a temporary password and **return it to the browser**. It now creates a **one-time reset link** that expires in 1 hour. The employee opens it and chooses their own password; nobody else ever sees it.
-   - The old reset action is kept only until the new screens are live everywhere, then it will be deleted.
+   - The old reset action that returned a temporary password has been deleted from the server.
    - Client portal password change: it never asked for the current password, so it always failed. It now asks for it and runs the breach check.
 3. **Google Fonts removed.** No visitor data goes to Google any more. The browser rules (CSP) no longer allow Google hosts.
 4. **Data deletion.** There was no way to delete personal data. Now:
@@ -74,6 +74,14 @@ The database only calls outward to SIGMA's own push function.
   - the one view runs with the caller's permissions;
   - functions that return personal data check the caller first;
   - only "Forgot password" works without signing in, and it gives the same answer whether or not the email exists.
+
+## Live status (8 Nov 2026)
+
+- The erasure database changes are live. Checks after applying: row-level rules on, only the password-reset request can be called without signing in, the audit log is still locked.
+- The employee-admin server function is live (v18). Without a login it returns "Authentication required".
+- The preview build passed: type-check, bundle secret scan and gitleaks.
+- Fonts load from SIGMA, with 0 requests to Google.
+- An expired reset link shows the "expired" screen.
 
 ## 5. Left as they are (decide if you want them changed)
 
