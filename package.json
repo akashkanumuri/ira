@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build": "tsc --noEmit -p tsconfig.json && vite build && node scripts/check-bundle-secrets.mjs dist",
     "preview": "vite preview",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "check:secrets": "node scripts/check-bundle-secrets.mjs dist"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",

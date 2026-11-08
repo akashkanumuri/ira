@@ -4,10 +4,14 @@ on:
   push:
     branches:
       - main
+      - redesign/foundation
       - v2-final
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -22,5 +26,28 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      # Type-check, build, then fail if anything secret-looking is in the browser bundle.
       - name: Build
         run: npm run build
+      # Blocks on critical advisories in shipped (non-dev) dependencies.
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=critical
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Blocking: no secret may exist in the current source tree.
+      - name: Scan current source for secrets
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 \
+            detect --source=/repo --no-git --redact --verbose --exit-code 1
+      # Report-only: older commits are already public; anything found there must be rotated, not just deleted.
+      - name: Scan git history for secrets (report only)
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 \
+            detect --source=/repo --redact --verbose --exit-code 1
