@@ -194,7 +194,9 @@ const statusMap: Record<string, Tone> = {
   Critical: 'err',
 };
 
-export const Status = ({ s }: { s: string }) => <Badge tone={statusMap[s] ?? 'neutral'}>{s}</Badge>;
+/** Raw values like "active" or "in_progress" read as "Active" / "In progress"; labels already in Title Case are unchanged. */
+const statusLabel = (s: string) => (s ? s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : s);
+export const Status = ({ s }: { s: string }) => <Badge tone={statusMap[s] ?? 'neutral'}>{statusLabel(s)}</Badge>;
 
 /* ---------- Layout Primitives ---------- */
 export const Card = ({

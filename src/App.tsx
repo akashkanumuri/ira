@@ -789,7 +789,7 @@ function getPageTitle(tab: string) {
     'admin-clients': 'Clients',
     'admin-employees': 'Employees / HR',
     'admin-attendance': 'Attendance',
-    'admin-tasks': 'Work & Assignments',
+    'admin-tasks': 'Work & tasks',
     'admin-requests': 'Requests',
     'admin-payroll': 'Payroll',
     'admin-holidays': 'Holidays',
@@ -798,7 +798,7 @@ function getPageTitle(tab: string) {
     'emp-dashboard': 'Dashboard',
     'emp-attendance': 'My Attendance',
     'emp-client-work': 'Client Projects',
-    'emp-tasks': 'Work & Assignments',
+    'emp-tasks': 'Work & tasks',
     'emp-leave': 'Leave',
     'emp-wfh': 'WFH',
     'emp-payroll': 'Payroll',
@@ -989,7 +989,7 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   }
 
   return <PageShell
-    title="Work & Assignments"
+    title="Work & tasks"
     subtitle="What you’re working on, what’s waiting for review, and work you’ve given others."
     actions={canAssign ? <button onClick={() => setAssignOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Assign task</button> : undefined}
   >
@@ -1080,7 +1080,7 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
     } finally { setArchiveBusy(false); }
   }
   return <PageShell
-    title="Work & Assignments"
+    title="Work & tasks"
     subtitle="Everything assigned across the team — what’s moving, what’s stuck, what’s waiting for review, and which client deliverable it serves."
     actions={<button onClick={() => setAssignOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Assign task</button>}
   >

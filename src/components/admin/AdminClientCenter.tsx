@@ -338,9 +338,9 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
   ========================================================================= */
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-[1320px] space-y-5 sm:space-y-6">
       {pwRequests.length > 0 && (
-        <div className="mx-4 sm:mx-6 mt-4 rounded-3xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5" role="region" aria-label="Password requests">
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5" role="region" aria-label="Password requests">
           <div className="flex items-center gap-2.5">
             <span className="grid place-items-center w-9 h-9 rounded-full bg-amber-100 text-amber-700"><KeyRound className="w-4 h-4" /></span>
             <div className="min-w-0">
@@ -361,41 +361,31 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
           </ul>
         </div>
       )}
-      {/* Top Navigation Tabs for Client Work Center */}
-      <div className="border-b border-line bg-surface px-4 sm:px-6 pt-2">
-        <div className="flex items-center justify-between pb-3 flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-ink">Client Operations & Projects</h1>
-            <p className="text-xs text-ink-3 mt-0.5">
-              Clients, projects, contracts, deliverables, modifications, dependencies and billing
-            </p>
-          </div>
-          <Button
-            size="sm"
-            icon={RefreshCw}
-            loading={loading}
-            onClick={() => void loadCoreData()}
-          >
+      {/* Same page header as every other admin page */}
+      <PageHeader
+        title="Clients & Projects"
+        desc="Clients, projects, contracts, deliverables, changes, dependencies and billing."
+        actions={
+          <Button size="sm" icon={RefreshCw} loading={loading} onClick={() => void loadCoreData()}>
             Refresh
           </Button>
-        </div>
-
-        <Tabs
-          value={activeTab}
-          onChange={t => {
-            setActiveTab(t as any);
-            setSelectedClientId(null);
-          }}
-          tabs={[
-            { id: 'directory', label: 'Client Directory', count: clients.length },
-            { id: 'projects', label: 'Projects', count: projects.length },
-            { id: 'workspace', label: 'Project Workspace' },
-          ]}
-        />
-      </div>
+        }
+      />
+      <Tabs
+        value={activeTab}
+        onChange={t => {
+          setActiveTab(t as any);
+          setSelectedClientId(null);
+        }}
+        tabs={[
+          { id: 'directory', label: 'Client Directory', count: clients.length },
+          { id: 'projects', label: 'Projects', count: projects.length },
+          { id: 'workspace', label: 'Project Workspace' },
+        ]}
+      />
 
       {/* Main Tab Views */}
-      <div className="px-4 sm:px-6">
+      <div>
         {/* ===============================================================
             TAB 1: DIRECTORY
         =============================================================== */}

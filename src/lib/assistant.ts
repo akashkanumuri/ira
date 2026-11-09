@@ -35,7 +35,7 @@ export function saveMemory(userId: string, m: BuddyMemory) {
 
 export const PAGE_HELP: Record<string, { title: string; text: string }> = {
   'emp-dashboard': { title: 'Dashboard', text: 'Your day at a glance: check-in, late marks, leave left, open tasks and your latest pay.' },
-  'emp-tasks': { title: 'Work & Assignments', text: 'Your tasks. Press Start to run the timer — only timed work counts. Hand in a link when done; your manager approves it.' },
+  'emp-tasks': { title: 'Work & tasks', text: 'Your tasks. Press Start to run the timer — only timed work counts. Hand in a link when done; your manager approves it.' },
   'emp-client-work': { title: 'Client Projects', text: 'Client projects you manage: review drafts and send versions to the client.' },
   'emp-attendance': { title: 'My Attendance', text: 'Check in, take breaks and check out. Tap any day in the calendar to see times, breaks and late marks.' },
   'emp-time': { title: 'My time', text: 'Where your day went: task time, meetings, breaks and away time, day by day.' },
@@ -55,7 +55,7 @@ export const PAGE_HELP: Record<string, { title: string; text: string }> = {
   'admin-employees': { title: 'Employees / HR', text: 'Add people, set how they work (office, hybrid, remote, hours) and their pay.' },
   'admin-attendance': { title: 'Attendance', text: 'Who is in today, late marks, and check someone in when their location fails.' },
   'admin-worktime': { title: 'Work time', text: 'Tracked task and meeting time for everyone.' },
-  'admin-tasks': { title: 'Work & Assignments', text: 'Assign work, review hand-ins and send approved work to clients.' },
+  'admin-tasks': { title: 'Work & tasks', text: 'Assign work, review hand-ins and send approved work to clients.' },
   'admin-requests': { title: 'Requests', text: 'Approve or reject leave and work-from-home.' },
   'admin-performance': { title: 'Performance', text: 'Review cycles, goals and punctuality for the team.' },
   'admin-payroll': { title: 'Payroll', text: 'Generate the month, check deductions (leave, absent, late), then finalize to lock payslips.' },
