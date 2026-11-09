@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus, Save, Send, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { fmtDate, inr, rpc, type ContractRow, type ContractVersionRow, type InstallmentRow } from '../../lib/sigma';
+import { fmtDate, inr, rpc, type ContractRow, type ContractVersionRow, type InstallmentRow, todayIST } from '../../lib/sigma';
 import { Button, Field, Input, Select, SidePanel, Textarea, cx, useToast } from '../client/ClientUI';
 
 const db = supabase as any;
@@ -112,7 +112,7 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
       .split('{value}').join(amount > 0 ? inr(amount) : '{value}')
       .split('{start_date}').join(start ? fmtDate(start) : 'the agreed start date')
       .split('{end_date}').join(end ? fmtDate(end) : 'the agreed end date')
-      .split('{today}').join(fmtDate(new Date().toISOString().slice(0, 10)));
+      .split('{today}').join(fmtDate(todayIST()));
 
   const problems = useMemo(() => {
     const p: Partial<Record<Step, string>> = {};

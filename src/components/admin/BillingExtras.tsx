@@ -116,7 +116,8 @@ export function RequestPaymentDialog({ inst, open, onClose, onDone }: { inst: In
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return;
-    const d = new Date(); d.setDate(d.getDate() + 7);
+    // A week from today in India time (not the browser's UTC date, which is a day behind before 5:30 AM).
+    const d = new Date(`${todayIST()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7);
     setDue(inst?.due_date && inst.due_date >= todayIST() ? inst.due_date : d.toISOString().slice(0, 10));
   }, [open, inst?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!inst) return null;
