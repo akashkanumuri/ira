@@ -239,7 +239,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
           tone="mint"
           label="Active clients"
           value={o ? o.clients.active : org.loading ? '·' : '—'}
-          caption={o ? <>{o.contracts.awaitingClient} contract{o.contracts.awaitingClient === 1 ? '' : 's'} awaiting signature · {o.clients.newThisMonth} new this month</> : org.error ?? 'Loading…'}
+          caption={o ? <>{o.contracts.awaitingClient} to sign · {o.clients.newThisMonth} new this month</> : org.error ?? 'Loading…'}
           onClick={() => onSelectTab('admin-clients')}
         />
         <Stat
@@ -294,8 +294,8 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
                     <button type="button" onClick={() => onSelectTab(a.to)} className="w-full flex items-center gap-3 rounded-2xl px-2 py-2.5 text-left hover:bg-ink-50 transition-colors group">
                       <IconChip icon={a.icon} tone={a.tone} />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-ink-900 truncate">{a.title}</span>
-                        <span className="block text-xs text-ink-500 truncate">{a.caption}</span>
+                        <span className="block text-sm font-bold text-ink-900 leading-snug">{a.title}</span>
+                        <span className="text-xs text-ink-500 leading-snug line-clamp-2">{a.caption}</span>
                       </span>
                       <ChevronRight className="w-4 h-4 text-ink-300 group-hover:text-ink-700 group-hover:translate-x-0.5 transition-all" />
                     </button>

@@ -165,7 +165,7 @@ export function Stat({
     </>
   );
   return (
-    <Card index={index} interactive={Boolean(onClick)} onClick={onClick} as={onClick ? 'button' : 'section'} className={cx('p-5 sm:p-6 w-full', className)}>
+    <Card index={index} interactive={Boolean(onClick)} onClick={onClick} as={onClick ? 'button' : 'section'} className={cx('p-5 sm:p-6 w-full flex flex-col justify-start text-left', className)}>
       {body}
     </Card>
   );

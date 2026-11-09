@@ -3,6 +3,7 @@ import { Compass, Sparkles, X } from 'lucide-react';
 import type { BuddyMood } from './Buddy';
 import { Buddy3D, type Buddy3DApi, type BuddyAction } from './Buddy3D';
 import { Tour } from './Assistant';
+import { useTuckOnScroll } from './useTuckOnScroll';
 import { AWAITING_CLIENT_CONTRACT, inr, installmentTotal, type ProjectWorkspace } from '../../lib/sigma';
 import { getKolkataDateString } from '../../lib/workingDays';
 
@@ -141,6 +142,7 @@ export function ClientAssistant(p: {
   }, [RW, RH]);
   const [pos, setPos] = useState(() => ({ x: typeof window === 'undefined' ? 0 : window.innerWidth - 126, y: typeof window === 'undefined' ? 0 : window.innerHeight - 140 }));
   const [away, setAway] = useState(false);
+  useTuckOnScroll(fab, () => view === 'none' && !away);
   useLayoutEffect(() => {
     const f = fab.current; if (!f) return;
     f.style.left = `${pos.x}px`; f.style.top = `${pos.y}px`; f.style.width = `${RW}px`; f.style.height = `${RH}px`;

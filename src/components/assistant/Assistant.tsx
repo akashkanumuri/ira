@@ -4,6 +4,7 @@ import type { AuthUser } from '../../contexts/AuthContext';
 import type { AttendanceRecord, Employee, Holiday, LeaveLedger, LeaveRequest, PayrollPeriod, PayrollRecord, Task, WfhRequest } from '../../types/attendance';
 import { Buddy, type BuddyMood } from './Buddy';
 import { Buddy3D, type Buddy3DApi, type BuddyAction } from './Buddy3D';
+import { useTuckOnScroll } from './useTuckOnScroll';
 import { IDLE_STUNTS, createStage, type Stage, type StuntName } from './stunts';
 import { PAGE_HELP, canAutoShow, computeNudges, loadMemory, saveMemory, type BuddyLevel, type BuddyMemory, type Nudge } from '../../lib/assistant';
 import { useWork } from '../work/WorkTracker';
@@ -284,6 +285,7 @@ export function Assistant(p: AssistantProps) {
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
   }, [away, homePos]);
+  useTuckOnScroll(fab, () => view === 'none' && !away && !stage.current?.busy());
   const nextTo = (r: DOMRect) => ({ x: Math.min(window.innerWidth - RW - 8, r.right + 6), y: Math.max(8, Math.min(window.innerHeight - RH - 8, r.top + r.height / 2 - RH * .55)) });
 
   // the stunt stage (screen-wide flights, props, effects, drag and throw)

@@ -1,7 +1,7 @@
 import { TeamReviewMetrics } from './ReviewMetrics';
 import { TeamPunctuality } from './Punctuality';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Award, CalendarRange, CheckCircle2, Lock, Play, Plus, Target, Trash2, TrendingUp } from 'lucide-react';
+import { Award, CalendarRange, CheckCircle2, Clock3, Lock, Play, Plus, Target, Trash2, TrendingUp } from 'lucide-react';
 import type { Designation, Employee } from '../../types/attendance';
 import { CYCLE_STATUS, PERIOD_LABEL, REVIEW_STATUS, perfApi, ratingFor, scoreTone, weighted, type Cycle, type Kra, type PerformanceSettings, type PeriodType, type PromotionCandidate, type Review } from '../../lib/performance';
 import { dateLabel } from '../../lib/v2';
@@ -127,9 +127,9 @@ function Cycles({ employees, designations }: { employees: Employee[]; designatio
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
               <Stat index={0} icon={<Target className="w-5 h-5" />} label={cycle.status === 'draft' ? 'KRAs ready' : 'In this cycle'} value={cycle.status === 'draft' ? ready : reviews.length} caption={cycle.status === 'draft' ? 'Weightage adds to 100%' : 'People being reviewed'} />
-              <Stat index={1} tone="amber" label="Self-review" value={reviews.filter((r) => r.status === 'self_review').length} caption="Waiting for employee" />
-              <Stat index={2} tone="brand" label="Manager review" value={reviews.filter((r) => r.status === 'manager_review').length} caption="Waiting for manager / HR" />
-              <Stat index={3} tone="mint" label="Finalized" value={finalized.length} caption={avg != null ? `Average ${avg.toFixed(1)}%` : 'No scores yet'} />
+              <Stat index={1} icon={<Clock3 className="w-5 h-5" />} tone="amber" label="Self-review" value={reviews.filter((r) => r.status === 'self_review').length} caption="Waiting for employee" />
+              <Stat index={2} icon={<TrendingUp className="w-5 h-5" />} tone="brand" label="Manager review" value={reviews.filter((r) => r.status === 'manager_review').length} caption="Waiting for manager / HR" />
+              <Stat index={3} icon={<CheckCircle2 className="w-5 h-5" />} tone="mint" label="Finalized" value={finalized.length} caption={avg != null ? `Average ${avg.toFixed(1)}%` : 'No scores yet'} />
             </div>
           </Card>
 

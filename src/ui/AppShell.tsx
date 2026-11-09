@@ -198,7 +198,7 @@ export function AppShell({
             </div>
           </header>
           {banner && <div className="px-4 sm:px-6 lg:px-8 pb-2">{banner}</div>}
-          <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-1 pb-32 lg:pb-12">{children}</main>
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-1 pb-56 lg:pb-40">{children}</main>
         </div>
       </div>
 
@@ -215,10 +215,10 @@ export function AppShell({
                 onClick={() => go(item.id)}
                 aria-label={item.label}
                 aria-current={on ? 'page' : undefined}
-                className={cx('relative flex-1 h-12 rounded-full inline-flex items-center justify-center gap-2 transition-colors duration-200', on ? 'bg-white text-ink-950' : 'text-white/70 hover:text-white')}
+                className={cx('relative min-w-0 h-12 rounded-full inline-flex items-center justify-center gap-2 transition-[flex-grow,background-color,color] duration-200', on ? 'flex-[2.2] px-4 bg-white text-ink-950' : 'flex-1 text-white/70 hover:text-white')}
               >
-                <Icon className="w-5 h-5" />
-                {on && <span className="text-xs font-bold truncate max-w-[80px]">{item.label.split(' ')[0]}</span>}
+                <Icon className="w-5 h-5 shrink-0" />
+                {on && <span className="min-w-0 text-xs font-bold truncate">{item.label.split(' ')[0]}</span>}
                 {!on && item.badge ? <span className="absolute top-2.5 right-[30%] w-2 h-2 rounded-full bg-rose-400" /> : null}
               </button>
             );
@@ -228,10 +228,10 @@ export function AppShell({
             onClick={() => setSheetOpen(true)}
             aria-label="More"
             aria-expanded={sheetOpen}
-            className={cx('relative flex-1 h-12 rounded-full inline-flex items-center justify-center gap-2 transition-colors', moreActive ? 'bg-white text-ink-950' : 'text-white/70 hover:text-white')}
+            className={cx('relative min-w-0 h-12 rounded-full inline-flex items-center justify-center gap-2 transition-[flex-grow,background-color,color] duration-200', moreActive ? 'flex-[2.2] px-4 bg-white text-ink-950' : 'flex-1 text-white/70 hover:text-white')}
           >
-            <MoreHorizontal className="w-5 h-5" />
-            {moreActive && <span className="text-xs font-bold">More</span>}
+            <MoreHorizontal className="w-5 h-5 shrink-0" />
+            {moreActive && <span className="min-w-0 text-xs font-bold truncate">More</span>}
             {!moreActive && moreBadge > 0 && <span className="absolute top-2.5 right-[30%] w-2 h-2 rounded-full bg-rose-400" />}
           </button>
         </div>

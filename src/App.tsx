@@ -79,7 +79,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History, UserX, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy
+  FolderKanban, BadgeIndianRupee, History, UserX, Ban, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -873,8 +873,8 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
       <PageHeader title="Payroll" subtitle="Your finalized monthly pay and any leave deductions." />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat index={0} icon={<WalletCards className="w-5 h-5" />} tone="brand" label="Latest pay" value={latest ? money(latest.finalPay) : '—'} caption={latest ? monthName(latest) : 'No finalized payslip yet'} />
-        <Stat index={1} label={`Paid in ${year}`} value={ytd ? money(ytd) : '—'} caption={`${finalized.filter((r) => monthOf(r).startsWith(year)).length} payslip(s) this year`} />
-        <Stat index={2} label="Monthly salary" value={money(user.currentSalary)} caption="Current base salary" />
+        <Stat index={1} icon={<CalendarDays className="w-5 h-5" />} tone="mint" label={`Paid in ${year}`} value={ytd ? money(ytd) : '—'} caption={`${finalized.filter((r) => monthOf(r).startsWith(year)).length} payslip(s) this year`} />
+        <Stat index={2} icon={<BadgeIndianRupee className="w-5 h-5" />} tone="amber" label="Monthly salary" value={money(user.currentSalary)} caption="Current base salary" />
       </div>
       {finalized.length === 0 ? (
         <div className="card"><EmptyState icon={<WalletCards className="w-6 h-6" />} title="No finalized payroll yet" text="Payslips appear here once payroll for a month is finalized." /></div>
@@ -996,9 +996,9 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
     {message && <UiNotice tone="rose">{message}</UiNotice>}
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
       <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="To do" value={mineOpen.length} caption={mineOpen[0] ? `Next due ${dateLabel(mineOpen[0].dueDate)}` : 'Nothing open'} onClick={() => setView('open')} />
-      <Stat index={1} label="Due this week" value={dueThisWeek} caption="Next 7 days" onClick={() => setView('open')} />
-      <Stat index={2} label="Overdue" value={overdueCount} tone={overdueCount ? 'rose' : 'brand'} caption={overdueCount ? 'Past their due date' : 'All on time'} onClick={() => setView('open')} />
-      <Stat index={3} label={given.length ? 'Waiting for your review' : 'In review'} value={given.length ? toReview : mineReview.length} caption={given.length ? 'Handed in by your team' : 'Handed in, awaiting approval'} onClick={() => setView(given.length ? 'given' : 'review')} />
+      <Stat index={1} icon={<Clock3 className="w-5 h-5" />} tone="amber" label="Due this week" value={dueThisWeek} caption="Next 7 days" onClick={() => setView('open')} />
+      <Stat index={2} icon={<CircleAlert className="w-5 h-5" />} label="Overdue" value={overdueCount} tone={overdueCount ? 'rose' : 'brand'} caption={overdueCount ? 'Past their due date' : 'All on time'} onClick={() => setView('open')} />
+      <Stat index={3} icon={<ClipboardCheck className="w-5 h-5" />} tone="sky" label={given.length ? 'Waiting for your review' : 'In review'} value={given.length ? toReview : mineReview.length} caption={given.length ? 'Handed in by your team' : 'Handed in, awaiting approval'} onClick={() => setView(given.length ? 'given' : 'review')} />
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <PillTabs value={view} onChange={setView} items={[
@@ -1087,9 +1087,9 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
     {message && <UiNotice tone="rose">{message}</UiNotice>}
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
       <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="Open" value={openCount} caption={`${activeEmployees.length} active people`} onClick={() => setStatus('open')} />
-      <Stat index={1} label="To review" value={reviewCount} tone={reviewCount ? 'amber' : 'brand'} caption="Handed in, waiting for approval" onClick={() => setStatus('awaiting_review')} />
-      <Stat index={2} label="Blocked" value={blockedCount} tone={blockedCount ? 'rose' : 'brand'} caption="Can’t continue without help" onClick={() => setStatus('blocked')} />
-      <Stat index={3} label="Overdue" value={overdueAll} tone={overdueAll ? 'rose' : 'brand'} caption={overdueAll ? 'Past due, not handed in' : 'All on time'} onClick={() => setStatus('overdue')} />
+      <Stat index={1} icon={<ClipboardCheck className="w-5 h-5" />} label="To review" value={reviewCount} tone={reviewCount ? 'amber' : 'brand'} caption="Handed in, waiting for approval" onClick={() => setStatus('awaiting_review')} />
+      <Stat index={2} icon={<Ban className="w-5 h-5" />} label="Blocked" value={blockedCount} tone={blockedCount ? 'rose' : 'brand'} caption="Can’t continue without help" onClick={() => setStatus('blocked')} />
+      <Stat index={3} icon={<CircleAlert className="w-5 h-5" />} label="Overdue" value={overdueAll} tone={overdueAll ? 'rose' : 'brand'} caption={overdueAll ? 'Past due, not handed in' : 'All on time'} onClick={() => setStatus('overdue')} />
     </div>
     <div className="card p-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
       <FilterInput label="Search"><SearchInput value={search} onChange={setSearch} placeholder="Task or person" /></FilterInput>
@@ -1414,9 +1414,9 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
     >
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Stat index={0} icon={<Users className="w-5 h-5" />} tone="brand" label="Active" value={activeCount} caption={`${all.length} accounts in total`} />
-        <Stat index={1} label="Inactive" value={all.length - activeCount} caption="Sign-in disabled, history kept" />
-        <Stat index={2} label="Remote" value={remoteCount} caption="Check in as WFH automatically" />
-        <Stat index={3} label="Departments" value={deptCount} caption="With active people" />
+        <Stat index={1} icon={<UserX className="w-5 h-5" />} tone="ink" label="Inactive" value={all.length - activeCount} caption="Sign-in disabled, history kept" />
+        <Stat index={2} icon={<Home className="w-5 h-5" />} tone="sky" label="Remote" value={remoteCount} caption="Check in as WFH automatically" />
+        <Stat index={3} icon={<Building2 className="w-5 h-5" />} tone="amber" label="Departments" value={deptCount} caption="With active people" />
       </div>
       <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
         <PillTabs value={status} onChange={setStatus} items={[{ id: 'all', label: 'Everyone', count: all.length }, { id: 'active', label: 'Active', count: activeCount }, { id: 'inactive', label: 'Inactive', count: all.length - activeCount }]} />
@@ -1645,7 +1645,7 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, holidays, onRef
         <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-ink-100" aria-hidden>
           {strip.map((x) => { const n = count(x.k); return n ? <span key={x.k} className={`${x.tone} h-full transition-[width] duration-700`} style={{ width: `${(n / Math.max(base.length, 1)) * 100}%` }} /> : null; })}
         </div>
-        <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="mt-4 grid grid-cols-3 sm:grid-cols-5 gap-2">
           {strip.map((x) => (
             <button key={x.k} type="button" onClick={() => setFilter(filter === x.k ? 'all' : x.k)} className={`rounded-2xl px-3.5 py-3 text-left transition-colors ${filter === x.k ? 'bg-ink-950 text-white' : 'inset-tile hover:bg-ink-100'}`}>
               <span className="flex items-center gap-2 text-[12px] font-semibold opacity-80"><span className={`w-2 h-2 rounded-full ${x.tone}`} />{x.label}</span>
@@ -1928,6 +1928,13 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
       actions={<input type="month" value={month} onChange={e => { setMonth(e.target.value); setMessage('') }} className="input !w-auto !rounded-full !min-h-[42px]" aria-label="Payroll month" />}
     >
       <section className="card rise p-5 sm:p-6">
+        {period?.status === 'draft' && (draftStale || monthOpen) && (
+          <p className="mb-5 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-[13px] text-amber-900">
+            {draftStale ? <>These figures were calculated on <b>{draftDateLabel}</b> — attendance, leave and late marks since then aren’t included. Press <b>Regenerate draft</b> before finalizing.</> : null}
+            {draftStale && monthOpen ? ' ' : null}
+            {monthOpen ? <>{monthName} isn’t over yet; finalize after the month ends so every day is counted.</> : null}
+          </p>
+        )}
         <div className="flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8">
           <div className="min-w-0">
             <p className="eyebrow">{monthName}</p>
@@ -1948,21 +1955,14 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
             {period && period.status === 'draft' && <button disabled={busy || !records.length} onClick={() => void finalize()} className="btn-primary">{busy ? 'Working…' : 'Finalize'}</button>}
           </div>
         </div>
-        {period?.status === 'draft' && (draftStale || monthOpen) && (
-          <p className="mt-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-[13px] text-amber-900">
-            {draftStale ? <>These figures were calculated on <b>{draftDateLabel}</b> — attendance, leave and late marks since then aren’t included. Press <b>Regenerate draft</b> before finalizing.</> : null}
-            {draftStale && monthOpen ? ' ' : null}
-            {monthOpen ? <>{monthName} isn’t over yet; finalize after the month ends so every day is counted.</> : null}
-          </p>
-        )}
         {message && <p className="text-[13px] mt-4 text-ink-600">{message}</p>}
       </section>
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Stat index={1} icon={<WalletCards className="w-5 h-5" />} tone="brand" label="Total payout" value={records.length ? money(totalPay) : '—'} caption={`${records.length} employee${records.length === 1 ? '' : 's'}`} />
-        <Stat index={2} label="Deductions" value={records.length ? money(totalDeduction) : '—'} caption={`${unpaidDays} unpaid leave · ${absentDays} absent · ${lateDaysTotal} late day${lateDaysTotal === 1 ? '' : 's'}`} />
-        <Stat index={3} label="Paid leave used" value={records.reduce((sum, r) => sum + Number(r.paidLeaveDays || 0), 0)} caption="Days across the team" />
-        <Stat index={4} label="Status" value={period ? (period.status === 'draft' ? 'Draft' : 'Locked') : '—'} caption={period?.finalizedAt ? `Finalized ${new Date(period.finalizedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })}` : 'Not finalized'} />
+        <Stat index={2} icon={<CircleAlert className="w-5 h-5" />} tone="rose" label="Deductions" value={records.length ? money(totalDeduction) : '—'} caption={`${unpaidDays} unpaid leave · ${absentDays} absent · ${lateDaysTotal} late day${lateDaysTotal === 1 ? '' : 's'}`} />
+        <Stat index={3} icon={<CalendarDays className="w-5 h-5" />} tone="mint" label="Paid leave used" value={records.reduce((sum, r) => sum + Number(r.paidLeaveDays || 0), 0)} caption="Days across the team" />
+        <Stat index={4} icon={<LockKeyhole className="w-5 h-5" />} tone="ink" label="Status" value={period ? (period.status === 'draft' ? 'Draft' : 'Locked') : '—'} caption={period?.finalizedAt ? `Finalized ${new Date(period.finalizedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })}` : 'Not finalized'} />
       </div>
 
       <section className="card overflow-hidden">

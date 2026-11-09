@@ -33,6 +33,10 @@
 
 /* stunts: the script drives the position frame by frame, and clicks pass through while it performs */
 .buddy-fab.buddy-driving { transition: none !important; }
+/* resting helper tucks into its corner while the page scrolls, so it doesn't sit on the content */
+.buddy-fab > button { transform-origin: 85% 100%; transition: transform .25s ease, opacity .25s ease; }
+.buddy-fab.buddy-tucked > button { transform: scale(.6); opacity: .35; }
+.buddy-fab.buddy-tucked > button:hover { transform: none; opacity: 1; }
 .buddy-fab[data-stunt] { pointer-events: none; }
 .buddy-fab[data-stunt] * { pointer-events: none !important; }
 .buddy-fx { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 59; }

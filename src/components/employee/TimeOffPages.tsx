@@ -173,9 +173,9 @@ export function LeavePage({ user, leaveRequests, ledgers, employees = [], onRefr
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Stat index={0} icon={<CalendarDays className="w-5 h-5" />} tone="brand" label="Available" value={current ? Number(current.closingBalance) : '—'} format={(n) => (Number.isInteger(n) ? String(n) : n.toFixed(1))} caption="Paid days you can take" />
-        <Stat index={1} label="Carried forward" value={current ? Number(current.openingBalance) : '—'} format={(n) => n.toFixed(1)} caption="From previous months" />
-        <Stat index={2} label="Added this month" value={current ? Number(current.accrual) : 1.5} format={(n) => n.toFixed(1)} caption="Monthly accrual" />
-        <Stat index={3} label="Used this month" value={current ? Number(current.paidUsed) + Number(current.unpaidUsed) : 0} format={(n) => n.toFixed(1)} caption={current ? `${current.paidUsed} paid · ${current.unpaidUsed} unpaid` : '—'} />
+        <Stat index={1} icon={<Undo2 className="w-5 h-5" />} tone="sky" label="Carried forward" value={current ? Number(current.openingBalance) : '—'} format={(n) => n.toFixed(1)} caption="From previous months" />
+        <Stat index={2} icon={<CalendarPlus className="w-5 h-5" />} tone="mint" label="Added this month" value={current ? Number(current.accrual) : 1.5} format={(n) => n.toFixed(1)} caption="Monthly accrual" />
+        <Stat index={3} icon={<CalendarDays className="w-5 h-5" />} tone="amber" label="Used this month" value={current ? Number(current.paidUsed) + Number(current.unpaidUsed) : 0} format={(n) => n.toFixed(1)} caption={current ? `${current.paidUsed} paid · ${current.unpaidUsed} unpaid` : '—'} />
       </div>
 
       {upcoming && (
@@ -378,8 +378,8 @@ export function WfhPage({ user, wfhRequests, onRefresh }: { user: AuthUser; wfhR
         <>
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
             <Stat index={0} icon={<Home className="w-5 h-5" />} tone="mint" label="Upcoming WFH days" value={upcomingApproved.length} caption={upcomingApproved[0] ? `Next: ${dateLabel(upcomingApproved[0].date, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'None approved ahead'} />
-            <Stat index={1} label="Waiting for approval" value={pending} caption={pending ? 'Your manager will review these' : 'Nothing pending'} />
-            <Stat index={2} label="Approved this month" value={thisMonth} caption="Days at home this month" />
+            <Stat index={1} icon={<Clock3 className="w-5 h-5" />} tone="amber" label="Waiting for approval" value={pending} caption={pending ? 'Your manager will review these' : 'Nothing pending'} />
+            <Stat index={2} icon={<CalendarDays className="w-5 h-5" />} tone="brand" label="Approved this month" value={thisMonth} caption="Days at home this month" />
           </div>
 
           <Card className="overflow-hidden">
