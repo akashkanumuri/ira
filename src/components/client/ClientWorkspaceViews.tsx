@@ -303,7 +303,7 @@ export function ClientDashboard({ user, project, ws, go }: ViewProps) {
         <UiStat index={3} icon={<History className="w-5 h-5" />} tone={overdueDeliv ? 'rose' : 'ink'} label="Running late" value={overdueDeliv} caption="Past planned due date" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr] items-stretch">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr] items-stretch">
         <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 4 }}>
           <div className="flex items-start justify-between gap-3">
             <div><h2 className="font-display font-bold text-[17px] text-ink-900">Project progress</h2><p className="text-[13px] text-ink-500">How far along your deliverables are.</p></div>
@@ -369,7 +369,7 @@ export function ClientDashboard({ user, project, ws, go }: ViewProps) {
         )}
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2 items-start">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 items-start">
         <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 7 }}>
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="flex items-center gap-3"><span className="w-10 h-10 rounded-full bg-brand-50 text-brand-600 grid place-items-center"><FileSignature size={17} /></span><div><h2 className="font-display font-bold text-[17px] text-ink-900">Contract</h2><p className="text-[12px] text-ink-500">{contract ? `${contract.ref} · v${contract.current_version_no}` : 'Not issued yet'}</p></div></div>
@@ -501,7 +501,7 @@ export function ClientContracts({ user, project, ws, reload, go }: ViewProps) {
     <>
       <PageHeader title="Sign Contract" desc="Open and read the contract, then accept or decline. The exact version, time and your account are permanently recorded." />
 
-      <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
         <div className="space-y-5">
           <Card>
             <div className="flex items-start justify-between gap-3 mb-5">

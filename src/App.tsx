@@ -642,7 +642,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
           { id: 'admin-finance', label: 'Finance', icon: BadgeIndianRupee },
           { id: 'admin-support', label: 'Client support', icon: LifeBuoy },
-          { id: 'admin-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness, badge: tasks.filter(t => !t.archivedAt && t.status === 'awaiting_review').length },
+          { id: 'admin-tasks', label: 'Work & tasks', icon: BriefcaseBusiness, badge: tasks.filter(t => !t.archivedAt && t.status === 'awaiting_review').length },
         ]
       },
       {
@@ -669,7 +669,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       { items: [{ id: 'emp-dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
       {
         label: 'My work', items: [
-          { id: 'emp-tasks', label: 'Work & Assignments', icon: BriefcaseBusiness, badge: employeeOpenTasksCount },
+          { id: 'emp-tasks', label: 'Work & tasks', icon: BriefcaseBusiness, badge: employeeOpenTasksCount },
           { id: 'emp-client-work', label: 'Client Projects', icon: FolderKanban },
         ]
       },
@@ -871,7 +871,7 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
   return (
     <Page>
       <PageHeader title="Payroll" subtitle="Your finalized monthly pay and any leave deductions." />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat index={0} icon={<WalletCards className="w-5 h-5" />} tone="brand" label="Latest pay" value={latest ? money(latest.finalPay) : '—'} caption={latest ? monthName(latest) : 'No finalized payslip yet'} />
         <Stat index={1} label={`Paid in ${year}`} value={ytd ? money(ytd) : '—'} caption={`${finalized.filter((r) => monthOf(r).startsWith(year)).length} payslip(s) this year`} />
         <Stat index={2} label="Monthly salary" value={money(user.currentSalary)} caption="Current base salary" />
@@ -879,7 +879,7 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
       {finalized.length === 0 ? (
         <div className="card"><EmptyState icon={<WalletCards className="w-6 h-6" />} title="No finalized payroll yet" text="Payslips appear here once payroll for a month is finalized." /></div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {finalized.map((r, i) => (
             <section key={r.id} className="card rise p-5 sm:p-6" style={{ ['--i' as any]: i }}>
               <div className="flex items-start justify-between gap-3">
@@ -1144,7 +1144,7 @@ function TaskAssignForm({
   const hasNoTargets = targets.length === 0;
 
   return (
-    <form onSubmit={onSubmit} className="grid md:grid-cols-2 gap-4">
+    <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {hasNoTargets && (
         <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 flex items-start gap-3">
           <div className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0 mt-0.5">
@@ -1423,16 +1423,15 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
         <SearchInput value={search} onChange={setSearch} placeholder="Search name, ID or login" className="w-full md:w-72" />
       </div>
       <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
-        <thead><tr><Th>Employee</Th><Th>Login ID</Th><Th>Role</Th><Th>Work mode</Th><Th>Salary</Th><Th>Signed in on</Th><Th>Status</Th><Th> </Th></tr></thead>
+        <thead><tr><Th>Employee</Th><Th>Role</Th><Th>Work mode</Th><Th>Salary</Th><Th>Signed in on</Th><Th>Status</Th><Th> </Th></tr></thead>
         <tbody>{filtered.map(e => (
           <tr key={e.id}>
             <td>
               <div className="flex items-center gap-3">
                 <Avatar name={e.name} src={e.avatar || null} size={36} />
-                <div className="min-w-0"><p className="font-bold text-ink-900 truncate">{e.name}</p><p className="text-[11px] text-ink-400 truncate">{e.empId}{e.manager ? ` · reports to ${e.manager}` : ''}</p></div>
+                <div className="min-w-0"><p className="font-bold text-ink-900 truncate">{e.name}</p><p className="text-[11px] text-ink-400 truncate">{e.empId} · login <span className="font-mono">{e.loginId}</span>{e.manager ? ` · reports to ${e.manager}` : ''}</p></div>
               </div>
             </td>
-            <Td mono>{e.loginId}</Td>
             <td><p className="text-ink-800 font-semibold">{e.designation || '—'}</p><p className="text-[11px] text-ink-400">{e.department || '—'}</p></td>
             <Td>{rulesMap?.get(e.id) ? rulesBadge(rulesMap.get(e.id)!) : e.workMode === 'remote' ? 'Remote' : 'Office'}</Td>
             <Td mono>{money(e.currentSalary)}</Td>
@@ -1591,16 +1590,16 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
     {success && <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><div className="flex items-center gap-2 text-emerald-800 font-bold text-sm"><CheckCircle2 className="w-4 h-4" />Employee account ready</div><p className="text-xs text-emerald-700 mt-2">Login ID: <b>{success.loginId}</b>{success.password && <> · Temporary password: <b>{success.password}</b></>}</p>{mode === 'create' && <p className="text-[11px] text-emerald-700 mt-2">Share the setup link with them privately. If it expires, use “Password reset link” on their profile.</p>}</div>}
     {error && <Notice type="error" text={error} />}
     <form onSubmit={save} className="space-y-6">
-      <FormSection title="Personal details" icon={<UserRound className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-4"><Field label="Full name"><input value={form.name} onChange={e => set('name', e.target.value)} className="input" required /></Field><Field label="Work email"><input type="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} className="input" /></Field><Field label="Phone"><input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" /></Field><Field label="Join date"><input type="date" value={form.joinDate} onChange={e => set('joinDate', e.target.value)} className="input" required /></Field></div></FormSection>
-      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-4"><Field label="Designation"><select disabled={refsLoading || !liveDesignations.length} value={form.designationName} onChange={e => { const name = e.target.value; const d = liveDesignations.find(x => x.name === name); setForm(f => ({ ...f, designationName: name, designationId: d?.id ?? '' })) }} className="input" required><option value="">Select designation</option>{liveDesignations.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Department"><select disabled={refsLoading} value={form.departmentName} onChange={e => { const name = e.target.value; const d = liveDepartments.find(x => x.name === name); setForm(f => ({ ...f, departmentName: name, departmentId: d?.id ?? '' })) }} className="input"><option value="">No department</option>{liveDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e => set('managerId', e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e: Employee) => e.status === 'active' && e.id !== employee?.id).map((e: Employee) => <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field>{rulesReady === false && <><Field label="Work mode"><select value={form.workMode} onChange={e => set('workMode', e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e => set('shiftStart', e.target.value)} className="input" required /></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e => set('shiftEnd', e.target.value)} className="input" required /></Field></>}{rulesReady === false && <Field label="Monthly salary"><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e => set('monthlySalary', e.target.value)} className="input" required /></Field>}</div></FormSection>
+      <FormSection title="Personal details" icon={<UserRound className="w-4 h-4" />}><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Full name"><input value={form.name} onChange={e => set('name', e.target.value)} className="input" required /></Field><Field label="Work email"><input type="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} className="input" /></Field><Field label="Phone"><input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" /></Field><Field label="Join date"><input type="date" value={form.joinDate} onChange={e => set('joinDate', e.target.value)} className="input" required /></Field></div></FormSection>
+      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4" />}><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Designation"><select disabled={refsLoading || !liveDesignations.length} value={form.designationName} onChange={e => { const name = e.target.value; const d = liveDesignations.find(x => x.name === name); setForm(f => ({ ...f, designationName: name, designationId: d?.id ?? '' })) }} className="input" required><option value="">Select designation</option>{liveDesignations.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Department"><select disabled={refsLoading} value={form.departmentName} onChange={e => { const name = e.target.value; const d = liveDepartments.find(x => x.name === name); setForm(f => ({ ...f, departmentName: name, departmentId: d?.id ?? '' })) }} className="input"><option value="">No department</option>{liveDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e => set('managerId', e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e: Employee) => e.status === 'active' && e.id !== employee?.id).map((e: Employee) => <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field>{rulesReady === false && <><Field label="Work mode"><select value={form.workMode} onChange={e => set('workMode', e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e => set('shiftStart', e.target.value)} className="input" required /></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e => set('shiftEnd', e.target.value)} className="input" required /></Field></>}{rulesReady === false && <Field label="Monthly salary"><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e => set('monthlySalary', e.target.value)} className="input" required /></Field>}</div></FormSection>
       {rulesReady && <FormSection title="How they work" icon={<Clock3 className="w-4 h-4" />}>
         {scheduledRules && <p className="mb-3 text-[12.5px] text-amber-800 bg-amber-50 rounded-xl px-3 py-2">A change is already scheduled from {dateLabel(scheduledRules.effective_from)}. Saving here sets the rules from the date below.</p>}
         <WorkRulesEditor value={rules} onChange={setRules} salary={form.monthlySalary} onSalary={v => set('monthlySalary', v)} effectiveFrom={rulesFrom} onEffectiveFrom={mode === 'edit' ? setRulesFrom : undefined} minEffective={today()} templates={templates} onTemplatesChanged={loadTemplates} projects={projectsLite} />
       </FormSection>}
       {rulesReady === null && <div className="rounded-2xl bg-ink-50 h-24 animate-pulse" />}
-      {mode === 'create' && <FormSection title="Login" icon={<KeyRound className="w-4 h-4" />}><div className="grid md:grid-cols-3 gap-4"><Field label="Login ID"><input value={form.loginId} onChange={e => set('loginId', e.target.value)} className="input" autoComplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,31}" title="3–32 characters: letters, numbers, dot, underscore or hyphen" /></Field><div className="md:col-span-2 flex items-end"><p className="text-[12.5px] text-ink-600 pb-2.5">You don’t set a password. After saving you get a one-time setup link to share with the employee; they choose their own password, so nobody else ever knows it.</p></div></div></FormSection>}
-      {mode === 'create' && <FormSection title="HR onboarding documents" icon={<Upload className="w-4 h-4" />}><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold text-slate-700">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
-      {mode === 'edit' && <FormSection title="HR documents" icon={<FileText className="w-4 h-4" />}><div className="space-y-2">{employeeDocs.map(d => <button type="button" key={d.id} onClick={() => void viewDoc(d)} className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-left"><span><span className="block text-xs font-bold">{d.documentType}</span><span className="block text-[10px] text-slate-500">{d.fileName}</span></span><Eye className="w-4 h-4 text-slate-400" /></button>)}{!employeeDocs.length && <p className="text-xs text-slate-500">No documents uploaded yet.</p>}</div><div className="grid md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
+      {mode === 'create' && <FormSection title="Login" icon={<KeyRound className="w-4 h-4" />}><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><Field label="Login ID"><input value={form.loginId} onChange={e => set('loginId', e.target.value)} className="input" autoComplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,31}" title="3–32 characters: letters, numbers, dot, underscore or hyphen" /></Field><div className="md:col-span-2 flex items-end"><p className="text-[12.5px] text-ink-600 pb-2.5">You don’t set a password. After saving you get a one-time setup link to share with the employee; they choose their own password, so nobody else ever knows it.</p></div></div></FormSection>}
+      {mode === 'create' && <FormSection title="HR onboarding documents" icon={<Upload className="w-4 h-4" />}><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold text-slate-700">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
+      {mode === 'edit' && <FormSection title="HR documents" icon={<FileText className="w-4 h-4" />}><div className="space-y-2">{employeeDocs.map(d => <button type="button" key={d.id} onClick={() => void viewDoc(d)} className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-left"><span><span className="block text-xs font-bold">{d.documentType}</span><span className="block text-[10px] text-slate-500">{d.fileName}</span></span><Eye className="w-4 h-4 text-slate-400" /></button>)}{!employeeDocs.length && <p className="text-xs text-slate-500">No documents uploaded yet.</p>}</div><div className="grid grid-cols-1 md:grid-cols-2 gap-3">{docs.map((d, i) => <div key={d.type} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold">{d.type}</p><input type="file" onChange={e => setDocs(prev => prev.map((x, idx) => idx === i ? { ...x, file: e.target.files?.[0] ?? null } : x))} className="mt-2 block w-full text-[11px]" /></div>)}</div></FormSection>}
       <div className="flex flex-col sm:flex-row justify-between gap-2 pt-2">{mode === 'edit' ? <span className="flex flex-wrap gap-2"><button type="button" onClick={() => void resetPassword()} disabled={resetBusy || employee?.status !== 'active'} title={employee?.status !== 'active' ? 'Activate the employee first' : undefined} className="btn-secondary"><KeyRound className="w-4 h-4" />{resetBusy ? 'Creating link…' : 'Password reset link'}</button>{employee?.status === 'inactive' && employee.profileId && <button type="button" onClick={() => setErasing(true)} className="btn-ghost text-rose-700"><Trash2 className="w-4 h-4" />Erase personal data</button>}</span> : <span />}<div className="flex justify-end gap-2"><button type="button" disabled={busy || resetBusy} onClick={onClose} className="btn-secondary disabled:opacity-50">Cancel</button><button disabled={busy} className="btn-primary">{busy ? 'Saving…' : mode === 'create' ? 'Create employee' : 'Save changes'}</button></div></div>
     </form>
   </Modal>;
@@ -1625,7 +1624,7 @@ function AttendanceAdmin({ attendance, employees, leaveRequests, holidays, onRef
   const rows = base.filter((r) => (filter === 'all' || r.state === filter) && (!search || `${r.e.name} ${r.e.empId} ${r.e.designation}`.toLowerCase().includes(search.toLowerCase())));
   const isToday = date === today();
   const strip = [
-    { k: 'working', label: isToday ? 'Working now' : 'Still open', tone: 'bg-mint-500' },
+    { k: 'working', label: isToday ? 'Checked in' : 'Still open', tone: 'bg-mint-500' },
     { k: 'break', label: 'On break', tone: 'bg-amber-400' },
     { k: 'done', label: 'Checked out', tone: 'bg-brand-600' },
     { k: 'out', label: cl.isWorkingDay ? 'Not in' : cl.label, tone: 'bg-ink-300' },
@@ -1767,7 +1766,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
       <section className="space-y-3">
         <p className="eyebrow">Waiting for you · {pending.length}</p>
         {pending.length ? (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {pending.map((r: any, i: number) => {
               const bal = tab === 'leave' ? balanceOf(r.employeeId, r.startDate) : null;
               const available = bal ? Math.max(0, Number(bal.openingBalance) + Number(bal.accrual) + Number(bal.adjustment ?? 0) - Number(bal.paidUsed)) : null;
@@ -1889,7 +1888,9 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
 
   async function finalize() {
     if (!period || period.status !== 'draft' || busy) return;
-    if (!(await confirmDialog({ title: 'Finalize payroll?', message: 'Employees will see these amounts as their payslip. The figures are saved as they are now.', confirmLabel: 'Finalize payroll' }))) return;
+    const early = monthOpen ? ` ${monthName} isn’t over yet: days after today won’t be counted and can’t be added later.` : '';
+    const stale = draftStale ? ` These figures were calculated on ${draftDateLabel}; regenerate first to include attendance and leave since then.` : '';
+    if (!(await confirmDialog({ title: 'Finalize payroll?', message: `Employees will see these amounts as their payslip. The figures are saved as they are now.${stale}${early}`, confirmLabel: 'Finalize payroll', danger: monthOpen || draftStale }))) return;
     setBusy(true); setMessage('');
     try {
       const { error } = await (supabase as any).rpc('finalize_payroll', { p_period_id: period.id });
@@ -1909,6 +1910,11 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
   const unpaidDays = records.reduce((sum, r) => sum + Number(r.unpaidLeaveDays || 0), 0);
   const absentDays = records.reduce((sum, r) => sum + Number(r.absentDays || 0), 0);
   const step = !period ? 1 : period.status === 'draft' ? 2 : 3;
+  // A draft is a snapshot: warn when it is older than today, or when the month hasn't finished yet.
+  const draftDate = period?.status === 'draft' && period.updatedAt ? getKolkataDateString(new Date(period.updatedAt)) : null;
+  const draftStale = Boolean(draftDate && draftDate < today());
+  const draftDateLabel = draftDate ? new Date(`${draftDate}T12:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
+  const monthOpen = month >= today().slice(0, 7);
   const monthName = new Date(`${month}-01T12:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const steps = [
     { n: 1, title: 'Generate draft', text: 'Snapshot salaries and leave for the month' },
@@ -1942,6 +1948,13 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
             {period && period.status === 'draft' && <button disabled={busy || !records.length} onClick={() => void finalize()} className="btn-primary">{busy ? 'Working…' : 'Finalize'}</button>}
           </div>
         </div>
+        {period?.status === 'draft' && (draftStale || monthOpen) && (
+          <p className="mt-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-[13px] text-amber-900">
+            {draftStale ? <>These figures were calculated on <b>{draftDateLabel}</b> — attendance, leave and late marks since then aren’t included. Press <b>Regenerate draft</b> before finalizing.</> : null}
+            {draftStale && monthOpen ? ' ' : null}
+            {monthOpen ? <>{monthName} isn’t over yet; finalize after the month ends so every day is counted.</> : null}
+          </p>
+        )}
         {message && <p className="text-[13px] mt-4 text-ink-600">{message}</p>}
       </section>
 
@@ -2157,7 +2170,7 @@ function ProfileEmployee({ user, onRefresh }: any) {
           </div>
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-2 items-start">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 items-start">
           <section className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: 1 }}>
             <div className="flex items-center gap-3"><IconChip icon={<UserRound className="w-5 h-5" />} size="sm" /><div><h3 className="font-display font-bold text-[15px] text-ink-900">Personal details</h3><p className="text-[12px] text-ink-500">You can update your name and phone.</p></div></div>
             <div className="grid gap-4 mt-5">
@@ -2180,7 +2193,7 @@ function ProfileEmployee({ user, onRefresh }: any) {
               <div className="flex items-center gap-3"><IconChip icon={<LockKeyhole className="w-5 h-5" />} size="sm" tone="ink" /><div><h3 className="font-display font-bold text-[15px] text-ink-900">Password</h3><p className="text-[12px] text-ink-500">Confirm your current password to change it.</p></div></div>
               <div className="space-y-4 mt-5">
                 <Field label="Current password"><PasswordField value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} autoComplete="current-password" /></Field>
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="New password"><PasswordField value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={12} autoComplete="new-password" /></Field>
                   <Field label="Confirm"><PasswordField value={confirm} onChange={e => setConfirm(e.target.value)} minLength={12} autoComplete="new-password" /></Field>
                 </div>
@@ -2268,7 +2281,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
         {groups.map(g => (
           <section key={g} className="space-y-3">
             <p className="eyebrow">{g}</p>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {specs.filter(s => s.group === g).map((s, i) => {
                 const running = busy === s.id;
                 const done = last[s.id];
@@ -2330,7 +2343,7 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
       {tab === 'patterns' && <section className="anim-fade" key="patterns"><WorkTemplatesSettings /></section>}
 
       {tab === 'rules' && (
-        <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="rules">
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="rules">
           <div className="card p-5 sm:p-6">
             <p className="font-display font-bold text-[15px] text-ink-900">New rule</p>
             <p className="text-[13px] text-ink-500 mt-0.5">Decide which job titles can hand work to which.</p>
@@ -2372,7 +2385,7 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
       )}
 
       {tab === 'designations' && (
-        <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="designations">
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="designations">
           <div className="card p-5 sm:p-6">
             <p className="font-display font-bold text-[15px] text-ink-900">New designation</p>
             <div className="space-y-4 mt-5">
@@ -2400,7 +2413,7 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
       )}
 
       {tab === 'departments' && (
-        <section className="grid gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="departments">
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr] items-start anim-fade" key="departments">
           <div className="card p-5 sm:p-6">
             <p className="font-display font-bold text-[15px] text-ink-900">New department</p>
             <div className="space-y-4 mt-5">

@@ -485,7 +485,7 @@ export function HolidayList({ holidays, renderActions }: { holidays: Holiday[]; 
       {byMonth.map(([month, items], gi) => (
         <section key={month} className="space-y-3">
           <p className="eyebrow">{new Date(`${month}-01T12:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</p>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {items.map((h, i) => {
               const past = h.date < today();
               return (

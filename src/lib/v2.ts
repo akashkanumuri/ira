@@ -349,6 +349,7 @@ export function mapPayrollPeriod(row: any): PayrollPeriod {
     dayDivisor: Number(row.day_divisor),
     status: row.status,
     finalizedAt: row.finalized_at,
+    updatedAt: row.updated_at ?? row.created_at ?? null,
   };
 }
 

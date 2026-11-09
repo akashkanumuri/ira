@@ -84,7 +84,7 @@ export function EmployeeHome(props: Common & {
 
       {showAttendance && <LateMarksCard status={lateStatus} />}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {showLeave && <Stat
           index={1}
           icon={<CalendarDays className="w-5 h-5" />}
@@ -126,7 +126,7 @@ export function EmployeeHome(props: Common & {
         />}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         {showAttendance && <AttendanceMonth {...props} focusDate={focus} />}
         <Card index={5} className="p-5 sm:p-6 flex flex-col">
           <CardHeader
@@ -181,7 +181,7 @@ export function MyAttendancePage(props: Common & { loginSessions: any[]; correct
       />
       <AttendanceToday {...props} />
       <LateMarksCard status={lateStatus} detailed />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <AttendanceMonth {...props} focusDate={focus} />
         <AttendanceRecent attendance={props.attendance} onOpen={(date) => setFocus({ date, at: Date.now() })} />
       </div>

@@ -319,7 +319,7 @@ function LiveBoard({ onOpen }: { onOpen: (id: string, name: string) => void }) {
         <Tile label="Away" value={counts.away} tone={counts.away ? 'rose' : undefined} />
         <Tile label="Not in / out" value={counts.out} />
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {rows.map((r) => {
           const st = liveStatus(r.state, now, r.last_seen_at);
           return (
@@ -487,7 +487,7 @@ function WorkSettingsForm() {
   return (
     <Card className="p-4 sm:p-5 space-y-4">
       <div className="flex items-center gap-2"><Settings2 className="w-4 h-4 text-ink-400" /><h3 className="font-display text-[16px] font-bold text-ink-900">Tracking rules</h3></div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {FIELDS.map((f) => (
           <label key={f.k} className="block">
             <span className="label">{f.label}</span>

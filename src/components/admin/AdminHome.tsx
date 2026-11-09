@@ -221,7 +221,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
       />
 
       {/* Headline numbers */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           index={0}
           icon={<Users className="w-5 h-5" />}
@@ -266,7 +266,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
       </div>
 
       {/* Trend + attention */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card index={4} className="p-5 sm:p-7">
           <CardHeader
             title="Attendance"
@@ -311,7 +311,7 @@ export function AdminHome({ user, employees, attendance, leaveRequests, wfhReque
       </div>
 
       {/* Team table + finance */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card index={6} className="overflow-hidden">
           <div className="p-5 sm:p-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <CardHeader

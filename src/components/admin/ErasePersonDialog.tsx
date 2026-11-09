@@ -42,7 +42,7 @@ export function ErasePersonDialog({ profileId, name, kind, onClose, onDone }: {
         <p>
           This permanently removes <b className="text-ink-900">{name}</b>’s personal data. It can’t be undone.
         </p>
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3">
             <p className="font-semibold text-rose-800 flex items-center gap-1.5"><Trash2 className="w-4 h-4" />Removed</p>
             <ul className="mt-2 space-y-1 text-[12.5px] text-rose-900 list-disc pl-4">

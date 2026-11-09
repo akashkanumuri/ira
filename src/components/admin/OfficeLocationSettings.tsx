@@ -113,7 +113,7 @@ export function OfficeLocationSettings() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
       <div className="card p-5 sm:p-6 space-y-5">
         <div className="flex items-start gap-3">
           <span className="w-10 h-10 rounded-full grid place-items-center bg-brand-50 text-brand-600 shrink-0"><MapPin className="w-5 h-5" /></span>

@@ -208,7 +208,7 @@ export function PaymentDetailsCard() {
   return (
     <Card>
       <CardHead title="How clients pay you" desc="Shown to clients when a payment is due. Leave blank what you don’t use." action={<Landmark size={18} className="text-ink-3" />} />
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Account name"><Input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></Field>
         <Field label="Bank"><Input value={f.bank} onChange={e => setF({ ...f, bank: e.target.value })} /></Field>
         <Field label="Account number"><Input value={f.number} onChange={e => setF({ ...f, number: e.target.value })} inputMode="numeric" /></Field>

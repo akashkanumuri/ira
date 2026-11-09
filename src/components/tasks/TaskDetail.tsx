@@ -306,7 +306,7 @@ export function TaskDetail({
               {startBlockedReason === 'Allow notifications to start.' && <button type="button" className="font-semibold text-brand-700 underline" onClick={() => void work?.requestNotifications()}>Allow notifications</button>}
             </p>
           )}
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <div className="flex justify-between text-[12px] mb-1.5"><span className="font-semibold text-ink-600">Time vs estimate</span><span className="tnum font-bold text-ink-900">{est ? `${fmtMinutes(Math.round(spentMin))} / ${fmtMinutes(est)}` : 'No estimate'}</span></div>
               <Progress value={est ? Math.min(100, spentMin / est * 100) : 0} tone={est && spentMin > est ? 'rose' : 'brand'} />
@@ -410,7 +410,7 @@ export function TaskDetail({
                       <Link2 className="w-4 h-4 shrink-0" /><span className="truncate">{l}</span><ExternalLink className="w-3.5 h-3.5 shrink-0" /></a></li>
                   ))}
                 </ul>
-                <div className="grid sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div className="inset-tile px-3.5 py-2.5"><p className="text-[11px] font-semibold text-ink-500">Key findings</p><p className="text-[13px] text-ink-800 whitespace-pre-wrap mt-0.5">{research.findings}</p></div>
                   <div className="inset-tile px-3.5 py-2.5"><p className="text-[11px] font-semibold text-ink-500">Plan</p><p className="text-[13px] text-ink-800 whitespace-pre-wrap mt-0.5">{research.plan}</p></div>
                 </div>

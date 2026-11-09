@@ -474,7 +474,7 @@ function ContractTab({ ws, projectId, projectName, clientId, reload }: { ws: Pro
           />
         </Card>
       ) : (
-        <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
           <Card>
             <CardHead
               title={`${contract.title} · v${contract.current_version_no}`}
@@ -1321,7 +1321,7 @@ function BillingRules({ clientId }: { clientId: string }) {
   if (err) return <Alert tone="warn" title="Payment lock rules unavailable">{err}</Alert>;
   if (!global) return null;
   return (
-    <div className="grid lg:grid-cols-2 gap-5">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <Card>
         <CardHead title="Organisation-wide payment rules" desc="Applies to every client unless overridden." />
         <div className="space-y-4">

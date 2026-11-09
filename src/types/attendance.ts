@@ -214,6 +214,8 @@ export interface PayrollPeriod {
   dayDivisor: number;
   status: 'draft' | 'finalized';
   finalizedAt?: string | null;
+  /** When the draft figures were last calculated (generate / regenerate). */
+  updatedAt?: string | null;
 }
 
 export interface PayrollRecord {

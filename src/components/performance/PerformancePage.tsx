@@ -74,7 +74,7 @@ export function PerformancePage({ user, employees = [] }: { user: AuthUser; empl
               <div className="flex-1 min-w-0">
                 <p className="eyebrow">Latest review · {cycleOf(latest.cycle_id)?.name}</p>
                 {latest.manager_summary && <p className="text-[14px] text-ink-700 mt-2 leading-relaxed">“{latest.manager_summary}”</p>}
-                <div className="grid sm:grid-cols-2 gap-3 mt-3 text-[13px]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 text-[13px]">
                   {latest.strengths && <div className="inset-tile p-3"><p className="text-[11px] font-bold text-mint-700 uppercase tracking-wide">Strengths</p><p className="text-ink-700 mt-1">{latest.strengths}</p></div>}
                   {latest.improvements && <div className="inset-tile p-3"><p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide">To work on</p><p className="text-ink-700 mt-1">{latest.improvements}</p></div>}
                 </div>
@@ -112,7 +112,7 @@ export function PerformancePage({ user, employees = [] }: { user: AuthUser; empl
       {state === 'ready' && tab === 'team' && (
         <div className="space-y-3">
           {team.length ? (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {team.map((r, i) => {
                 const e = employees.find((x) => x.id === r.employee_id);
                 const c = cycleOf(r.cycle_id);
@@ -220,7 +220,7 @@ function SelfReviewCard({ review, cycle, kras, onChanged }: { review: Review; cy
                 </div>
                 <Badge tone="ink">{Number(k.weightage)}%</Badge>
               </div>
-              <div className="grid gap-3 md:grid-cols-[1fr_260px] mt-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_260px] mt-3">
                 <div className="grid gap-2">
                   <input className="input" placeholder="What you achieved (actual)" value={d?.actual ?? ''} disabled={!editable} onChange={(e) => setDraft((p) => ({ ...p, [k.id]: { ...p[k.id], actual: e.target.value } }))} maxLength={500} />
                   <input className="input" placeholder="Comment (optional)" value={d?.comment ?? ''} disabled={!editable} onChange={(e) => setDraft((p) => ({ ...p, [k.id]: { ...p[k.id], comment: e.target.value } }))} maxLength={2000} />
@@ -306,7 +306,7 @@ function ReviewDialog({ review, cycle, kras, employeeName, asManager, onClose, o
         {canScore ? (
           <div className="space-y-3">
             <label className="block"><span className="label">Summary</span><textarea className="input" value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={4000} /></label>
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block"><span className="label">Strengths</span><textarea className="input" value={strengths} onChange={(e) => setStrengths(e.target.value)} maxLength={2000} /></label>
               <label className="block"><span className="label">To work on</span><textarea className="input" value={improvements} onChange={(e) => setImprovements(e.target.value)} maxLength={2000} /></label>
             </div>

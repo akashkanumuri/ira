@@ -135,7 +135,7 @@ function LeaveTypeDialog({ type, taken, onClose, onSaved }: { type: LeaveType | 
           <label className="block"><span className="label">Document needed over</span><input className="input" inputMode="decimal" value={docAfter} onChange={(e) => setDocAfter(e.target.value)} placeholder="Never" /><span className="text-[11px] text-ink-400">days · 0 = always</span></label>
           <label className="block"><span className="label">Notice (days ahead)</span><input className="input" inputMode="numeric" value={notice} onChange={(e) => setNotice(e.target.value)} /></label>
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {toggle('Paid', 'Uses the paid balance', isPaid, setIsPaid)}
           {toggle('Half days', 'Can be taken as half a day', halfDay, setHalfDay)}
           {toggle('Available', 'Shown to employees', active, setActive)}

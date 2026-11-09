@@ -82,7 +82,7 @@ export function TeamApprovals({ onRefresh }: { onRefresh?: () => Promise<void> }
       {state === 'loading' ? (
         <Card className="p-5 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full rounded-2xl" />)}</Card>
       ) : shown.length ? (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {shown.map((r, i) => (
             <Card key={r.id} index={i} className="p-5">
               <div className="flex items-start gap-3">

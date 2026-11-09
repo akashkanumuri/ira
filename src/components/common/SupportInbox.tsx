@@ -42,7 +42,7 @@ export function SupportInbox({ employees = [] }: { employees?: Employee[]; canAs
       <PageHeader title="Client support" subtitle="Questions and problems raised by clients from their portal." actions={<button type="button" className="btn-secondary" onClick={() => void load()}><RefreshCw className="w-4 h-4" /> Refresh</button>} />
       {state === 'error' && <Notice tone="sky">{error}</Notice>}
       {state !== 'error' && (
-        <div className="grid gap-4 lg:grid-cols-[380px_1fr] items-start">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_1fr] items-start">
           <div className={cx('space-y-3', open && 'hidden lg:block')}>
             <PillTabs value={tab} onChange={setTab} items={[{ id: 'active', label: 'Open', count: active.length || undefined }, { id: 'resolved', label: 'Resolved' }, { id: 'all', label: 'All' }]} />
             <SearchInput value={search} onChange={setSearch} placeholder="Search requests" />

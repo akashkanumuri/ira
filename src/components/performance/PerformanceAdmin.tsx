@@ -98,7 +98,7 @@ function Cycles({ employees, designations }: { employees: Employee[]; designatio
   if (loading) return <Card className="p-5 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-2xl" />)}</Card>;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[300px_1fr] items-start">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr] items-start">
       <div className="space-y-3">
         <Button icon={<Plus className="w-4 h-4" />} className="w-full" onClick={() => setCreating(true)}>New review cycle</Button>
         {cycles.length ? cycles.map((c) => (
@@ -258,7 +258,7 @@ function KraEditor({ cycle, employee, existing, designations, employees, onClose
                 <input className="input !w-24 text-center tnum" inputMode="decimal" placeholder="%" value={r.weightage} onChange={(e) => set(i, { weightage: e.target.value === '' ? '' : Number(e.target.value) })} aria-label="Weightage %" />
                 <button type="button" className="icon-btn text-rose-500" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label="Remove KRA"><Trash2 className="w-4 h-4" /></button>
               </div>
-              <div className="grid sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input className="input" placeholder="Target, e.g. 12 kits" value={r.target} onChange={(e) => set(i, { target: e.target.value })} maxLength={300} />
                 <input className="input" placeholder="How it’s measured" value={r.measurement} onChange={(e) => set(i, { measurement: e.target.value })} maxLength={300} />
               </div>
@@ -355,7 +355,7 @@ function Promotions({ designations }: { designations: Designation[] }) {
 
   if (loading) return <Card className="p-5 space-y-3">{[0, 1].map((i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}</Card>;
   return (
-    <div className="grid gap-4 lg:grid-cols-[340px_1fr] items-start">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr] items-start">
       <Card className="p-5 sm:p-6">
         <CardHeader title="Eligibility rule" subtitle="Who shows up as ready for a promotion conversation" />
         {settings && (

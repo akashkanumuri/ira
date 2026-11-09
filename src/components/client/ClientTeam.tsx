@@ -144,7 +144,7 @@ function InviteDialog({ clientId, mode, onClose, onDone }: { clientId: string; m
       <div className="space-y-4">
         <label className="block"><span className="label">Full name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" /></label>
         <label className="block"><span className="label">Work email</span><input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" /></label>
-        <div className="grid sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {(Object.keys(ROLE) as Member['role'][]).map((r) => (
             <button key={r} type="button" onClick={() => setRole(r)} className={cx('text-left rounded-2xl border px-3.5 py-3', role === r ? 'border-brand-400 bg-brand-50 ring-2 ring-brand-100' : 'border-ink-200 hover:border-ink-300')}>
               <span className="block text-[13px] font-bold text-ink-900">{ROLE[r].label}</span><span className="block text-[11px] text-ink-500 mt-0.5">{ROLE[r].hint}</span>

@@ -45,7 +45,7 @@ export function ClientSupport({ projects }: { projects: Array<{ id: string; name
 
       {state === 'error' && <Notice tone="sky">{error}</Notice>}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px] items-start">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px] items-start">
         <div className="space-y-4">
           {open ? (
             <Card className="p-5 sm:p-6 flex flex-col min-h-[460px]">

@@ -55,7 +55,7 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1.5 sm:grid-cols-[190px_1fr] sm:items-start py-2.5">
+    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[190px_1fr] sm:items-start py-2.5">
       <div className="pt-1">
         <p className="text-[13px] font-semibold text-ink-800">{label}</p>
         {hint && <p className="text-[11.5px] text-ink-400 leading-snug mt-0.5">{hint}</p>}
@@ -179,7 +179,7 @@ export function WorkRulesEditor({ value: r, onChange, effectiveFrom, onEffective
       {/* 1 — type (required) */}
       <div>
         <p className="text-[12px] font-bold uppercase tracking-wide text-ink-500 mb-2">Employee type <span className="text-rose-500">*</span></p>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Employee type">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Employee type">
           {BOARD_TYPES.map((t) => {
             const on = type === t.id;
             const Icon = t.icon;
