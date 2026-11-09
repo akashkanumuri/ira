@@ -60,6 +60,8 @@ export function BarTrend({
                 <span
                   className={cx(
                     'absolute z-10 -translate-y-2 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold transition-opacity duration-150',
+                    // Keep the label inside the chart at the edges (it would push the page sideways on phones).
+                    i === 0 ? 'left-0' : i === data.length - 1 ? 'right-0' : '',
                     isActive ? 'bg-ink-950 text-white opacity-100' : 'opacity-100'
                   )}
                   style={{ bottom: `${Math.max(pct * 100, 8)}%` }}
