@@ -77,9 +77,12 @@ export function getTrustedBaseUrl(): string {
   return `${parsed.protocol}//${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
 
+// The live addresses of the app. Both are served while the custom domain is settling in.
+const LIVE_ORIGINS = ['https://sigma.irahospitality.co.in', 'https://ira-eta-two.vercel.app'];
+
 function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null;
-  if (origin === 'https://ira-eta-two.vercel.app') return origin;
+  if (LIVE_ORIGINS.includes(origin)) return origin;
   if (/^https:\/\/ira-[a-z0-9-]+-satisfyinginventior-1459s-projects\.vercel\.app$/i.test(origin)) return origin;
   if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)) return origin;
   return null;

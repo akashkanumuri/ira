@@ -11,10 +11,12 @@ export const VAPID_PUBLIC_KEY = ((env.VITE_VAPID_PUBLIC_KEY as string | undefine
  * preview link would otherwise be registered twice and show every alert twice, so only the live address
  * (and localhost for development) registers; other addresses clean up any old registration instead.
  */
-export const PUSH_ORIGIN = ((env.VITE_PUSH_ORIGIN as string | undefined) || 'https://ira-eta-two.vercel.app').replace(/\/$/, '');
+const LIVE_ORIGINS = ['https://sigma.irahospitality.co.in', 'https://ira-eta-two.vercel.app'];
+export const PUSH_ORIGIN = ((env.VITE_PUSH_ORIGIN as string | undefined) || LIVE_ORIGINS[0]).replace(/\/$/, '');
 export function isPushOrigin(): boolean {
   if (typeof window === 'undefined') return false;
-  return window.location.origin === PUSH_ORIGIN || window.location.hostname === 'localhost';
+  const here = window.location.origin;
+  return here === PUSH_ORIGIN || LIVE_ORIGINS.includes(here) || window.location.hostname === 'localhost';
 }
 
 /** On a non-live address: drop this browser's push registration so alerts only arrive once. */
