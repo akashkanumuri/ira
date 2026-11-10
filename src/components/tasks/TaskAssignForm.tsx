@@ -1,5 +1,6 @@
 import { CircleAlert, RefreshCw } from 'lucide-react';
-import type { Employee } from '../../types/attendance';
+/** Only what the form actually shows, so a lighter row from another screen fits too. */
+export interface AssignTarget { id: string; name: string; designation?: string | null }
 import type { LinkableDeliverable } from '../../lib/linkableDeliverables';
 import { getKolkataDateString } from '../../lib/workingDays';
 
@@ -21,7 +22,7 @@ export function TaskAssignForm({
   deliverables?: LinkableDeliverable[];
   /** Opened from inside a deliverable: it is shown, not chosen. */
   fixedDeliverable?: { id: string; label: string };
-  targets: Employee[];
+  targets: AssignTarget[];
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   busy?: boolean;

@@ -5,9 +5,8 @@ import { notify } from '../../lib/toast';
 import { log } from '../../lib/log';
 import { createAssignedTask } from '../../lib/taskCreate';
 import { notifyTaskAssigned } from '../../lib/notifications';
-import { TaskAssignForm } from '../tasks/TaskAssignForm';
+import { TaskAssignForm, type AssignTarget } from '../tasks/TaskAssignForm';
 import { Modal } from '../../ui/Modal';
-import type { Employee } from '../../types/attendance';
 
 const db = () => supabase as any;
 
@@ -43,7 +42,7 @@ export function DeliverableWork({
   status: string;
   stageSince: string | null;
   dueDate: string | null;
-  employees: Employee[];
+  employees: AssignTarget[];
   onChanged?: () => void | Promise<void>;
 }) {
   const [rows, setRows] = useState<Row[] | null>(null);
