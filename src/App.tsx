@@ -79,7 +79,7 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History, UserX, Ban, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy
+  FolderKanban, BadgeIndianRupee, History, UserX, Ban, Package, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -184,6 +184,10 @@ export default function App() {
   return <Portal user={user} onLogout={signOut} />;
 }
 
+import { TaskAssignForm } from './components/tasks/TaskAssignForm';
+import { DeliveryBoard } from './components/admin/DeliveryBoard';
+import { createAssignedTask } from './lib/taskCreate';
+
 function LiveClockDisplay() {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
@@ -200,7 +204,7 @@ function LiveClockDisplay() {
   );
 }
 
-const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime'];
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime'];
 const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
@@ -640,6 +644,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       {
         label: 'Clients & delivery', items: [
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
+          { id: 'admin-delivery', label: 'Delivery', icon: Package },
           { id: 'admin-finance', label: 'Finance', icon: BadgeIndianRupee },
           { id: 'admin-support', label: 'Client support', icon: LifeBuoy },
           { id: 'admin-tasks', label: 'Work & tasks', icon: BriefcaseBusiness, badge: tasks.filter(t => !t.archivedAt && t.status === 'awaiting_review').length },
@@ -822,6 +827,11 @@ function getPageTitle(tab: string) {
 function AdminContent(props: any) {
   const { activeTab, user, onRefresh, onSelectTab } = props;
   if (activeTab === 'admin-clients') return <AdminClientCenter employees={props.employees} />;
+  if (activeTab === 'admin-delivery') return (
+    <PageShell title="Delivery" subtitle="Every promise made to a client, longest stuck first.">
+      <DeliveryBoard onOpenProject={() => onSelectTab?.('admin-clients')} />
+    </PageShell>
+  );
   if (activeTab === 'admin-employees') return <EmployeesAdmin {...props} />;
   if (activeTab === 'admin-attendance') return <AttendanceAdmin {...props} />;
   if (activeTab === 'admin-tasks') return <TasksAdmin {...props} />;
@@ -907,26 +917,6 @@ function PayrollEmployee({ user, payrollPeriods, payrollRecords }: any) {
   );
 }
 
-async function setTaskResearch(taskId: string | null | undefined, minutesRaw: FormDataEntryValue | null) {
-  const minutes = Math.round(Number(minutesRaw ?? ''));
-  if (!taskId || !Number.isFinite(minutes) || minutes === 30) return; // 30 min is the default the database sets
-  const { error } = await (supabase as any).rpc('task_set_research', { p_task_id: taskId, p_minutes: Math.min(480, Math.max(5, minutes)) });
-  if (error) notify(`Task assigned, but the research time couldn’t be set: ${error.message}`, 'error', 7000);
-}
-
-async function setTaskEstimate(taskId: string | null | undefined, hoursRaw: FormDataEntryValue | null) {
-  const hours = Number(hoursRaw ?? '');
-  if (!taskId || !Number.isFinite(hours) || hours <= 0) return;
-  const { error } = await (supabase as any).rpc('task_set_estimate', { p_task_id: taskId, p_minutes: Math.round(hours * 60) });
-  if (error && !/does not exist|could not find/i.test(error.message)) notify(`Task created, but the estimate wasn’t saved: ${error.message}`, 'error', 6000);
-}
-
-async function linkTaskToDeliverable(taskId: string | null | undefined, deliverableId: string) {
-  if (!taskId || !deliverableId) return;
-  const { error } = await (supabase as any).rpc('staff_link_task_to_deliverable', { p_task_id: taskId, p_deliverable_id: deliverableId });
-  if (error) notify(`Task created, but it couldn’t be linked to the deliverable: ${error.message}`, 'error', 7000);
-}
-
 /** Hide subtasks from a list when their parent is also listed — they're shown inside the parent. */
 function topLevel(list: Task[]) {
   const ids = new Set(list.map((t) => t.id));
@@ -970,22 +960,18 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
     e.preventDefault(); const form = e.currentTarget; setMessage('');
     if (assignBusy) return;
     if (targets.length === 0) { setMessage('No employees are available for assignment.'); notify('No employees are available for assignment.', 'error'); return; }
-    const fd = new FormData(e.currentTarget);
-    const title = String(fd.get('title') ?? '').trim(), to = String(fd.get('assignedTo') ?? ''), start = String(fd.get('startDate') ?? ''), due = String(fd.get('dueDate') ?? '');
-    if (!title || !to || !start || !due) { setMessage('Complete all required task fields.'); return; }
-    if (due < start) { setMessage('Due date cannot be before the start date.'); return; }
-    assignRequestRef.current = crypto.randomUUID(); setAssignBusy(true);
+    const fd = new FormData(form);
+    assignRequestRef.current = assignRequestRef.current ?? crypto.randomUUID();
+    setAssignBusy(true);
     try {
-      const { data: createdTaskId, error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: clean(fd.get('description')), p_assigned_to: to, p_start_date: start, p_due_date: due, p_priority: String(fd.get('priority') ?? 'medium'), p_client_request_id: assignRequestRef.current });
-      if (error) throw error;
+      await createAssignedTask(fd, { requestId: assignRequestRef.current, actorUserId: user.id });
       notify('Task assigned.', 'success');
-      await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
-      await setTaskEstimate(createdTaskId, fd.get('estimateHours'));
-      await setTaskResearch(createdTaskId, fd.get('researchMinutes'));
-      void notifyTaskAssigned({ assigneeEmployeeId: to, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current, actorUserId: user.id });
+      assignRequestRef.current = null;
       form.reset(); setAssignOpen(false); await onRefresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
-    finally { assignRequestRef.current = null; setAssignBusy(false); }
+    } catch (error) {
+      const m = error instanceof Error ? error.message : 'Unable to assign task.';
+      setMessage(m); notify(m, 'error');
+    } finally { setAssignBusy(false); }
   }
 
   return <PageShell
@@ -1046,25 +1032,19 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
   async function assignTask(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; setMessage('');
     if (assignBusy) return;
-    const fd = new FormData(e.currentTarget);
-    const title = String(fd.get('title') || '').trim(), toId = String(fd.get('assignedTo') || ''), start = String(fd.get('startDate') || today()), due = String(fd.get('dueDate') || today()), priorityValue = String(fd.get('priority') || 'medium');
-    if (!title || !toId) { setMessage('Task title and employee are required.'); return; }
-    if (due < start) { setMessage('Due date cannot be before the start date.'); return; }
-    const description = clean(fd.get('description'));
-    const signature = JSON.stringify([title, description, toId, start, due, priorityValue]);
+    const fd = new FormData(form);
+    const signature = JSON.stringify([...fd.entries()]);
     if (assignRequestRef.current?.signature !== signature) assignRequestRef.current = { signature, id: crypto.randomUUID() };
     setAssignBusy(true);
     try {
-      const { data: createdTaskId, error } = await (supabase as any).rpc('create_task', { p_title: title, p_description: description, p_assigned_to: toId, p_start_date: start, p_due_date: due, p_priority: priorityValue, p_client_request_id: assignRequestRef.current.id });
-      if (error) throw error;
-      await linkTaskToDeliverable(createdTaskId, String(fd.get('deliverableId') ?? ''));
-      await setTaskEstimate(createdTaskId, fd.get('estimateHours'));
-      await setTaskResearch(createdTaskId, fd.get('researchMinutes'));
-      void notifyTaskAssigned({ assigneeEmployeeId: toId, taskTitle: title, dueDate: due, taskId: createdTaskId || assignRequestRef.current?.id, actorUserId: user?.id ?? '' });
+      await createAssignedTask(fd, { requestId: assignRequestRef.current.id, actorUserId: user?.id ?? '' });
       assignRequestRef.current = null; notify('Task assigned.', 'success'); form.reset(); setAssignOpen(false); await onRefresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign task.'); notify(error instanceof Error ? error.message : 'Unable to assign task.', 'error'); }
-    finally { setAssignBusy(false); }
+    } catch (error) {
+      const m = error instanceof Error ? error.message : 'Unable to assign task.';
+      setMessage(m); notify(m, 'error');
+    } finally { setAssignBusy(false); }
   }
+
   async function removeTask() {
     if (!archiveTarget || archiveBusy) return;
     setArchiveBusy(true); setMessage('');
@@ -1120,163 +1100,6 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
   </PageShell>;
 }
 
-function TaskAssignForm({
-  targets,
-  onSubmit,
-  onClose,
-  busy = false,
-  isAdmin = false,
-  userDesignation,
-  directReportDesignations = [],
-  hasDirectReportRules = false,
-  deliverables = [],
-}: {
-  deliverables?: LinkableDeliverable[];
-  targets: Employee[];
-  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
-  onClose: () => void;
-  busy?: boolean;
-  isAdmin?: boolean;
-  userDesignation?: string;
-  directReportDesignations?: string[];
-  hasDirectReportRules?: boolean;
-}) {
-  const hasNoTargets = targets.length === 0;
-
-  return (
-    <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {hasNoTargets && (
-        <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 flex items-start gap-3">
-          <div className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0 mt-0.5">
-            <CircleAlert className="w-5 h-5" />
-          </div>
-          <div className="space-y-1 text-xs">
-            <p className="font-bold text-amber-950 text-sm">No employees available for assignment</p>
-            {isAdmin ? (
-              <p className="text-amber-900 leading-relaxed">
-                There are currently no active employees in the organization. Add active employees under <span className="font-semibold">Employees / HR</span> to begin assigning tasks.
-              </p>
-            ) : hasDirectReportRules ? (
-              <p className="text-amber-900 leading-relaxed">
-                Your designation {userDesignation ? <span className="font-semibold">({userDesignation})</span> : ''} is configured to assign tasks to direct reports{directReportDesignations.length ? <> in <span className="font-semibold">{directReportDesignations.join(', ')}</span></> : ''}. However, no active employees are currently assigned to you as their reporting manager in HR.
-              </p>
-            ) : (
-              <p className="text-amber-900 leading-relaxed">
-                No active employees are authorized for task assignment under your current designation rules.
-              </p>
-            )}
-            {!isAdmin && (
-              <p className="text-amber-850 pt-1 font-medium">
-                To delegate tasks, an administrator must assign team members to your reporting hierarchy in <span className="font-semibold">Employees / HR</span>, or configure assignment rules in <span className="font-semibold">Settings</span>.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      <label className="md:col-span-2">
-        <span className="label">Task</span>
-        <input name="title" className="input" placeholder="e.g. Design homepage hero banner" required disabled={hasNoTargets} />
-      </label>
-
-      <label className="md:col-span-2">
-        <span className="label">Description</span>
-        <textarea name="description" className="input min-h-20" placeholder="Task requirements, deliverables and context…" disabled={hasNoTargets} />
-      </label>
-
-      <label>
-        <span className="label">Assign To</span>
-        {hasNoTargets ? (
-          <div>
-            <select name="assignedTo" disabled className="input bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200" aria-disabled="true">
-              <option value="">No authorized employees available</option>
-            </select>
-            <span className="text-[11px] text-amber-700 mt-1 block font-medium">
-              {isAdmin ? 'Add active employees in HR to enable assignment.' : 'Direct reporting line required to delegate tasks.'}
-            </span>
-          </div>
-        ) : (
-          <select name="assignedTo" className="input" required defaultValue="">
-            <option value="" disabled>Select employee</option>
-            {targets.map(e => (
-              <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>
-            ))}
-          </select>
-        )}
-      </label>
-
-      <label>
-        <span className="label">Priority</span>
-        <select name="priority" defaultValue="medium" className="input" disabled={hasNoTargets}>
-          <option value="low">low</option>
-          <option value="medium">medium</option>
-          <option value="high">high</option>
-          <option value="urgent">urgent</option>
-        </select>
-      </label>
-
-      {deliverables.length > 0 && (
-        <label className="md:col-span-2">
-          <span className="label">Client deliverable <span className="font-normal text-ink-400">optional</span></span>
-          <select name="deliverableId" defaultValue="" className="input" disabled={hasNoTargets}>
-            <option value="">Not linked to a client deliverable</option>
-            {Array.from(new Set(deliverables.map((d) => d.projectName))).map((project) => (
-              <optgroup key={project} label={project}>
-                {deliverables.filter((d) => d.projectName === project).map((d) => (
-                  <option key={d.id} value={d.id}>{d.number ? `${d.number} · ` : ''}{d.name}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <span className="block text-xs text-ink-400 mt-1.5">Links this work to the client’s deliverable so it shows who is responsible.</span>
-        </label>
-      )}
-
-      <label>
-        <span className="label">Start Date</span>
-        <input type="date" name="startDate" defaultValue={today()} className="input" required disabled={hasNoTargets} />
-      </label>
-
-      <label>
-        <span className="label">Due Date</span>
-        <input type="date" name="dueDate" defaultValue={today()} className="input" required disabled={hasNoTargets} />
-      </label>
-
-      <label>
-        <span className="label">Estimated effort <span className="font-normal text-ink-400">optional · hours</span></span>
-        <input type="number" name="estimateHours" min={0.25} max={999} step={0.25} className="input" placeholder="e.g. 4" disabled={hasNoTargets} />
-        <span className="block text-xs text-ink-400 mt-1.5">Compared with the time the assignee tracks.</span>
-      </label>
-
-      <label>
-        <span className="label">Research time <span className="font-normal text-ink-400">minutes · before the work starts</span></span>
-        <input type="number" name="researchMinutes" min={5} max={480} step={5} defaultValue={30} className="input" required disabled={hasNoTargets} />
-        <span className="block text-xs text-ink-400 mt-1.5">On top of the effort. They share links, findings and a plan before working.</span>
-      </label>
-
-      <div className="md:col-span-2 flex justify-end gap-2 pt-2">
-        <button type="button" onClick={onClose} className="btn-secondary">
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={busy || hasNoTargets}
-          title={hasNoTargets ? 'Cannot assign: No authorized employees available' : undefined}
-          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {busy ? (
-            <span className="inline-flex items-center gap-1.5">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              Assigning…
-            </span>
-          ) : (
-            'Assign'
-          )}
-        </button>
-      </div>
-    </form>
-  );
-}
 
 function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssignee, deliverableName, hideClient, empty = 'No tasks.', startable }: { tasks: Task[]; allTasks: Task[]; onOpen: (task: Task) => void; onDelete?: (task: Task) => void; archivingId?: string | null; showAssignee?: boolean; deliverableName?: (id?: string | null) => string | null; hideClient?: boolean; empty?: string; startable?: boolean }) {
   const work = useWork();

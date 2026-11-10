@@ -6,6 +6,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DeliverableThread } from '../common/DeliverableThread';
+import { DeliverableWork } from './DeliverableWork';
 import { StaffClientReview } from '../common/StaffClientReview';
 import { ContractWizard } from './ContractWizard';
 import { ClientAccessCard, ExtraChargesCard, PaymentDetailsCard, RequestPaymentDialog } from './BillingExtras';
@@ -806,6 +807,16 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
                 <ul className="space-y-1.5">{deps.map(x => <li key={x.id} className="flex items-center justify-between text-[13px] gap-2"><span className="truncate">{x.name}</span><Status s={x.status} /></li>)}</ul>
               )}
             </section>
+
+            <DeliverableWork
+              deliverableId={d.id}
+              deliverableLabel={`${d.deliverable_number} · ${d.name}`}
+              status={d.status}
+              stageSince={(d as { stage_since?: string | null }).stage_since ?? null}
+              dueDate={d.due_date}
+              employees={employees}
+              onChanged={reload}
+            />
 
             <section>
               <h3 className="text-[13px] font-semibold mb-2">Work links</h3>
