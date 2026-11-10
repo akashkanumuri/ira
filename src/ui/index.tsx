@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useCountUp } from './motion';
 
@@ -239,11 +239,33 @@ export function Button({
   loading,
   children,
   className,
+  onClick,
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: 'sm'; icon?: React.ReactNode; loading?: boolean }) {
+  // An impatient second click used to run the whole action twice (three projects from one press).
+  // While a click's work is still running the button waits: it spins, and further clicks do nothing.
+  const [working, setWorking] = useState(false);
+  const running = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+
+  const click = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (running.current) return;
+    const result = onClick?.(e) as unknown;
+    if (result && typeof (result as Promise<unknown>).then === 'function') {
+      running.current = true;
+      setWorking(true);
+      void (result as Promise<unknown>).catch(() => {}).then(() => {
+        running.current = false;
+        if (mounted.current) setWorking(false);
+      });
+    }
+  };
+
+  const wait = loading || working;
   return (
-    <button type="button" {...rest} disabled={rest.disabled || loading} className={cx(`btn-${variant}`, size === 'sm' && 'btn-sm', className)}>
-      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
+    <button type="button" {...rest} onClick={click} disabled={rest.disabled || wait} className={cx(`btn-${variant}`, size === 'sm' && 'btn-sm', className)}>
+      {wait ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
       {children}
     </button>
   );
