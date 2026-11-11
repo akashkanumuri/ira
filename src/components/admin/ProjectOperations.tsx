@@ -771,6 +771,16 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
               {isLocked(d.lock_state) && <Badge tone="err">{d.lock_state === 'locked_payment' ? 'Locked: payment' : 'Locked: manual'}</Badge>}
               {d.lock_state === 'override_unlocked' && <Badge tone="info">Unlocked by override</Badge>}
             </div>
+            <DeliverableWork
+              deliverableId={d.id}
+              deliverableLabel={`${d.deliverable_number} · ${d.name}`}
+              status={d.status}
+              stageSince={(d as { stage_since?: string | null }).stage_since ?? null}
+              dueDate={d.due_date}
+              employees={employees}
+              onChanged={reload}
+            />
+
             <section>
               <h3 className="text-[13px] font-semibold mb-2">Move to</h3>
               <div className="flex flex-wrap gap-2">
@@ -807,16 +817,6 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
                 <ul className="space-y-1.5">{deps.map(x => <li key={x.id} className="flex items-center justify-between text-[13px] gap-2"><span className="truncate">{x.name}</span><Status s={x.status} /></li>)}</ul>
               )}
             </section>
-
-            <DeliverableWork
-              deliverableId={d.id}
-              deliverableLabel={`${d.deliverable_number} · ${d.name}`}
-              status={d.status}
-              stageSince={(d as { stage_since?: string | null }).stage_since ?? null}
-              dueDate={d.due_date}
-              employees={employees}
-              onChanged={reload}
-            />
 
             <section>
               <h3 className="text-[13px] font-semibold mb-2">Work links</h3>
