@@ -309,7 +309,8 @@ export function DeliverablePage({
             </section>
 
             {/* Right now */}
-            <section className="card p-5 sm:p-6 flex flex-wrap items-center justify-between gap-5" style={{ borderLeft: `6px solid ${TONE_EDGE[now.tone]}` }}>
+            <section className="card p-5 sm:p-6 pl-7 sm:pl-8 flex flex-wrap items-center justify-between gap-5" style={{ position: 'relative', overflow: 'hidden' }}>
+              <span aria-hidden="true" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, background: TONE_EDGE[now.tone] }} />
               <div className="min-w-0 max-w-[720px] space-y-1.5">
                 <p className={`text-[11.5px] font-extrabold tracking-[0.06em] ${TONE_TEXT[now.tone]}`}>RIGHT NOW</p>
                 <h2 className="font-display text-[24px] sm:text-[27px] font-bold tracking-tight leading-tight text-ink-950">{now.title}</h2>

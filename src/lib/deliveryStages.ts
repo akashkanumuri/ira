@@ -41,3 +41,21 @@ export function clientStageLine(status: string): string {
     default: return status;
   }
 }
+
+/** The short label on the client's tracker. The database status names are staff vocabulary. */
+export function clientStageLabel(status: string): string {
+  switch (status) {
+    case 'Draft':
+    case 'Pending': return 'Planned';
+    case 'In Progress': return 'In work';
+    case 'Awaiting Client Dependency': return 'Needs something from you';
+    case 'Under Internal Review': return 'Our check';
+    case 'Awaiting Client Review': return 'Your review';
+    case 'Modification Requested':
+    case 'Revision In Progress': return 'Making your changes';
+    case 'Completed': return 'Approved';
+    case 'Ready for Download': return 'Ready to download';
+    case 'Cancelled': return 'Cancelled';
+    default: return status;
+  }
+}

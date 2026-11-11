@@ -81,7 +81,7 @@ import {
   type ProjectWorkspace,
 } from '../../lib/sigma';
 import { Stat as UiStat } from '../../ui';
-import { DELIVERY_STAGES, clientStageLine, deliveryStageIndex } from '../../lib/deliveryStages';
+import { DELIVERY_STAGES, clientStageLabel, clientStageLine, deliveryStageIndex } from '../../lib/deliveryStages';
 import { DeliverableThread } from '../common/DeliverableThread';
 import { ClientVersions } from './ClientVersions';
 import { Gauge, Ring } from '../../ui/charts';
@@ -1082,7 +1082,9 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
       <PageHeader title="Progress Tracker" desc={`${project.name} · where each deliverable stands`} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <Stat label="Completed" value={`${prog.done}/${prog.total}`} sub={`${prog.countPct}% by count`} />
-        <Stat label="Weighted progress" value={prog.weightedPct != null ? `${prog.weightedPct}%` : '—'} sub={prog.weightedPct != null ? 'By deliverable weightage' : 'Weightage not configured'} />
+        {prog.weightedPct != null
+          ? <Stat label="Weighted progress" value={`${prog.weightedPct}%`} sub="By deliverable weightage" />
+          : <Stat label="With our team" value={rows.filter(x => !['Completed', 'Ready for Download', 'Awaiting Client Review', 'Awaiting Client Dependency'].includes(x.status)).length} sub="Being worked on or checked" />}
         <Stat label="Waiting on you" value={ws.dependencies.filter(x => ['Requested', 'Pending', 'Rejected', 'Resubmission Required'].includes(x.status)).length} sub="Requested items" tone="warn" />
         <Stat label="Target completion" value={<span className="text-[18px]">{fmtDate(project.targetDate)}</span>} sub="Managed by the IRA team" />
       </div>
@@ -1101,12 +1103,17 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
             const finished = r.status === 'Completed' || r.status === 'Ready for Download';
             const yours = r.status === 'Awaiting Client Review' || open.length > 0;
             return (
-              <li key={r.id} className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: Math.min(i, 8), ...(yours ? { borderLeft: '6px solid #5b35e8' } : {}) }}>
+              <li key={r.id} className="card p-5 sm:p-6 rise" style={{ ['--i' as string]: Math.min(i, 8), position: 'relative', overflow: 'hidden' } as React.CSSProperties}>
+                {yours && <span aria-hidden="true" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: '#5b35e8' }} />}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2.5">
                       <h3 className="font-display font-bold text-[17px] text-ink-900">{r.name}</h3>
-                      <Status s={clientStatus(r)} />
+                      {clientStatus(r) === 'Locked' ? <Status s="Locked" /> : (
+                        <span className={cx('text-[11.5px] font-bold px-2.5 py-1 rounded-full', yours ? 'bg-brand-50 text-brand-700' : finished ? 'bg-mint-50 text-mint-700' : 'bg-ink-100 text-ink-700')}>
+                          {open.length ? 'Needs something from you' : clientStageLabel(r.status)}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[13.5px] text-ink-600 mt-1.5">
                       {open.length ? `Paused: we need ${open.map(x => x.name).join(', ')} from you.` : clientStageLine(r.status)}

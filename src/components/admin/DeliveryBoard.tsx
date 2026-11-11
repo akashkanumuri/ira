@@ -180,7 +180,7 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
                 <span className="text-[13.5px] font-bold text-ink-900">{c.label}</span>
               </span>
               <span className="block stat-value text-[32px] text-ink-950 mt-3">{c.n}</span>
-              <span className="block text-xs text-ink-500 mt-1.5">{on ? 'showing only these — press again to clear' : c.sub}</span>
+              <span className="block text-xs text-ink-500 mt-1.5">{on ? 'press again to clear' : c.sub}</span>
             </button>
           );
         })}
@@ -350,7 +350,7 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
                     <span className="min-w-0">
                       <span className="block text-[13.5px] font-medium text-ink-900 truncate">{r.deliverable_name}</span>
                       <span className="block text-xs text-ink-500 truncate">
-                        waiting on {r.waiting_on}
+                        {r.tasks_total === 0 ? 'no tasks created yet' : r.tasks_unassigned > 0 ? `${r.tasks_unassigned} task${r.tasks_unassigned === 1 ? '' : 's'} with nobody on it` : `waiting on ${r.waiting_on}`}
                         {r.tasks_total > 0 && ` · ${r.tasks_done} of ${r.tasks_total} tasks done`}
                       </span>
                     </span>
