@@ -205,10 +205,10 @@ function LiveClockDisplay() {
 }
 
 const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime'];
-const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-delivery', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
-  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work',
+  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work', 'admin-delivery': 'emp-delivery', 'emp-delivery': 'admin-delivery',
 };
 /** Cross-role mappings whose pages understand the same deep-link query. */
 const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-tasks', 'emp-tasks>admin-tasks', 'admin-support>emp-support', 'emp-support>admin-support']);
@@ -218,7 +218,7 @@ const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-ta
 // Employee sections tied to a work-pattern feature (see lib/workRules FeatureKey).
 const TAB_FEATURE: Record<string, FeatureKey> = {
   'emp-attendance': 'attendance', 'emp-time': 'my_time', 'emp-leave': 'leave', 'emp-wfh': 'wfh',
-  'emp-holidays': 'holidays', 'emp-payroll': 'payroll', 'emp-client-work': 'client_projects',
+  'emp-holidays': 'holidays', 'emp-payroll': 'payroll', 'emp-client-work': 'client_projects', 'emp-delivery': 'client_projects',
 };
 const LEGACY_ROUTES: Record<string, string> = {
   'admin/clients': 'admin-clients', 'my-deliverables': 'emp-client-work', 'admin/tasks': 'admin-tasks', 'admin/leave': 'admin-requests',
@@ -676,6 +676,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         label: 'My work', items: [
           { id: 'emp-tasks', label: 'Work & tasks', icon: BriefcaseBusiness, badge: employeeOpenTasksCount },
           { id: 'emp-client-work', label: 'Client Projects', icon: FolderKanban },
+          { id: 'emp-delivery', label: 'Delivery', icon: Package },
         ]
       },
       {
@@ -701,7 +702,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const hiddenTabs = new Set<string>(Object.entries(TAB_FEATURE)
     .filter(([, f]) => user.role !== 'admin' && !featureOn(workCtx, f))
     .map(([t]) => t));
-  if (clientWorkKnown && !seesClientWork) hiddenTabs.add('emp-client-work');
+  if (clientWorkKnown && !seesClientWork) { hiddenTabs.add('emp-client-work'); hiddenTabs.add('emp-delivery'); }
   const visibleNav = navGroups.map((g) => ({ ...g, items: g.items.filter((i) => !hiddenTabs.has(i.id)) })).filter((g) => g.items.length);
   const mobilePrimary = (user.role === 'admin'
     ? ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-requests']
@@ -853,6 +854,11 @@ function EmployeeContent(props: any) {
   const { activeTab } = props;
   if (activeTab === 'emp-attendance') return <MyAttendancePage {...props} />;
   if (activeTab === 'emp-client-work') return <ManagerClientWork user={props.user} employees={props.employees} />;
+  if (activeTab === 'emp-delivery') return (
+    <PageShell title="Delivery" subtitle="Every promise made to a client, longest stuck first.">
+      <DeliveryBoard onOpenProject={() => props.onSelectTab?.('emp-client-work')} />
+    </PageShell>
+  );
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
   if (activeTab === 'emp-leave') return <LeavePage {...props} />;
   if (activeTab === 'emp-wfh') return <WfhPage {...props} />;
