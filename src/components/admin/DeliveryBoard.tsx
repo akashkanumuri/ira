@@ -163,7 +163,7 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
       {error && <div className="card p-4 text-[13px] text-rose-700">{error}</div>}
 
       {/* The cards are the filter. Pressing one again clears it. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {cards.map((c, i) => {
           const on = filter === c.id;
           return (
@@ -176,10 +176,10 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
               style={{ ['--i' as string]: i, ...(on ? { borderColor: '#5b35e8', boxShadow: '0 0 0 2px #5b35e8' } : {}) } as React.CSSProperties}
             >
               <span className="flex items-center gap-2.5">
-                <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.tone}`}>{c.icon}</span>
-                <span className="text-[13.5px] font-bold text-ink-900">{c.label}</span>
+                <span className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 ${c.tone}`}>{c.icon}</span>
+                <span className="text-[12.5px] sm:text-[13.5px] font-bold text-ink-900 leading-tight">{c.label}</span>
               </span>
-              <span className="block stat-value text-[32px] text-ink-950 mt-3">{c.n}</span>
+              <span className="block stat-value text-[26px] sm:text-[32px] text-ink-950 mt-2.5 sm:mt-3">{c.n}</span>
               <span className="block text-xs text-ink-500 mt-1.5">{on ? 'press again to clear' : c.sub}</span>
             </button>
           );

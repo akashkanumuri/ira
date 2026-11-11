@@ -181,7 +181,7 @@ export function DeliverablePage({
     if (s === 'Awaiting Client Dependency') return { tone: 'amber', title: `Waiting on ${clientName} ${forDays(stageDays)}`, detail: waitingDeps.length ? `We asked for: ${waitingDeps.map((x) => x.name).join(', ')}.` : 'We need something from the client before work can continue.', action: { label: 'See what is holding it up', tab: 'holding' } };
     if (s === 'Under Internal Review') return { tone: 'brand', title: `In internal review ${forDays(stageDays)}`, detail: 'Check the work, then send a draft link to the client.', action: { label: 'Send to client', tab: 'client' } };
     if (live.length === 0) return { tone: 'rose', title: 'Not broken into tasks yet', detail: 'Nobody is working on this. Add the tasks and give each one an owner.', action: s === 'Draft' ? { label: 'Mark ready to start', status: 'Pending' } : undefined };
-    if (unassigned.length > 0) return { tone: 'rose', title: `${unassigned.length} task${unassigned.length === 1 ? ' has' : 's have'} nobody on ${unassigned.length === 1 ? 'it' : 'them'}`, detail: 'Tick the rows and click a name on the left to hand them out.' };
+    if (unassigned.length > 0) return { tone: 'rose', title: `${unassigned.length} task${unassigned.length === 1 ? ' has' : 's have'} nobody on ${unassigned.length === 1 ? 'it' : 'them'}`, detail: 'Tick the tasks, then pick a name from the team list to hand them out.' };
     if (allDone) return { tone: 'mint', title: 'Every task is done — ready for internal review', detail: 'All the pieces were approved. Move it on so it can go to the client.', action: (s === 'In Progress' || s === 'Revision In Progress') ? { label: 'Move to internal review', status: 'Under Internal Review' } : s === 'Pending' ? { label: 'Start work', status: 'In Progress' } : undefined };
     if (s === 'Draft') return { tone: 'amber', title: 'Planned, not started', detail: 'Tasks are set up. Mark it ready when the contract is in place.', action: { label: 'Mark ready to start', status: 'Pending' } };
     if (s === 'Pending') return { tone: 'amber', title: `Ready to start ${forDays(stageDays)}`, detail: `${openTasks.length} task${openTasks.length === 1 ? '' : 's'} assigned and waiting.`, action: { label: 'Start work', status: 'In Progress' } };
@@ -384,7 +384,7 @@ export function DeliverablePage({
                     <span className="text-xs font-semibold text-ink-500">open now</span>
                   </div>
                   <p className="text-[12.5px] text-ink-500 mt-1 mb-3 leading-snug">
-                    {selectedIds.length ? `Click a name to give them the ${selectedIds.length} ticked task${selectedIds.length === 1 ? '' : 's'}.` : 'Tick tasks on the right, then click a name.'}
+                    {selectedIds.length ? `Click a name to give them the ${selectedIds.length} ticked task${selectedIds.length === 1 ? '' : 's'}.` : 'Tick tasks in the list, then click a name.'}
                   </p>
                   <ul className="space-y-2 max-h-[420px] overflow-y-auto">
                     {employees.map((p) => {
@@ -422,7 +422,7 @@ export function DeliverablePage({
                     {selectedIds.length > 0 ? (
                       <div className="flex items-center gap-3">
                         <span className="text-[13.5px] font-extrabold">{selectedIds.length} selected</span>
-                        <span className="text-[13px] text-ink-500">Pick someone on the left</span>
+                        <span className="text-[13px] text-ink-500">Pick someone from the team list</span>
                         <button type="button" onClick={() => setSelected({})} className="text-[12.5px] font-bold text-ink-500 hover:text-ink-900">Clear</button>
                       </div>
                     ) : (
