@@ -1139,7 +1139,7 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
                           </span>
                           <span className={cx('flex-1 h-[3px]', done ? 'bg-mint-500' : 'bg-ink-100')} />
                         </div>
-                        <p className={cx('mt-2 text-[12px] sm:text-[12.5px] truncate', here ? 'font-extrabold text-ink-950' : done ? 'font-semibold text-ink-700' : 'font-semibold text-ink-400')}>{st.clientName}</p>
+                        <p className={cx('mt-2 text-[11px] sm:text-[12.5px] leading-tight', here ? 'font-extrabold text-ink-950' : done ? 'font-semibold text-ink-700' : 'font-semibold text-ink-400')}>{st.clientName}</p>
                       </li>
                     );
                   })}
