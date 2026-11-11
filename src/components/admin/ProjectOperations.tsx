@@ -6,7 +6,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DeliverableThread } from '../common/DeliverableThread';
-import { DeliverableWork } from './DeliverableWork';
+import { DeliverablePage } from '../delivery/DeliverablePage';
 import { StaffClientReview } from '../common/StaffClientReview';
 import { ContractWizard } from './ContractWizard';
 import { ClientAccessCard, ExtraChargesCard, PaymentDetailsCard, RequestPaymentDialog } from './BillingExtras';
@@ -643,6 +643,8 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selected, setSelected] = useState<string | null>(null);
+  /** The full deliverable page; the older panel is kept behind its "Details & settings" button. */
+  const [pageId, setPageId] = useState<string | null>(null);
   const [edit, setEdit] = useState<'create' | 'edit' | null>(null);
   const [form, setForm] = useState<DelivForm>(emptyDeliv);
   const [reason, setReason] = useState('');
@@ -744,7 +746,7 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
       <DataTable
         rows={rows}
         pageSize={15}
-        onRow={r => setSelected(r.id)}
+        onRow={r => setPageId(r.id)}
         empty={<Empty icon={Package} title="No deliverables" desc="Add the agreed scope items for this project." />}
         cols={[
           { key: 'n', head: 'No.', w: '76px', mobile: 'hide', render: r => <span className="font-mono text-xs text-ink-2">{r.deliverable_number}</span> },
@@ -755,6 +757,15 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
           { key: 's', head: 'Status', render: r => <span className="flex items-center gap-1.5"><Status s={r.status} />{isLocked(r.lock_state) && <Lock size={12} className="text-err" aria-label="Locked" />}</span> },
         ]}
       />
+
+      {pageId && (
+        <DeliverablePage
+          deliverableId={pageId}
+          employees={employees}
+          onClose={() => { setPageId(null); void reload(); }}
+          onEditDetails={() => { const id = pageId; setPageId(null); setSelected(id); }}
+        />
+      )}
 
       <SidePanel
         open={!!d && !edit}
@@ -771,16 +782,6 @@ function DeliverablesTab({ ws, projectId, employees, reload }: { ws: ProjectWork
               {isLocked(d.lock_state) && <Badge tone="err">{d.lock_state === 'locked_payment' ? 'Locked: payment' : 'Locked: manual'}</Badge>}
               {d.lock_state === 'override_unlocked' && <Badge tone="info">Unlocked by override</Badge>}
             </div>
-            <DeliverableWork
-              deliverableId={d.id}
-              deliverableLabel={`${d.deliverable_number} · ${d.name}`}
-              status={d.status}
-              stageSince={(d as { stage_since?: string | null }).stage_since ?? null}
-              dueDate={d.due_date}
-              employees={employees}
-              onChanged={reload}
-            />
-
             <section>
               <h3 className="text-[13px] font-semibold mb-2">Move to</h3>
               <div className="flex flex-wrap gap-2">

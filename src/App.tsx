@@ -830,7 +830,7 @@ function AdminContent(props: any) {
   if (activeTab === 'admin-clients') return <AdminClientCenter employees={props.employees} />;
   if (activeTab === 'admin-delivery') return (
     <PageShell title="Delivery" subtitle="Every promise made to a client, longest stuck first.">
-      <DeliveryBoard onOpenProject={() => onSelectTab?.('admin-clients')} />
+      <DeliveryBoard employees={(props.employees as Employee[]).filter((e) => e.status === 'active')} myEmployeeId={user.employeeDbId ?? null} />
     </PageShell>
   );
   if (activeTab === 'admin-employees') return <EmployeesAdmin {...props} />;
@@ -856,7 +856,7 @@ function EmployeeContent(props: any) {
   if (activeTab === 'emp-client-work') return <ManagerClientWork user={props.user} employees={props.employees} />;
   if (activeTab === 'emp-delivery') return (
     <PageShell title="Delivery" subtitle="Every promise made to a client, longest stuck first.">
-      <DeliveryBoard onOpenProject={() => props.onSelectTab?.('emp-client-work')} />
+      <DeliveryBoard employees={(props.employees as Employee[]).filter((e) => e.status === 'active')} myEmployeeId={props.user.employeeDbId ?? null} />
     </PageShell>
   );
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;

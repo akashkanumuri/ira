@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarClock, Clock3, PauseCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { log } from '../../lib/log';
+import { DeliverablePage } from '../delivery/DeliverablePage';
+import type { AssignTarget } from '../tasks/TaskAssignForm';
 
 const db = () => supabase as any;
 
@@ -36,7 +38,8 @@ const STAGE_TONE: Record<string, string> = {
  * still moving does not look like a problem. The cards at the top are the filter: there is no second
  * row of tabs underneath saying the same thing.
  */
-export function DeliveryBoard({ onOpenProject }: { onOpenProject?: (projectId: string) => void }) {
+export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTarget[]; myEmployeeId?: string | null }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   const [rows, setRows] = useState<BoardRow[] | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<FilterId | null>(null);
@@ -141,7 +144,7 @@ export function DeliveryBoard({ onOpenProject }: { onOpenProject?: (projectId: s
               <li key={r.deliverable_id}>
                 <button
                   type="button"
-                  onClick={() => onOpenProject?.(r.project_id)}
+                  onClick={() => setOpenId(r.deliverable_id)}
                   className="w-full text-left px-4 py-3.5 grid grid-cols-1 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] gap-2 md:gap-4 items-center hover:bg-ink-50/60"
                 >
                   <span className="min-w-0">
@@ -173,9 +176,18 @@ export function DeliveryBoard({ onOpenProject }: { onOpenProject?: (projectId: s
         )}
 
         <p className="px-4 py-3 text-xs text-ink-400 border-t border-ink-100">
-          Days counted in the current stage, not since the work began. A client ringing to ask where their work is should be answerable from this screen.
+          Days counted in the current stage, not since the work began. Open any row for its tasks, journey and record.
         </p>
       </div>
+
+      {openId && (
+        <DeliverablePage
+          deliverableId={openId}
+          employees={employees}
+          myEmployeeId={myEmployeeId}
+          onClose={() => { setOpenId(null); void load(); }}
+        />
+      )}
     </div>
   );
 }
