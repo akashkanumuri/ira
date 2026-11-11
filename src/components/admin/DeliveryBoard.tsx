@@ -27,6 +27,8 @@ const dayWord = (n: number) => (n === 0 ? 'today' : n === 1 ? '1 day' : `${n} da
 const shortDate = (iso: string | null) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' }) : '';
 
+const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+
 const STAGE_TONE: Record<string, string> = {
   'Awaiting Client Review': 'bg-amber-50 text-amber-800',
   'Awaiting Client Dependency': 'bg-amber-50 text-amber-800',
@@ -55,6 +57,8 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
   const [openId, setOpenId] = useState<string | null>(null);
   const [rows, setRows] = useState<BoardRow[] | null>(null);
   const [doneRows, setDoneRows] = useState<DoneRow[]>([]);
+  /** deliverable id → the people holding its open tasks, for the initials on each card. */
+  const [holders, setHolders] = useState<Record<string, string[]>>({});
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<FilterId | null>(null);
   const [view, setView] = useState<ViewId>('pipeline');
@@ -66,6 +70,25 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
     const { data, error: e } = await db().rpc('staff_delivery_board');
     if (e) { log.error('delivery board failed', e); setError(e.message); setRows([]); }
     else { setError(''); setRows((data ?? []) as BoardRow[]); }
+
+    // Who is on each one. Shows only the tasks this person may see; the board works without it.
+    try {
+      const ids = ((data ?? []) as BoardRow[]).map((r) => r.deliverable_id);
+      if (ids.length) {
+        const { data: ts } = await db().from('tasks').select('deliverable_id, assigned_to, status')
+          .in('deliverable_id', ids).is('archived_at', null);
+        const map: Record<string, string[]> = {};
+        for (const t of ((ts ?? []) as Array<{ deliverable_id: string; assigned_to: string | null; status: string }>)) {
+          if (!t.assigned_to || t.status === 'completed' || t.status === 'cancelled') continue;
+          const list = (map[t.deliverable_id] ??= []);
+          if (!list.includes(t.assigned_to)) list.push(t.assigned_to);
+        }
+        setHolders(map);
+      } else setHolders({});
+    } catch (err) {
+      log.warn('task holders failed', err);
+      setHolders({});
+    }
 
     // Recently approved work, for the last column. The board still works if this read fails.
     try {
@@ -129,6 +152,7 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
     { id: 'stuck', label: `Stuck ${STUCK_DAYS} days or more`, sub: 'nothing moved', n: counts.stuck, icon: <AlertTriangle className="w-5 h-5" />, tone: 'text-rose-700 bg-rose-50' },
   ];
 
+  const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? 'Someone';
   const ageTone = (r: BoardRow) =>
     r.days_in_stage >= STUCK_DAYS ? 'bg-rose-50 text-rose-700' : r.days_in_stage >= SLOW_DAYS ? 'bg-amber-50 text-amber-800' : 'bg-ink-100 text-ink-600';
   const edgeTone = (r: BoardRow) =>
@@ -148,8 +172,8 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
               type="button"
               aria-pressed={on}
               onClick={() => setFilter(on ? null : c.id)}
-              className={`card rise p-4 sm:p-5 text-left transition-colors ${on ? 'ring-2 ring-brand-500 border-brand-200' : 'hover:border-ink-200'}`}
-              style={{ ['--i' as string]: i } as React.CSSProperties}
+              className="card rise p-4 sm:p-5 text-left transition-shadow"
+              style={{ ['--i' as string]: i, ...(on ? { borderColor: '#5b35e8', boxShadow: '0 0 0 2px #5b35e8' } : {}) } as React.CSSProperties}
             >
               <span className="flex items-center gap-2.5">
                 <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.tone}`}>{c.icon}</span>
@@ -249,6 +273,24 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
                                 {r.due_date && <span className={r.overdue ? 'font-bold text-rose-700' : 'text-ink-500'}>{r.overdue ? 'late · ' : 'due '}{shortDate(r.due_date)}</span>}
                               </span>
                             </span>
+
+                            {(holders[r.deliverable_id]?.length ?? 0) > 0 && (
+                              <span className="flex items-center mt-2.5 pt-2.5 border-t border-ink-100">
+                                {holders[r.deliverable_id].slice(0, 4).map((id, hi) => (
+                                  <span
+                                    key={id}
+                                    title={nameOf(id)}
+                                    className={`w-6 h-6 rounded-full bg-brand-50 text-brand-700 border-2 border-white text-[9.5px] font-extrabold flex items-center justify-center ${hi ? '-ml-1.5' : ''}`}
+                                  >
+                                    {initials(nameOf(id))}
+                                  </span>
+                                ))}
+                                {holders[r.deliverable_id].length > 4 && <span className="ml-1 text-[11px] font-bold text-ink-500">+{holders[r.deliverable_id].length - 4}</span>}
+                                <span className="ml-2 text-[11.5px] text-ink-500 truncate">
+                                  {holders[r.deliverable_id].length === 1 ? nameOf(holders[r.deliverable_id][0]) : `${holders[r.deliverable_id].length} people on it`}
+                                </span>
+                              </span>
+                            )}
                           </button>
                         </li>
                       );

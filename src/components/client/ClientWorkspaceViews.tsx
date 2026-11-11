@@ -1101,7 +1101,7 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
             const finished = r.status === 'Completed' || r.status === 'Ready for Download';
             const yours = r.status === 'Awaiting Client Review' || open.length > 0;
             return (
-              <li key={r.id} className={cx('card p-5 sm:p-6 rise', yours && 'border-l-[6px] border-l-brand-600')} style={{ ['--i' as any]: Math.min(i, 8) }}>
+              <li key={r.id} className="card p-5 sm:p-6 rise" style={{ ['--i' as any]: Math.min(i, 8), ...(yours ? { borderLeft: '6px solid #5b35e8' } : {}) }}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2.5">

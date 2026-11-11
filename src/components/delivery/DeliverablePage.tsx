@@ -48,7 +48,8 @@ const TASK_TONE: Record<string, string> = {
 };
 
 type Tone = 'brand' | 'amber' | 'rose' | 'mint';
-const TONE_BORDER: Record<Tone, string> = { brand: 'border-l-brand-600', amber: 'border-l-amber-400', rose: 'border-l-rose-500', mint: 'border-l-mint-500' };
+/** The card class sets its own border outside Tailwind's layers, so the coloured edge is an inline style. */
+const TONE_EDGE: Record<Tone, string> = { brand: '#5b35e8', amber: '#f0b429', rose: '#e5484d', mint: '#34a877' };
 const TONE_TEXT: Record<Tone, string> = { brand: 'text-brand-700', amber: 'text-amber-800', rose: 'text-rose-700', mint: 'text-mint-700' };
 
 type TabId = 'work' | 'holding' | 'client' | 'record';
@@ -308,7 +309,7 @@ export function DeliverablePage({
             </section>
 
             {/* Right now */}
-            <section className={`card border-l-[6px] ${TONE_BORDER[now.tone]} p-5 sm:p-6 flex flex-wrap items-center justify-between gap-5`}>
+            <section className="card p-5 sm:p-6 flex flex-wrap items-center justify-between gap-5" style={{ borderLeft: `6px solid ${TONE_EDGE[now.tone]}` }}>
               <div className="min-w-0 max-w-[720px] space-y-1.5">
                 <p className={`text-[11.5px] font-extrabold tracking-[0.06em] ${TONE_TEXT[now.tone]}`}>RIGHT NOW</p>
                 <h2 className="font-display text-[24px] sm:text-[27px] font-bold tracking-tight leading-tight text-ink-950">{now.title}</h2>
