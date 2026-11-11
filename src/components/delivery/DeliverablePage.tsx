@@ -11,6 +11,7 @@ import { notifyTaskAssigned } from '../../lib/notifications';
 import { TaskAssignForm, type AssignTarget } from '../tasks/TaskAssignForm';
 import { StaffClientReview } from '../common/StaffClientReview';
 import { Modal } from '../../ui/Modal';
+import { DELIVERY_STAGES as STAGES, deliveryStageIndex as stageIndex } from '../../lib/deliveryStages';
 
 const db = () => supabase as any;
 
@@ -45,16 +46,6 @@ const TASK_TONE: Record<string, string> = {
   blocked: 'bg-rose-50 text-rose-700', awaiting_review: 'bg-amber-50 text-amber-800', revision_required: 'bg-rose-50 text-rose-700',
   completed: 'bg-mint-50 text-mint-700', cancelled: 'bg-ink-100 text-ink-500',
 };
-
-/** The five steps every deliverable walks through, and which database statuses sit in each. */
-const STAGES: Array<{ id: string; name: string; statuses: string[] }> = [
-  { id: 'start', name: 'Not started', statuses: ['Draft', 'Pending'] },
-  { id: 'work', name: 'Work in progress', statuses: ['In Progress', 'Awaiting Client Dependency', 'Modification Requested', 'Revision In Progress'] },
-  { id: 'internal', name: 'Internal review', statuses: ['Under Internal Review'] },
-  { id: 'client', name: 'With the client', statuses: ['Awaiting Client Review'] },
-  { id: 'done', name: 'Approved', statuses: ['Completed', 'Ready for Download'] },
-];
-const stageIndex = (status: string) => Math.max(0, STAGES.findIndex((s) => s.statuses.includes(status)));
 
 type Tone = 'brand' | 'amber' | 'rose' | 'mint';
 const TONE_BORDER: Record<Tone, string> = { brand: 'border-l-brand-600', amber: 'border-l-amber-400', rose: 'border-l-rose-500', mint: 'border-l-mint-500' };

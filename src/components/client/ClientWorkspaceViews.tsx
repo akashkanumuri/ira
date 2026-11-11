@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  Check,
   CheckCircle2,
   CreditCard,
   Download,
@@ -80,6 +81,7 @@ import {
   type ProjectWorkspace,
 } from '../../lib/sigma';
 import { Stat as UiStat } from '../../ui';
+import { DELIVERY_STAGES, clientStageLine, deliveryStageIndex } from '../../lib/deliveryStages';
 import { DeliverableThread } from '../common/DeliverableThread';
 import { ClientVersions } from './ClientVersions';
 import { Gauge, Ring } from '../../ui/charts';
@@ -1088,32 +1090,64 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
         <Progress value={prog.weightedPct ?? prog.countPct} label="Project completion" />
       </Card>
 
-      <DataTable
-        rows={rows}
-        pageSize={15}
-        empty={<Empty icon={TrendingUp} title="Nothing to track yet" desc="Progress appears once deliverables are active." />}
-        cols={[
-          { key: 'n', head: 'Sl. No.', w: '72px', mobile: 'hide', render: r => <span className="font-mono text-xs text-ink-2">{r.deliverable_number}</span> },
-          { key: 'd', head: 'Deliverable', mobile: 'title', render: r => <span className="font-medium text-ink">{r.name}</span> },
-          { key: 'q', head: 'Quantity', render: r => <span className="tnum">{fmtQty(r.quantity, r.unit)}</span> },
-          { key: 't', head: 'Timeline', render: r => <span className="text-xs text-ink-2">{r.timeline ?? fmtDate(r.due_date)}</span> },
-          { key: 's', head: 'Status', render: r => <Status s={clientStatus(r)} /> },
-          {
-            key: 'dep', head: 'Dependency',
-            render: r => {
-              const open = openDeps(r.id);
-              return open.length ? <span className="text-xs text-warn">{open.map(x => x.name).join(', ')}</span> : <span className="text-ink-3 text-xs">None</span>;
-            },
-          },
-          { key: 'u', head: 'Last updated', render: r => <span className="text-xs text-ink-2">{fmtDate(r.updated_at)}</span> },
-        ]}
-        actions={r => {
-          const open = openDeps(r.id);
-          if (open.length) return <Button size="sm" icon={Upload} onClick={() => setDepId(open[0].id)}>Upload</Button>;
-          if (r.status === 'Ready for Download' && !isLocked(r.lock_state)) return <Button size="sm" icon={Download} onClick={() => go('deliverables')}>Download</Button>;
-          return <Button size="sm" variant="ghost" onClick={() => go('deliverables')}>View</Button>;
-        }}
-      />
+      {/* One card per deliverable: where it is on the same five-step track the team works to. */}
+      {rows.length === 0 ? (
+        <Empty icon={TrendingUp} title="Nothing to track yet" desc="Progress appears once deliverables are active." />
+      ) : (
+        <ul className="space-y-3">
+          {rows.map((r, i) => {
+            const open = openDeps(r.id);
+            const idx = deliveryStageIndex(r.status);
+            const finished = r.status === 'Completed' || r.status === 'Ready for Download';
+            const yours = r.status === 'Awaiting Client Review' || open.length > 0;
+            return (
+              <li key={r.id} className={cx('card p-5 sm:p-6 rise', yours && 'border-l-[6px] border-l-brand-600')} style={{ ['--i' as any]: Math.min(i, 8) }}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h3 className="font-display font-bold text-[17px] text-ink-900">{r.name}</h3>
+                      <Status s={clientStatus(r)} />
+                    </div>
+                    <p className="text-[13.5px] text-ink-600 mt-1.5">
+                      {open.length ? `Paused: we need ${open.map(x => x.name).join(', ')} from you.` : clientStageLine(r.status)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {open.length > 0 && <Button size="sm" variant="primary" icon={Upload} onClick={() => setDepId(open[0].id)}>Send it now</Button>}
+                    {open.length === 0 && r.status === 'Awaiting Client Review' && <Button size="sm" variant="primary" onClick={() => go('deliverables')}>Review now</Button>}
+                    {open.length === 0 && r.status === 'Ready for Download' && !isLocked(r.lock_state) && <Button size="sm" icon={Download} onClick={() => go('deliverables')}>Download</Button>}
+                    {open.length === 0 && !['Awaiting Client Review', 'Ready for Download'].includes(r.status) && <Button size="sm" variant="ghost" onClick={() => go('deliverables')}>View</Button>}
+                  </div>
+                </div>
+
+                <ol className="mt-5 grid grid-cols-5">
+                  {DELIVERY_STAGES.map((st, si) => {
+                    const done = si < idx || finished;
+                    const here = si === idx && !finished;
+                    return (
+                      <li key={st.id} className="min-w-0 pr-2">
+                        <div className="flex items-center">
+                          <span className={cx('w-4 h-4 rounded-full shrink-0 grid place-items-center', done ? 'bg-mint-500 text-white' : here ? (yours ? 'bg-brand-600 ring-4 ring-brand-100' : 'bg-sky-400 ring-4 ring-sky-100') : 'bg-ink-200')}>
+                            {done && <Check size={10} strokeWidth={3.5} />}
+                          </span>
+                          <span className={cx('flex-1 h-[3px]', done ? 'bg-mint-500' : 'bg-ink-100')} />
+                        </div>
+                        <p className={cx('mt-2 text-[12px] sm:text-[12.5px] truncate', here ? 'font-extrabold text-ink-950' : done ? 'font-semibold text-ink-700' : 'font-semibold text-ink-400')}>{st.clientName}</p>
+                      </li>
+                    );
+                  })}
+                </ol>
+
+                <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[12.5px] text-ink-500">
+                  <span>Due <b className="text-ink-800">{r.timeline ?? fmtDate(r.due_date)}</b></span>
+                  <span>Quantity <b className="text-ink-800 tnum">{fmtQty(r.quantity, r.unit)}</b></span>
+                  <span>Last updated <b className="text-ink-800">{fmtDate(r.updated_at)}</b></span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <SidePanel
         open={!!dep}
