@@ -512,7 +512,7 @@ export function DeliverablePage({
                   <ul className="space-y-2.5">
                     {blockers.map((b) => (
                       <li key={b.key} className={`rounded-2xl border px-4 py-3 flex items-start gap-3.5 ${b.tone === 'rose' ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
-                        <span className={`w-10 h-10 rounded-xl bg-white border flex items-center justify-center text-[12px] font-extrabold shrink-0 ${b.tone === 'rose' ? 'border-rose-200 text-rose-700' : 'border-amber-200 text-amber-800'}`}>{b.age}d</span>
+                        <span className={`w-10 h-10 rounded-xl bg-white border flex items-center justify-center text-[12px] font-extrabold shrink-0 ${b.tone === 'rose' ? 'border-rose-200 text-rose-700' : 'border-amber-200 text-amber-800'}`}>{b.age > 0 ? `${b.age}d` : "new"}</span>
                         <span className="min-w-0">
                           <span className="block text-[13.5px] font-bold text-ink-900">{b.title}</span>
                           <span className="block text-[12.5px] text-ink-600 leading-snug">{b.detail}</span>

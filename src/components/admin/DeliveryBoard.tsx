@@ -341,7 +341,7 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
                   <button
                     type="button"
                     onClick={() => setOpenId(r.deliverable_id)}
-                    className="w-full text-left px-4 py-3.5 grid grid-cols-1 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] gap-2 md:gap-4 items-center hover:bg-ink-50/60"
+                    className="w-full text-left px-4 py-3.5 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,320px)] gap-2 md:gap-4 items-center hover:bg-ink-50/60"
                   >
                     <span className="min-w-0">
                       <span className="block text-[13.5px] font-bold text-ink-900 truncate">{r.client_name ?? 'No client'}</span>
