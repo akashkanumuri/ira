@@ -4,7 +4,7 @@ import { CHAIN_LABEL, leaveApi, useLeavePolicy, type TeamLeaveRequest } from '..
 import { openFile } from '../../lib/sigma';
 import { notify } from '../../lib/toast';
 import { dateLabel } from '../../lib/v2';
-import { Avatar, Badge, Button, Card, EmptyState, Notice, Page, PageHeader, PillTabs, Skeleton, StatusBadge } from '../../ui';
+import { Avatar, Badge, Button, Card, EmptyState, Notice, Page, PageHeader, PillTabs, SearchInput, Skeleton, StatusBadge } from '../../ui';
 import { Modal } from '../../ui/Modal';
 import { useLiveRefresh } from '../../lib/live';
 
@@ -15,6 +15,7 @@ export function TeamApprovals({ onRefresh }: { onRefresh?: () => Promise<void> }
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
   const [tab, setTab] = useState<'waiting' | 'recent'>('waiting');
+  const [q, setQ] = useState('');
   const [deciding, setDeciding] = useState<{ row: TeamLeaveRequest; decision: 'approved' | 'rejected' } | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,7 @@ export function TeamApprovals({ onRefresh }: { onRefresh?: () => Promise<void> }
 
   const waiting = useMemo(() => rows.filter((r) => r.status === 'pending' && r.manager_status === 'pending'), [rows]);
   const recent = useMemo(() => rows.filter((r) => !(r.status === 'pending' && r.manager_status === 'pending')), [rows]);
-  const shown = tab === 'waiting' ? waiting : recent;
+  const shown = (tab === 'waiting' ? waiting : recent).filter((r) => !q.trim() || `${r.employee_name} ${r.designation ?? ''} ${r.leave_type} ${(r as any).reason ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()));
   const typeName = (code: string) => policy.types.find((t) => t.code === code)?.name ?? code;
 
   async function viewDocs(r: TeamLeaveRequest) {
@@ -77,7 +78,10 @@ export function TeamApprovals({ onRefresh }: { onRefresh?: () => Promise<void> }
       )}
       {state === 'error' && <Notice tone="rose">{error}</Notice>}
 
-      <PillTabs value={tab} onChange={setTab} items={[{ id: 'waiting', label: 'Waiting for you', count: waiting.length || undefined }, { id: 'recent', label: 'Recent', count: recent.length || undefined }]} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <PillTabs value={tab} onChange={setTab} items={[{ id: 'waiting', label: 'Waiting for you', count: waiting.length || undefined }, { id: 'recent', label: 'Recent', count: recent.length || undefined }]} />
+        <SearchInput value={q} onChange={setQ} placeholder="Search person or leave type" className="w-full sm:w-64" />
+      </div>
 
       {state === 'loading' ? (
         <Card className="p-5 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full rounded-2xl" />)}</Card>

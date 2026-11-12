@@ -4,7 +4,7 @@ import { AlertSettings } from './AlertSettings';
 import type { AuthUser } from '../../contexts/AuthContext';
 import { deleteNotification, fetchUserNotifications, markAllNotificationsAsRead, markNotificationAsRead, type NotificationRecord, type NotificationType } from '../../lib/notifications';
 import { notify } from '../../lib/toast';
-import { Card, EmptyState, Page, PageHeader, PillTabs, Skeleton, cx, type Tone } from '../../ui';
+import { Card, EmptyState, Page, PageHeader, PillTabs, SearchInput, Skeleton, cx, type Tone } from '../../ui';
 import { useLiveRefresh } from '../../lib/live';
 
 const TYPE_META: Record<NotificationType, { label: string; icon: React.ReactNode; tone: Tone }> = {
@@ -42,6 +42,7 @@ export function NotificationsPage({ user, onOpen }: { user: AuthUser; onOpen: (u
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [type, setType] = useState<NotificationType | 'any'>('any');
+  const [q, setQ] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,7 +57,8 @@ export function NotificationsPage({ user, onOpen }: { user: AuthUser; onOpen: (u
 
   const unread = items.filter((n) => !n.read_at).length;
   const types = useMemo(() => Array.from(new Set(items.map((n) => n.type))).filter((t) => TYPE_META[t]), [items]);
-  const shown = items.filter((n) => (filter === 'all' || !n.read_at) && (type === 'any' || n.type === type));
+  const shown = items.filter((n) => (filter === 'all' || !n.read_at) && (type === 'any' || n.type === type)
+    && (!q.trim() || `${n.title} ${n.message ?? ''}`.toLowerCase().includes(q.trim().toLowerCase())));
   const groups = useMemo(() => {
     const m = new Map<string, NotificationRecord[]>();
     for (const n of shown) m.set(dayKey(n.created_at), [...(m.get(dayKey(n.created_at)) ?? []), n]);
@@ -95,6 +97,7 @@ export function NotificationsPage({ user, onOpen }: { user: AuthUser; onOpen: (u
       <AlertSettings user={user} />
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <PillTabs value={filter} onChange={setFilter} items={[{ id: 'all', label: 'All', count: items.length }, { id: 'unread', label: 'Unread', count: unread || undefined }]} />
+        <SearchInput value={q} onChange={setQ} placeholder="Search notifications" className="w-full sm:w-64" />
         {types.length > 1 && (
           <div className="flex flex-wrap gap-1.5">
             {(['any', ...types] as const).map((t) => (

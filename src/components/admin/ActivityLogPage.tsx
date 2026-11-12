@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, History, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Avatar, Badge, Card, EmptyState, Notice, Page, PageHeader, PillTabs, Skeleton, cx, type Tone } from '../../ui';
+import { Avatar, Badge, Card, EmptyState, Notice, Page, PageHeader, PillTabs, SearchInput, Skeleton, cx, type Tone } from '../../ui';
 import { useLiveRefresh } from '../../lib/live';
 
 const PAGE = 50;
@@ -84,6 +84,7 @@ export function ActivityLogPage() {
   const [group, setGroup] = useState<keyof typeof GROUPS>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [more, setMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,16 +161,18 @@ export function ActivityLogPage() {
     }
   };
 
+  const who = (r: Row) => (r.actor_id ? names[r.actor_id] ?? (r.actor_role === 'admin' ? 'Administrator' : 'User') : 'System');
   const byDay = useMemo(() => {
+    const n = q.trim().toLowerCase();
     const m = new Map<string, Row[]>();
     for (const r of rows) {
+      if (n && !`${who(r)} ${r.action} ${ENTITY_LABEL[r.entity_type] ?? r.entity_type} ${r.project_id ? projects[r.project_id] ?? '' : ''} ${r.reason ?? ''} ${r.changes ? JSON.stringify(r.changes) : ''}`.toLowerCase().includes(n)) continue;
       const d = new Date(r.occurred_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
       m.set(d, [...(m.get(d) ?? []), r]);
     }
     return [...m.entries()];
-  }, [rows]);
-
-  const who = (r: Row) => (r.actor_id ? names[r.actor_id] ?? (r.actor_role === 'admin' ? 'Administrator' : 'User') : 'System');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, q, names, projects]);
 
   return (
     <Page>
@@ -190,7 +193,8 @@ export function ActivityLogPage() {
             { id: 'access', label: 'People & access' },
           ]}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput value={q} onChange={setQ} placeholder="Search who, what, project" className="w-full sm:w-60" />
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input !w-auto !min-h-[40px] !rounded-full !text-[13px]" aria-label="From date" />
           <span className="text-ink-400 text-sm">to</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input !w-auto !min-h-[40px] !rounded-full !text-[13px]" aria-label="To date" />
