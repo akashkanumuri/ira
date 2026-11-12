@@ -1148,10 +1148,10 @@ function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
   >
     {message && <UiNotice tone="rose">{message}</UiNotice>}
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-      <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="Open" value={openCount} caption={`${activeEmployees.length} active people`} onClick={() => setStatus('open')} />
-      <Stat index={1} icon={<ClipboardCheck className="w-5 h-5" />} label="To review" value={reviewCount} tone={reviewCount ? 'amber' : 'brand'} caption="Handed in, waiting for approval" onClick={() => setStatus('awaiting_review')} />
-      <Stat index={2} icon={<Ban className="w-5 h-5" />} label="Blocked" value={blockedCount} tone={blockedCount ? 'rose' : 'brand'} caption="Can’t continue without help" onClick={() => setStatus('blocked')} />
-      <Stat index={3} icon={<CircleAlert className="w-5 h-5" />} label="Overdue" value={overdueAll} tone={overdueAll ? 'rose' : 'brand'} caption={overdueAll ? 'Past due, not handed in' : 'All on time'} onClick={() => setStatus('overdue')} />
+      <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="Open" value={openCount} caption={`${activeEmployees.length} active people`} active={status === 'open'} onClick={() => setStatus((cur) => (cur === 'open' ? 'open' : 'open'))} />
+      <Stat index={1} icon={<ClipboardCheck className="w-5 h-5" />} label="To review" value={reviewCount} tone={reviewCount ? 'amber' : 'brand'} caption="Handed in, waiting for approval" active={status === 'awaiting_review'} onClick={() => setStatus((cur) => (cur === 'awaiting_review' ? 'open' : 'awaiting_review'))} />
+      <Stat index={2} icon={<Ban className="w-5 h-5" />} label="Blocked" value={blockedCount} tone={blockedCount ? 'rose' : 'brand'} caption="Can’t continue without help" active={status === 'blocked'} onClick={() => setStatus((cur) => (cur === 'blocked' ? 'open' : 'blocked'))} />
+      <Stat index={3} icon={<CircleAlert className="w-5 h-5" />} label="Overdue" value={overdueAll} tone={overdueAll ? 'rose' : 'brand'} caption={overdueAll ? 'Past due, not handed in' : 'All on time'} active={status === 'overdue'} onClick={() => setStatus((cur) => (cur === 'overdue' ? 'open' : 'overdue'))} />
     </div>
     <div className="card p-4 grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
       <FilterInput label="Search"><SearchInput value={search} onChange={setSearch} placeholder="Task or person" /></FilterInput>
@@ -1292,7 +1292,12 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
     setEditing(target);
     setModal('edit');
   }, [employees]);
-  const filtered = (employees as Employee[]).filter(e => (status === 'all' || e.status === status) && (!search.trim() || `${e.name} ${e.empId} ${e.loginId} ${e.workEmail}`.toLowerCase().includes(search.toLowerCase())));
+  const [dept, setDept] = useState('all');
+  const isRemote = (e: Employee) => e.status === 'active' && (rulesMap?.get(e.id)?.location_mode ?? e.workMode) === 'remote';
+  const filtered = (employees as Employee[]).filter(e =>
+    (status === 'all' || (status === 'remote' ? isRemote(e) : e.status === status)) &&
+    (dept === 'all' || e.department === dept) &&
+    (!search.trim() || `${e.name} ${e.empId} ${e.loginId} ${e.workEmail} ${e.designation ?? ''} ${e.department ?? ''}`.toLowerCase().includes(search.toLowerCase())));
   const all = employees as Employee[];
   const activeCount = all.filter((e) => e.status === 'active').length;
   const remoteCount = all.filter((e) => e.status === 'active' && (rulesMap?.get(e.id)?.location_mode ?? e.workMode) === 'remote').length;
@@ -1318,14 +1323,20 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
       actions={<button onClick={() => { setEditing(null); setModal('create') }} className="btn-primary"><UserPlus className="w-4 h-4" />Add employee</button>}
     >
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Stat index={0} icon={<Users className="w-5 h-5" />} tone="brand" label="Active" value={activeCount} caption={`${all.length} accounts in total`} />
-        <Stat index={1} icon={<UserX className="w-5 h-5" />} tone="ink" label="Inactive" value={all.length - activeCount} caption="Sign-in disabled, history kept" />
-        <Stat index={2} icon={<Home className="w-5 h-5" />} tone="sky" label="Remote" value={remoteCount} caption="Check in as WFH automatically" />
+        <Stat index={0} icon={<Users className="w-5 h-5" />} tone="brand" label="Active" value={activeCount} caption={`${all.length} accounts in total`} active={status === 'active'} onClick={() => setStatus((c) => (c === 'active' ? 'all' : 'active'))} />
+        <Stat index={1} icon={<UserX className="w-5 h-5" />} tone="ink" label="Inactive" value={all.length - activeCount} caption="Sign-in disabled, history kept" active={status === 'inactive'} onClick={() => setStatus((c) => (c === 'inactive' ? 'all' : 'inactive'))} />
+        <Stat index={2} icon={<Home className="w-5 h-5" />} tone="sky" label="Remote" value={remoteCount} caption="Check in as WFH automatically" active={status === 'remote'} onClick={() => setStatus((c) => (c === 'remote' ? 'all' : 'remote'))} />
         <Stat index={3} icon={<Building2 className="w-5 h-5" />} tone="amber" label="Departments" value={deptCount} caption="With active people" />
       </div>
-      <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-        <PillTabs value={status} onChange={setStatus} items={[{ id: 'all', label: 'Everyone', count: all.length }, { id: 'active', label: 'Active', count: activeCount }, { id: 'inactive', label: 'Inactive', count: all.length - activeCount }]} />
-        <SearchInput value={search} onChange={setSearch} placeholder="Search name, ID or login" className="w-full md:w-72" />
+      <div className="card p-3 sm:p-4 flex flex-wrap gap-3 items-center">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search name, ID, login, role or department" className="flex-1 min-w-[220px]" />
+        <label className="sr-only" htmlFor="emp-dept">Department</label>
+        <select id="emp-dept" value={dept} onChange={(e) => setDept(e.target.value)} className="input !w-auto !min-h-[40px] !rounded-full !py-1.5">
+          <option value="all">All departments</option>
+          {Array.from(new Set(all.map((e) => e.department).filter(Boolean) as string[])).sort().map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <span className="text-[13px] text-ink-500"><b className="text-ink-900">{filtered.length}</b> {status === 'all' ? 'people' : status === 'remote' ? 'remote' : status}</span>
+        {(search || dept !== 'all' || status !== 'all') && <button type="button" className="text-[13px] font-semibold text-brand-700" onClick={() => { setSearch(''); setDept('all'); setStatus('all'); }}>Clear</button>}
       </div>
       <div className="card overflow-hidden"><div className="overflow-x-auto"><table className="data-table">
         <thead><tr><Th>Employee</Th><Th>Role</Th><Th>Work mode</Th><Th>Salary</Th><Th>Signed in on</Th><Th>Status</Th><Th> </Th></tr></thead>
@@ -1659,7 +1670,12 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
   const corrPending = (corrections as CorrectionRequest[]).filter((r) => r.status === 'pending');
   const rows: any[] = tab === 'leave' ? leaveRequests : tab === 'wfh' ? wfhRequests : corrections;
   const pending = tab === 'leave' ? leavePending : tab === 'wfh' ? wfhPending : corrPending;
-  const reviewed = rows.filter((r: any) => r.status !== 'pending');
+  const [rq, setRq] = useState('');
+  const [rDecision, setRDecision] = useState<'all' | 'approved' | 'rejected'>('all');
+  const reviewedAll = rows.filter((r: any) => r.status !== 'pending');
+  const reviewed = reviewedAll.filter((r: any) =>
+    (rDecision === 'all' || r.status === rDecision || (rDecision === 'rejected' && r.status === 'cancelled')) &&
+    (!rq.trim() || `${r.employeeName ?? ''} ${r.department ?? ''} ${r.leaveType ?? ''} ${r.reason ?? ''}`.toLowerCase().includes(rq.trim().toLowerCase())));
   const table = tab === 'leave' ? 'leave_requests' : tab === 'wfh' ? 'wfh_requests' : 'regularization_requests';
 
   return (
@@ -1733,7 +1749,16 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
       </section>
 
       <section className="card overflow-hidden">
-        <div className="p-5 sm:p-6"><h2 className="font-display text-lg font-bold text-ink-950">Reviewed</h2><p className="text-[13px] text-ink-500 mt-1">{reviewed.length} decision{reviewed.length === 1 ? '' : 's'}</p></div>
+        <div className="p-5 sm:p-6 flex flex-wrap items-end justify-between gap-3">
+          <div><h2 className="font-display text-lg font-bold text-ink-950">Reviewed</h2><p className="text-[13px] text-ink-500 mt-1">{reviewed.length} of {reviewedAll.length} decision{reviewedAll.length === 1 ? '' : 's'}</p></div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <SearchInput value={rq} onChange={setRq} placeholder="Search person, type, reason" className="w-full sm:w-64" />
+            <label className="sr-only" htmlFor="req-decision">Decision</label>
+            <select id="req-decision" value={rDecision} onChange={(e) => setRDecision(e.target.value as any)} className="input !w-auto !min-h-[40px] !rounded-full !py-1.5">
+              <option value="all">Any decision</option><option value="approved">Approved</option><option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead><tr><Th>Employee</Th><Th>{tab === 'leave' ? 'Dates' : 'Date'}</Th><Th>Details</Th><Th>Decision</Th></tr></thead>
@@ -1746,7 +1771,7 @@ function RequestsAdmin({ leaveRequests, wfhRequests, corrections = [], ledgers =
                   <Td><StatusBadge label={r.status} /></Td>
                 </tr>
               ))}
-              {!reviewed.length && <EmptyRow colSpan={4} text="Nothing reviewed yet." />}
+              {!reviewed.length && <EmptyRow colSpan={4} text={reviewedAll.length ? 'Nothing matches that search.' : 'Nothing reviewed yet.'} />}
             </tbody>
           </table>
         </div>
