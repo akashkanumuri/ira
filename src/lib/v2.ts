@@ -265,6 +265,7 @@ export function mapTask(row: any, employees: Map<string, Employee>): Task {
     reviewedAt: row.reviewed_at ?? null,
     estimateMinutes: row.estimate_minutes ?? null,
     researchMinutes: row.research_minutes ?? null,
+    selfAssigned: Boolean(row.self_assigned),
   };
 }
 

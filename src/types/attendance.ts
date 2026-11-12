@@ -193,6 +193,8 @@ export interface Task {
   estimateMinutes?: number | null;
   /** Research time before work starts (minutes); null = no research step (older tasks). */
   researchMinutes?: number | null;
+  /** Added by the employee for themselves; their reporting manager reviews it. */
+  selfAssigned?: boolean;
 }
 
 export interface LeaveLedger {

@@ -65,6 +65,7 @@ export function Card({
   index,
   as: As = 'section',
   onClick,
+  pressed,
 }: {
   children: React.ReactNode;
   className?: string;
@@ -72,12 +73,18 @@ export function Card({
   index?: number;
   as?: 'section' | 'div' | 'article' | 'button';
   onClick?: () => void;
+  /** A pressed filter card. `.card` owns its border and shadow outside Tailwind's layers, so this is inline. */
+  pressed?: boolean;
 }) {
-  const style = index != null ? ({ ['--i' as any]: index } as React.CSSProperties) : undefined;
+  const style = {
+    ...(index != null ? { ['--i' as string]: index } : {}),
+    ...(pressed ? { borderColor: 'var(--color-brand-600, #5b35e8)', boxShadow: '0 0 0 2px var(--color-brand-600, #5b35e8)' } : {}),
+  } as React.CSSProperties;
   return (
     <As
       onClick={onClick}
       type={As === 'button' ? 'button' : undefined}
+      aria-pressed={As === 'button' && pressed != null ? pressed : undefined}
       style={style}
       className={cx('card rise', interactive && 'card-interactive cursor-pointer text-left', className)}
     >
@@ -141,6 +148,7 @@ export function Stat({
   onClick,
   index,
   className,
+  active,
 }: {
   label: React.ReactNode;
   value: number | string | null | undefined;
@@ -151,6 +159,8 @@ export function Stat({
   onClick?: () => void;
   index?: number;
   className?: string;
+  /** This card is the filter currently applied to the list below it. */
+  active?: boolean;
 }) {
   const body = (
     <>
@@ -165,7 +175,7 @@ export function Stat({
     </>
   );
   return (
-    <Card index={index} interactive={Boolean(onClick)} onClick={onClick} as={onClick ? 'button' : 'section'} className={cx('p-5 sm:p-6 w-full flex flex-col justify-start text-left', className)}>
+    <Card index={index} interactive={Boolean(onClick)} onClick={onClick} as={onClick ? 'button' : 'section'} pressed={onClick ? Boolean(active) : undefined} className={cx('p-5 sm:p-6 w-full flex flex-col justify-start text-left', className)}>
       {body}
     </Card>
   );

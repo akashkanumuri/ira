@@ -930,8 +930,16 @@ function topLevel(list: Task[]) {
 }
 const byDue = (a: Task, b: Task) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title);
 
+/** Search a task by its title, brief or the person on it. */
+const taskMatches = (t: Task, q: string) => {
+  const n = q.trim().toLowerCase();
+  if (!n) return true;
+  return [t.title, t.description, t.assignedToName, t.assignedByName].some((x) => (x ?? '').toLowerCase().includes(n));
+};
+
 function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh }: any) {
   const [assignOpen, setAssignOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [assignBusy, setAssignBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('task'));
@@ -940,18 +948,30 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
   const myDesignation = (designations as Designation[]).find((d: Designation) => d.id === user.designationId);
   const canAssign = Boolean(user.designationId && (myDesignation?.canAssignTasks ?? (designations as Designation[]).some((d: Designation) => d.id === user.designationId && d.canAssignTasks)));
   const all = (tasks as Task[]).filter((t) => !t.archivedAt && (t.assignedTo === myId || t.assignedBy === myId));
-  const [view, setView] = useState<'open' | 'review' | 'done' | 'given'>('open');
+  type View = 'open' | 'overdue' | 'review' | 'own' | 'done' | 'given';
+  const [view, setView] = useState<View>('open');
+  const [q, setQ] = useState('');
+  const [priority, setPriority] = useState('all');
   const mine = all.filter((t) => t.assignedTo === myId);
   const mineOpen = mine.filter(isTaskWithAssignee).sort(byDue);
+  const mineOverdue = mineOpen.filter((t) => t.dueDate < today());
   const mineReview = mine.filter((t) => t.status === 'awaiting_review').sort(byDue);
+  const mineOwn = mine.filter((t) => t.selfAssigned && !isTaskClosed(t)).sort(byDue);
   const mineDone = mine.filter(isTaskClosed).sort((a, b) => (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt));
   const given = all.filter((t) => t.assignedBy === myId && t.assignedTo !== myId).sort((a, b) => (a.status === 'awaiting_review' ? -1 : 0) - (b.status === 'awaiting_review' ? -1 : 0) || byDue(a, b));
   const toReview = given.filter((t) => t.status === 'awaiting_review').length;
-  const visible = topLevel(view === 'open' ? mineOpen : view === 'review' ? mineReview : view === 'done' ? mineDone : given);
-  const overdueCount = mineOpen.filter((t) => t.dueDate < today()).length;
+  const showGiven = canAssign || given.length > 0;
+  const base = view === 'open' ? mineOpen : view === 'overdue' ? mineOverdue : view === 'review' ? mineReview : view === 'own' ? mineOwn : view === 'done' ? mineDone : given;
+  const visible = topLevel(base).filter((t) => taskMatches(t, q) && (priority === 'all' || t.priority === priority));
   const weekEnd = (() => { const d = new Date(`${today()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); })();
   const dueThisWeek = mineOpen.filter((t) => t.dueDate >= today() && t.dueDate <= weekEnd).length;
-  // Client deliverables are handled from the admin login only; the employee login's task screens don't show them.
+  // Employees can read only their own record, so the manager's name comes from a narrow RPC.
+  const [reviewer, setReviewer] = useState<{ id: string; name: string } | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void (supabase as any).rpc('my_reporting_manager').then(({ data }: any) => { if (live && Array.isArray(data) && data[0]) setReviewer(data[0]); });
+    return () => { live = false; };
+  }, []);
 
   const myRules = (rules as AssignmentRule[]).filter(r => r.assignerDesignationId === user.designationId);
   const hasDirectReportRules = myRules.some(r => r.scope === 'direct_reports');
@@ -980,26 +1000,37 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
     } finally { setAssignBusy(false); }
   }
 
+  const pick = (v: View) => setView((cur) => (cur === v && v !== 'open' ? 'open' : v));
+  const cards: Array<{ id: View; label: string; value: number; caption: string; icon: React.ReactNode; tone: any }> = [
+    { id: 'open', label: 'To do', value: mineOpen.length, caption: dueThisWeek ? `${dueThisWeek} due this week` : mineOpen[0] ? `Next due ${dateLabel(mineOpen[0].dueDate)}` : 'Nothing open', icon: <BriefcaseBusiness className="w-5 h-5" />, tone: 'brand' },
+    { id: 'overdue', label: 'Overdue', value: mineOverdue.length, caption: mineOverdue.length ? 'Past their due date' : 'All on time', icon: <CircleAlert className="w-5 h-5" />, tone: mineOverdue.length ? 'rose' : 'brand' },
+    { id: 'review', label: 'Waiting for OK', value: mineReview.length, caption: 'Handed in, not approved yet', icon: <Clock3 className="w-5 h-5" />, tone: 'amber' },
+    { id: 'own', label: 'My own tasks', value: mineOwn.length, caption: reviewer ? `Reviewed by ${reviewer.name}` : 'Added by you', icon: <ListChecks className="w-5 h-5" />, tone: 'sky' },
+    { id: 'done', label: 'Done', value: mineDone.length, caption: 'Completed or cancelled', icon: <CheckCircle2 className="w-5 h-5" />, tone: 'mint' },
+    ...(showGiven ? [{ id: 'given' as View, label: 'Assigned by me', value: given.length, caption: toReview ? `${toReview} waiting for your review` : 'Work you gave others', icon: <ClipboardCheck className="w-5 h-5" />, tone: toReview ? 'amber' : 'ink' }] : []),
+  ];
+  const viewName = cards.find((c) => c.id === view)?.label ?? 'To do';
+
   return <PageShell
     title="Work & tasks"
-    subtitle="What you’re working on, what’s waiting for review, and work you’ve given others."
-    actions={canAssign ? <button onClick={() => setAssignOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Assign task</button> : undefined}
+    subtitle="What you’re working on, what’s waiting for an OK, and work you’ve given others."
+    actions={<div className="flex flex-wrap gap-2">
+      <button onClick={() => setOwnOpen(true)} className="btn-secondary"><Plus className="w-4 h-4" />Add my own task</button>
+      {canAssign && <button onClick={() => setAssignOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Assign task</button>}
+    </div>}
   >
     {message && <UiNotice tone="rose">{message}</UiNotice>}
-    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-      <Stat index={0} icon={<BriefcaseBusiness className="w-5 h-5" />} tone="brand" label="To do" value={mineOpen.length} caption={mineOpen[0] ? `Next due ${dateLabel(mineOpen[0].dueDate)}` : 'Nothing open'} onClick={() => setView('open')} />
-      <Stat index={1} icon={<Clock3 className="w-5 h-5" />} tone="amber" label="Due this week" value={dueThisWeek} caption="Next 7 days" onClick={() => setView('open')} />
-      <Stat index={2} icon={<CircleAlert className="w-5 h-5" />} label="Overdue" value={overdueCount} tone={overdueCount ? 'rose' : 'brand'} caption={overdueCount ? 'Past their due date' : 'All on time'} onClick={() => setView('open')} />
-      <Stat index={3} icon={<ClipboardCheck className="w-5 h-5" />} tone="sky" label={given.length ? 'Waiting for your review' : 'In review'} value={given.length ? toReview : mineReview.length} caption={given.length ? 'Handed in by your team' : 'Handed in, awaiting approval'} onClick={() => setView(given.length ? 'given' : 'review')} />
+    <div className={cx('grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3', cards.length > 5 ? 'xl:grid-cols-6' : 'xl:grid-cols-5')}>
+      {cards.map((c, i) => <Stat key={c.id} index={i} icon={c.icon} tone={c.tone} label={c.label} value={c.value} caption={c.caption} active={view === c.id} onClick={() => pick(c.id)} />)}
     </div>
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <PillTabs value={view} onChange={setView} items={[
-        { id: 'open', label: 'To do', count: mineOpen.length },
-        { id: 'review', label: 'In review', count: mineReview.length || undefined },
-        { id: 'done', label: 'Done', count: mineDone.length || undefined },
-        ...(canAssign || given.length ? [{ id: 'given' as const, label: toReview ? `Assigned by me · ${toReview} to review` : 'Assigned by me', count: given.length }] : []),
-      ]} />
-      {canAssign && <Badge tone={targets.length > 0 ? 'brand' : 'amber'}>{targets.length > 0 ? `${targets.length} people you can assign` : 'Direct reports required to assign'}</Badge>}
+    <div className="card p-3 sm:p-4 flex flex-wrap items-center gap-3">
+      <SearchInput value={q} onChange={setQ} placeholder="Search tasks, briefs, people" className="flex-1 min-w-[220px]" />
+      <label className="sr-only" htmlFor="emp-task-priority">Priority</label>
+      <select id="emp-task-priority" value={priority} onChange={(e) => setPriority(e.target.value)} className="input !w-auto !min-h-[40px] !rounded-full !py-1.5">
+        <option value="all">Any priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+      </select>
+      <span className="text-[13px] text-ink-500"><b className="text-ink-900">{visible.length}</b> {viewName.toLowerCase()}{q || priority !== 'all' ? ' matching' : ''}</span>
+      {(q || priority !== 'all') && <button type="button" className="text-[13px] font-semibold text-brand-700" onClick={() => { setQ(''); setPriority('all'); }}>Clear</button>}
     </div>
     {assignOpen && (
       <Modal title="Assign work" onClose={() => setAssignOpen(false)} closeDisabled={assignBusy} wide>
@@ -1008,11 +1039,56 @@ function TasksEmployee({ user, tasks, employees, designations, rules, onRefresh 
           hasDirectReportRules={hasDirectReportRules} />
       </Modal>
     )}
-    <TaskTable tasks={visible} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee={view === 'given'} hideClient startable={view === 'open'}
-      empty={view === 'open' ? 'Nothing to do right now.' : view === 'review' ? 'Nothing waiting for review.' : view === 'done' ? 'No finished tasks yet.' : 'You haven’t assigned any work yet.'} />
+    {ownOpen && <OwnTaskForm reviewerName={reviewer?.name ?? null} onClose={() => setOwnOpen(false)} onSaved={async () => { setOwnOpen(false); setView('own'); await onRefresh(); }} />}
+    <TaskTable tasks={visible} allTasks={tasks} onOpen={(t) => setOpenId(t.id)} showAssignee={view === 'given'} hideClient startable={view !== 'done' && view !== 'given' && view !== 'review'}
+      empty={q || priority !== 'all' ? 'Nothing matches that search.' : view === 'open' ? 'Nothing to do right now.' : view === 'overdue' ? 'Nothing overdue.' : view === 'review' ? 'Nothing waiting for an OK.' : view === 'own' ? 'Add a task for yourself to keep track of work you owe.' : view === 'done' ? 'No finished tasks yet.' : 'You haven’t assigned any work yet.'} />
     {openTask && <TaskDetail task={openTask} tasks={tasks} employees={employees} viewer={{ employeeId: myId, isAdmin: false }} subtaskTargets={targets}
       onClose={() => setOpenId(null)} onChanged={onRefresh} />}
   </PageShell>;
+}
+
+/** A task you add for yourself. Starts without approval; when you hand it in, your reporting manager reviews it. */
+function OwnTaskForm({ reviewerName, onClose, onSaved }: { reviewerName: string | null; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const reqId = useRef<string>(crypto.randomUUID());
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (busy) return;
+    const fd = new FormData(e.currentTarget);
+    const title = String(fd.get('title') || '').trim();
+    const due = String(fd.get('due') || today());
+    if (!title) { setErr('Give the task a title.'); return; }
+    if (due < today()) { setErr('The due date can’t be in the past.'); return; }
+    setBusy(true); setErr('');
+    try {
+      const { error } = await (supabase as any).rpc('create_self_task', {
+        p_title: title, p_description: String(fd.get('notes') || '').trim() || null,
+        p_start_date: today(), p_due_date: due, p_priority: String(fd.get('priority') || 'medium'), p_client_request_id: reqId.current,
+      });
+      if (error) throw new Error(error.message);
+      notify('Added to your tasks.', 'success');
+      await onSaved();
+    } catch (x) { setErr(x instanceof Error ? x.message : 'Could not add the task.'); } finally { setBusy(false); }
+  }
+  return (
+    <Modal title="Add my own task" onClose={onClose} closeDisabled={busy}>
+      <form onSubmit={submit} className="space-y-4">
+        <p className="text-[13px] text-ink-600">For work you owe and want to keep track of. You can start it straight away. When you hand it in, <b>{reviewerName ?? 'the admin'}</b> reviews it.</p>
+        <label className="block"><span className="label">What is it?</span><input name="title" className="input" maxLength={200} required autoFocus placeholder="e.g. Resize the menu for Instagram" /></label>
+        <label className="block"><span className="label">Notes (optional)</span><textarea name="notes" className="input min-h-20" maxLength={5000} /></label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block"><span className="label">Due</span><input name="due" type="date" className="input" defaultValue={today()} min={today()} required /></label>
+          <label className="block"><span className="label">Priority</span><select name="priority" className="input" defaultValue="medium"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
+        </div>
+        {err && <p className="text-[13px] text-rose-700">{err}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="btn-primary" disabled={busy}>{busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}Add task</button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 function TasksAdmin({ tasks, employees, designations, user, onRefresh }: any) {
@@ -1130,7 +1206,7 @@ function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssigne
         return (
           <li key={t.id} className={cx('px-4 py-3 flex items-start gap-3', runningId === t.id && 'bg-brand-50/60')} onClick={() => onOpen(t)}>
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-[14px] text-ink-900 leading-snug line-clamp-2">{t.title}</p>
+              <p className="font-bold text-[14px] text-ink-900 leading-snug line-clamp-2">{t.title}{t.selfAssigned && <span className="ml-1.5 align-middle text-[10.5px] font-bold px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700">Own task</span>}</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 {t.archivedAt ? <Badge tone="ink">Removed</Badge> : <Badge tone={meta.tone} dot>{meta.label}</Badge>}
                 <PriorityBadge value={t.priority} />
@@ -1158,7 +1234,7 @@ function TaskTable({ tasks, allTasks, onOpen, onDelete, archivingId, showAssigne
       return (
         <tr key={t.id} className={cx('cursor-pointer hover:bg-ink-50/60', runningId === t.id && 'bg-brand-50/60')} onClick={() => onOpen(t)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(t) }}>
           <td>
-            <span className="block max-w-[340px] truncate font-bold text-ink-900">{t.parentTaskId && <CornerDownRight className="inline w-3.5 h-3.5 mr-1 text-ink-400 -mt-0.5" />}{t.title}</span>
+            <span className="block max-w-[340px] truncate font-bold text-ink-900">{t.parentTaskId && <CornerDownRight className="inline w-3.5 h-3.5 mr-1 text-ink-400 -mt-0.5" />}{t.title}{t.selfAssigned && <span className="ml-1.5 align-middle text-[10.5px] font-bold px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700">Own task</span>}</span>
             <span className="mt-1 flex flex-wrap gap-1.5">
               {!hideClient && t.deliverableId && <span className="inline-flex max-w-[260px] truncate items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{deliverableName?.(t.deliverableId) ?? 'Client deliverable'}</span>}
               {subs && <span className="inline-flex items-center gap-1 rounded-full bg-ink-50 px-2 py-0.5 text-[11px] font-semibold text-ink-600"><ListChecks className="w-3 h-3" />{subs}</span>}
