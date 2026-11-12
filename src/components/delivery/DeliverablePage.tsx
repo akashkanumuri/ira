@@ -429,7 +429,7 @@ export function DeliverablePage({
                               {p.designation && <span className="block text-[11.5px] text-ink-500 truncate">{p.designation}</span>}
                             </span>
                             <span className="text-right shrink-0">
-                              <span className="block text-[11.5px] font-bold text-ink-900 whitespace-nowrap">{here} here</span>
+                              <span className="block text-[11.5px] font-bold text-ink-900 whitespace-nowrap">{here} open here</span>
                               <span className={`block text-[11px] font-semibold whitespace-nowrap ${n >= 8 ? 'text-rose-700' : n >= 5 ? 'text-amber-800' : 'text-ink-500'}`}>{n} open in all</span>
                             </span>
                           </button>

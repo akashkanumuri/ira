@@ -321,14 +321,10 @@ export function TaskDetail({
               {startBlockedReason === 'Allow notifications to start.' && <button type="button" className="font-semibold text-brand-700 underline" onClick={() => void work?.requestNotifications()}>Allow notifications</button>}
             </p>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
             <div>
               <div className="flex justify-between text-[12px] mb-1.5"><span className="font-semibold text-ink-600">Time vs estimate</span><span className="tnum font-bold text-ink-900">{est ? `${fmtMinutes(Math.round(spentMin))} / ${fmtMinutes(est)}` : 'No estimate'}</span></div>
               <Progress value={est ? Math.min(100, spentMin / est * 100) : 0} tone={est && spentMin > est ? 'rose' : 'brand'} />
-            </div>
-            <div>
-              <div className="flex justify-between text-[12px] mb-1.5"><span className="font-semibold text-ink-600">Progress <span className="font-normal text-ink-400">from check-ins</span></span><span className="tnum font-bold text-ink-900">{Math.round(task.status === 'completed' ? 100 : task.progressPct ?? 0)}%</span></div>
-              <Progress value={task.status === 'completed' ? 100 : task.progressPct ?? 0} tone={task.status === 'completed' ? 'mint' : task.status === 'blocked' ? 'rose' : 'brand'} />
             </div>
           </div>
           {todaySessions.length > 0 && (
