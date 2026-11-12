@@ -66,9 +66,11 @@ type TabId = 'work' | 'holding' | 'client' | 'record';
  * The same page for an admin and a manager; it opens over whatever screen asked for it.
  */
 export function DeliverablePage({
-  deliverableId, employees, myEmployeeId, onClose, onEditDetails,
+  deliverableId, employees, myEmployeeId, onClose, onEditDetails, initialTab,
 }: {
   deliverableId: string;
+  /** Open on this tab, e.g. 'client' when a notification is about a draft the client answered. */
+  initialTab?: 'work' | 'holding' | 'client' | 'record';
   employees: AssignTarget[];
   myEmployeeId?: string | null;
   onClose: () => void;
@@ -81,7 +83,7 @@ export function DeliverablePage({
   const [deps, setDeps] = useState<DepRow[]>([]);
   const [load, setLoad] = useState<Record<string, number>>({});
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<TabId>('work');
+  const [tab, setTab] = useState<TabId>(initialTab ?? 'work');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState('');
   const [addOpen, setAddOpen] = useState(false);

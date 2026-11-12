@@ -54,7 +54,9 @@ const COLUMN_DOT = ['bg-ink-300', 'bg-brand-600', 'bg-sky-400', 'bg-amber-400', 
  * filter for both views.
  */
 export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTarget[]; myEmployeeId?: string | null }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  // A notification link (/admin-delivery?deliverable=<id>&round=<n>) opens that deliverable straight away.
+  const [openId, setOpenId] = useState<string | null>(() => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('deliverable') : null));
+  const [openTab] = useState<'client' | undefined>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('round') ? 'client' : undefined));
   const [rows, setRows] = useState<BoardRow[] | null>(null);
   const [doneRows, setDoneRows] = useState<DoneRow[]>([]);
   /** deliverable id → the people holding its open tasks, for the initials on each card. */
@@ -376,9 +378,15 @@ export function DeliveryBoard({ employees, myEmployeeId }: { employees: AssignTa
       {openId && (
         <DeliverablePage
           deliverableId={openId}
+          initialTab={openTab}
           employees={employees}
           myEmployeeId={myEmployeeId}
-          onClose={() => { setOpenId(null); void load(); }}
+          onClose={() => {
+            setOpenId(null);
+            // Drop the deep link so a refresh shows the board, not the same deliverable again.
+            if (typeof window !== 'undefined' && window.location.search.includes('deliverable=')) window.history.replaceState(null, '', window.location.pathname);
+            void load();
+          }}
         />
       )}
     </div>

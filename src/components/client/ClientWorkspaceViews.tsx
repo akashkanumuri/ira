@@ -681,8 +681,16 @@ export function ClientDeliverables({ user, ws, reload }: ViewProps) {
   const toast = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<'detail' | 'modify' | 'review' | null>(null);
+  // A notification link (?deliverable=<id>) opens that deliverable's detail straight away.
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    try { return new URLSearchParams(window.location.search).get('deliverable'); } catch { return null; }
+  });
+  const [panel, setPanel] = useState<'detail' | 'modify' | 'review' | null>(() => {
+    try { return new URLSearchParams(window.location.search).get('deliverable') ? 'detail' : null; } catch { return null; }
+  });
+  useEffect(() => {
+    try { if (window.location.search.includes('deliverable=')) window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
+  }, []);
   const [form, setForm] = useState<ModForm>({ type: 'quantity', quantity: '', date: '', value: '', reason: '' });
   const [reviewComment, setReviewComment] = useState('');
   const [busy, setBusy] = useState(false);

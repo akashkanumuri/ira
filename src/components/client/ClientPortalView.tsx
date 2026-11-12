@@ -60,6 +60,8 @@ export interface ClientNotificationItem {
   when: string;
   unread: boolean;
   page: ClientNavPage | null;
+  /** The item the notification is about, e.g. "deliverable=<id>&round=3". */
+  query?: string;
 }
 
 const ACTION_PAGES: Record<string, ClientNavPage> = {
@@ -102,7 +104,8 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
   const toast = useToast();
   const { changePassword } = useAuth();
 
-  const [page, setPage] = useState<ClientNavPage>('dashboard');
+  // A link from a push notification (/client/deliverables?deliverable=…) opens on that page.
+  const [page, setPage] = useState<ClientNavPage>(() => { try { return ACTION_PAGES[window.location.pathname] ?? 'dashboard'; } catch { return 'dashboard'; } });
 
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -162,7 +165,8 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
         body: n.message,
         when: fmtWhen(n.created_at),
         unread: !n.read_at,
-        page: n.action_url ? ACTION_PAGES[n.action_url] ?? null : null,
+        page: n.action_url ? ACTION_PAGES[String(n.action_url).split('?')[0]] ?? null : null,
+        query: n.action_url && String(n.action_url).includes('?') ? String(n.action_url).split('?')[1] : undefined,
       })),
     );
   }, [user.id]);
@@ -283,7 +287,11 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
           items={notifications}
           onMarkRead={markNotificationRead}
           onMarkAllRead={markAllNotificationsRead}
-          onNavigate={setPage}
+          onNavigate={(p, query) => {
+            // The page reads the item to open from the address bar, as a push notification link would.
+            try { window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`); } catch { /* ignore */ }
+            setPage(p);
+          }}
         />
       );
     }
@@ -421,7 +429,7 @@ function ClientNotificationsView({
   items: ClientNotificationItem[];
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
-  onNavigate: (p: ClientNavPage) => void;
+  onNavigate: (p: ClientNavPage, query?: string) => void;
 }) {
   const [tab, setTab] = useState('all');
   const filtered = tab === 'all' ? items : items.filter(n => n.unread);
@@ -500,7 +508,7 @@ function ClientNotificationsView({
                     className="text-xs text-ink-2 hover:text-ink font-medium underline"
                     onClick={() => {
                       if (n.unread) onMarkRead(n.id);
-                      onNavigate(n.page!);
+                      onNavigate(n.page!, n.query);
                     }}
                   >
                     Open

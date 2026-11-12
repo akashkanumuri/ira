@@ -211,7 +211,7 @@ const CROSS_ROLE: Record<string, string> = {
   'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work', 'admin-delivery': 'emp-delivery', 'emp-delivery': 'admin-delivery',
 };
 /** Cross-role mappings whose pages understand the same deep-link query. */
-const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-tasks', 'emp-tasks>admin-tasks', 'admin-support>emp-support', 'emp-support>admin-support']);
+const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-tasks', 'emp-tasks>admin-tasks', 'admin-support>emp-support', 'emp-support>admin-support', 'admin-delivery>emp-delivery', 'emp-delivery>admin-delivery']);
 
 /** The page a path resolves to for this role; links meant for the other role land on the closest equivalent. */
 /** Older notification links that pre-date the current routes. */
