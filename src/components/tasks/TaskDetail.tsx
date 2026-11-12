@@ -197,8 +197,6 @@ export function TaskDetail({
   const actions: Array<{ key: string; label: string; icon: React.ReactNode; kind: 'primary' | 'secondary' | 'danger' | 'mint'; onClick: () => void }> = [];
   if (!task.archivedAt) {
     if (isAssignee && ['assigned', 'accepted', 'in_progress', 'revision_required'].includes(task.status)) {
-      if (isReviewer) actions.push({ key: 'done', label: 'Mark complete', icon: <CheckCircle2 className="w-4 h-4" />, kind: 'mint', onClick: () => setPrompt({ to: 'completed', title: 'Mark this task complete?', confirm: 'Mark complete' }) });
-      else if (!researchNeeded) actions.push({ key: 'handin', label: `Submit draft ${nextDraftNo}`, icon: <Send className="w-4 h-4" />, kind: 'primary', onClick: () => { setLink(''); setPrompt({ to: 'awaiting_review', title: `Submit draft ${nextDraftNo} for review`, link: true, noteLabel: 'What changed in this draft? (optional)', confirm: 'Submit draft' }); } });
       if (task.status !== 'assigned') actions.push({ key: 'block', label: 'I’m blocked', icon: <ShieldAlert className="w-4 h-4" />, kind: 'secondary', onClick: () => setPrompt({ to: 'blocked', title: 'What’s blocking this task?', noteLabel: 'What do you need, and from whom?', noteRequired: true, confirm: 'Mark blocked' }) });
     }
     if (isReviewer && task.status === 'awaiting_review') {
@@ -263,6 +261,23 @@ export function TaskDetail({
             <div key={k} className={cx('inset-tile px-3.5 py-3 min-w-0', i === 2 && 'col-span-2 sm:col-span-1')}><dt className="text-[11px] font-semibold text-ink-500">{k}</dt><dd className="text-[13px] font-bold text-ink-900 truncate mt-0.5">{v}</dd></div>
           ))}
         </dl>
+
+        <TaskSteps
+          task={task}
+          isAssignee={isAssignee && !task.archivedAt}
+          isReviewer={isReviewer}
+          busy={busy}
+          researchNeeded={researchNeeded}
+          reviewerName={(task.assignedBy ? byId.get(task.assignedBy)?.name : null) ?? task.assignedByName ?? 'your manager'}
+          draftNo={nextDraftNo}
+          onStarted={() => void go('accepted', 'Marked as started.')}
+          onInProgress={() => void go('in_progress', 'Marked as in progress.')}
+          onProgress={(pct) => void run(`pct:${pct}`, () => taskApi.setProgress(task.id, pct), `Progress set to ${pct}%.`)}
+          onCompleted={() => {
+            if (isReviewer) setPrompt({ to: 'completed', title: 'Mark this task completed?', confirm: 'Mark completed' });
+            else { setLink(''); setPrompt({ to: 'awaiting_review', title: `Completed: hand in draft ${nextDraftNo}`, link: true, noteLabel: 'What did you do in this draft? (optional)', confirm: 'Hand it in' }); }
+          }}
+        />
 
         {task.statusNote && ['blocked', 'revision_required', 'cancelled', 'awaiting_review'].includes(task.status) && (
           <div className={cx('rounded-2xl px-4 py-3 text-[13px]', task.status === 'awaiting_review' ? 'bg-amber-50 text-amber-900' : task.status === 'cancelled' ? 'bg-ink-50 text-ink-700' : 'bg-rose-50 text-rose-900')}>
@@ -606,6 +621,100 @@ export function TaskDetail({
 }
 
 /** Plain text with web links made clickable. */
+/* ------------------------------------------------------------------ status steps */
+
+/**
+ * The three steps an employee moves a task through — Started, In progress, Completed — with when
+ * each happened. "Completed" hands the work in; it counts once the reviewer approves it, so the
+ * first-draft approval rate stays honest. Changes requested puts the task back into In progress.
+ */
+function TaskSteps({
+  task, isAssignee, isReviewer, busy, researchNeeded, reviewerName, draftNo, onStarted, onInProgress, onProgress, onCompleted,
+}: {
+  task: Task; isAssignee: boolean; isReviewer: boolean; busy: string | null; researchNeeded: boolean; reviewerName: string; draftNo: number;
+  onStarted: () => void; onInProgress: () => void; onProgress: (pct: number) => void; onCompleted: () => void;
+}) {
+  if (task.status === 'cancelled') return null;
+  const s = task.status;
+  const pct = s === 'completed' || s === 'awaiting_review' ? 100 : Math.round(task.progressPct ?? 0);
+  // Which step the task is on: 0 not started, 1 started, 2 in progress, 3 completed.
+  const at = s === 'assigned' ? 0 : s === 'accepted' ? 1 : ['in_progress', 'blocked', 'revision_required'].includes(s) ? 2 : 3;
+  const steps = [
+    { label: 'Started', time: task.acceptedAt ?? task.startedAt ?? null },
+    { label: 'In progress', time: task.startedAt ?? null },
+    { label: 'Completed', time: s === 'completed' ? task.completedAt ?? null : s === 'awaiting_review' ? task.submittedAt ?? null : null },
+  ];
+  const line =
+    s === 'assigned' ? (isAssignee ? 'Press Started when you pick this up.' : `${task.assignedToName} has not started yet.`)
+    : s === 'accepted' ? (isAssignee ? 'Press In progress when you begin the actual work.' : `${task.assignedToName} has started it.`)
+    : s === 'blocked' ? `Stuck. ${task.statusNote ?? ''}`.trim()
+    : s === 'revision_required' ? `Changes asked. Back in progress. ${task.statusNote ? `“${task.statusNote}”` : ''}`.trim()
+    : s === 'in_progress' ? `${pct}% done${task.timeSpentMinutes ? ` · ${fmtMinutes(task.timeSpentMinutes)} worked` : ''}.`
+    : s === 'awaiting_review' ? `Completed and handed in. Waiting for ${isReviewer ? 'your' : `${reviewerName}’s`} OK.`
+    : 'Completed and approved.';
+  const tone = s === 'blocked' || s === 'revision_required' ? 'rose' : s === 'awaiting_review' ? 'amber' : s === 'completed' ? 'mint' : 'brand';
+  const toneBox = { rose: 'border-rose-200 bg-rose-50/60', amber: 'border-amber-200 bg-amber-50/60', mint: 'border-mint-200 bg-mint-50/60', brand: 'border-ink-200 bg-white' }[tone];
+  const canAct = isAssignee && !busy;
+
+  return (
+    <section aria-label="Task status" className={cx('rounded-2xl border p-4 space-y-4', toneBox)}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h4 className="text-[13px] font-bold text-ink-800">Status</h4>
+        <p className="text-[12.5px] font-semibold text-ink-600 text-right">{line}</p>
+      </div>
+
+      <ol className="grid grid-cols-3 gap-2">
+        {steps.map((st, i) => {
+          const done = at > i || (i === 2 && s === 'completed');
+          const current = (at === 1 && i === 0) || (at === 2 && i === 1) || (at === 3 && i === 2);
+          const waiting = i === 2 && s === 'awaiting_review';
+          return (
+            <li key={st.label} className="min-w-0">
+              <div className="flex items-center">
+                <span className={cx('w-5 h-5 rounded-full shrink-0 flex items-center justify-center',
+                  waiting ? 'bg-amber-400 text-white' : done || current ? 'bg-mint-500 text-white' : 'bg-ink-200')}>
+                  {(done || current) && !waiting && <CheckCircle2 className="w-3.5 h-3.5" />}
+                </span>
+                {i < 2 && <span className={cx('flex-1 h-[3px] mx-1 rounded-full', at > i + 1 ? 'bg-mint-500' : 'bg-ink-100')} />}
+              </div>
+              <p className={cx('mt-1.5 text-[12.5px] font-bold', done || current ? 'text-ink-900' : 'text-ink-400')}>{st.label}</p>
+              <p className="text-[11.5px] text-ink-500 truncate">{waiting ? 'waiting for OK' : st.time ? when(st.time) : '—'}</p>
+            </li>
+          );
+        })}
+      </ol>
+
+      {at === 2 && (
+        <div>
+          <div className="flex justify-between text-[12px] mb-1.5"><span className="font-semibold text-ink-600">How far along</span><span className="tnum font-bold text-ink-900">{pct}%</span></div>
+          <Progress value={pct} tone={s === 'blocked' || s === 'revision_required' ? 'rose' : 'brand'} />
+          {isAssignee && s !== 'blocked' && (
+            <div className="flex flex-wrap gap-1.5 mt-2.5" role="group" aria-label="Set progress">
+              {[25, 50, 75, 90].map((p) => (
+                <button key={p} type="button" disabled={!canAct} onClick={() => onProgress(p)}
+                  className={cx('px-3 py-1 rounded-full text-[12px] font-bold border transition-colors disabled:opacity-50', pct >= p ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-ink-700 border-ink-200 hover:border-brand-300')}>
+                  {busy === `pct:${p}` ? '…' : `${p}%`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {isAssignee && at < 3 && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Change status">
+          <button type="button" disabled={!canAct || at >= 1} onClick={onStarted} className={cx(at === 0 ? 'btn-primary' : 'btn-secondary', 'btn-sm disabled:opacity-40')}>Started</button>
+          <button type="button" disabled={!canAct || at >= 2} onClick={onInProgress} className={cx(at === 1 ? 'btn-primary' : 'btn-secondary', 'btn-sm disabled:opacity-40')}>In progress</button>
+          <button type="button" disabled={!canAct || at === 0 || researchNeeded} onClick={onCompleted} className={cx(at === 2 ? 'btn-primary' : 'btn-secondary', 'btn-sm disabled:opacity-40')}>
+            Completed{isReviewer ? '' : ` · hand in draft ${draftNo}`}
+          </button>
+        </div>
+      )}
+      {isAssignee && at < 3 && researchNeeded && at > 0 && <p className="text-[12px] text-ink-500">Finish the research step below before you can mark it completed.</p>}
+    </section>
+  );
+}
+
 function linkify(text: string) {
   const parts = text.split(/(https?:\/\/[^\s<>"]+)/g);
   return parts.map((p, i) => (i % 2 === 1

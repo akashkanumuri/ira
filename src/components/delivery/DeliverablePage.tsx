@@ -11,6 +11,9 @@ import { notifyTaskAssigned } from '../../lib/notifications';
 import { TaskAssignForm, type AssignTarget } from '../tasks/TaskAssignForm';
 import { StaffClientReview } from '../common/StaffClientReview';
 import { Modal } from '../../ui/Modal';
+import { TaskDetail } from '../tasks/TaskDetail';
+import { mapTask } from '../../lib/v2';
+import type { Employee, Task } from '../../types/attendance';
 import { DELIVERY_STAGES as STAGES, deliveryStageIndex as stageIndex } from '../../lib/deliveryStages';
 
 const db = () => supabase as any;
@@ -26,6 +29,7 @@ interface TaskRow {
   id: string; title: string; description: string | null; status: string; due_date: string | null;
   assigned_to: string | null; research_minutes: number | null; time_spent_minutes: number | null;
   created_at: string; started_at: string | null; submitted_at: string | null; completed_at: string | null;
+  accepted_at: string | null; progress_pct: number | null; status_note: string | null;
 }
 interface DepRow { id: string; name: string; status: string; required_by: string | null; uploaded_at: string | null; created_at: string }
 
@@ -38,11 +42,11 @@ const mins = (m: number | null) => (!m ? '—' : m < 60 ? `${m}m` : `${Math.floo
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 
 const TASK_LABEL: Record<string, string> = {
-  assigned: 'Not started', accepted: 'Not started', in_progress: 'In progress', blocked: 'Blocked',
-  awaiting_review: 'In review', revision_required: 'Changes asked', completed: 'Done', cancelled: 'Cancelled',
+  assigned: 'Not started', accepted: 'Started', in_progress: 'In progress', blocked: 'Stuck',
+  awaiting_review: 'Waiting for OK', revision_required: 'Changes asked', completed: 'Completed', cancelled: 'Cancelled',
 };
 const TASK_TONE: Record<string, string> = {
-  assigned: 'bg-ink-100 text-ink-700', accepted: 'bg-ink-100 text-ink-700', in_progress: 'bg-brand-50 text-brand-700',
+  assigned: 'bg-ink-100 text-ink-700', accepted: 'bg-sky-50 text-sky-700', in_progress: 'bg-brand-50 text-brand-700',
   blocked: 'bg-rose-50 text-rose-700', awaiting_review: 'bg-amber-50 text-amber-800', revision_required: 'bg-rose-50 text-rose-700',
   completed: 'bg-mint-50 text-mint-700', cancelled: 'bg-ink-100 text-ink-500',
 };
@@ -82,6 +86,16 @@ export function DeliverablePage({
   const [busy, setBusy] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [showAllRecord, setShowAllRecord] = useState(false);
+  /** People brought onto this deliverable with Add person who have no task here yet. */
+  const [extraPeople, setExtraPeople] = useState<string[]>([]);
+  const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [openTask, setOpenTask] = useState<Task | null>(null);
+
+  const openTaskDetail = useCallback(async (taskId: string) => {
+    const { data, error: e } = await db().from('tasks').select('*').eq('id', taskId).maybeSingle();
+    if (e || !data) { notify(e?.message ?? 'That task could not be opened.', 'error'); return; }
+    setOpenTask(mapTask(data, new Map((employees as unknown as Employee[]).map((x) => [x.id, x]))));
+  }, [employees]);
 
   const reload = useCallback(async () => {
     try {
@@ -91,7 +105,7 @@ export function DeliverablePage({
       setD(row as Deliv);
       const [t, dp, p, open, r] = await Promise.all([
         db().from('tasks')
-          .select('id, title, description, status, due_date, assigned_to, research_minutes, time_spent_minutes, created_at, started_at, submitted_at, completed_at')
+          .select('id, title, description, status, due_date, assigned_to, research_minutes, time_spent_minutes, created_at, started_at, submitted_at, completed_at, accepted_at, progress_pct, status_note')
           .eq('deliverable_id', deliverableId).is('archived_at', null).order('created_at', { ascending: true }),
         db().from('deliverable_dependencies').select('id, name, status, required_by, uploaded_at, created_at').eq('deliverable_id', deliverableId),
         db().from('projects').select('name, client_id').eq('id', row.project_id).maybeSingle(),
@@ -134,6 +148,15 @@ export function DeliverablePage({
 
   /* ---------- derived state ---------- */
   const live = useMemo(() => tasks.filter((t) => t.status !== 'cancelled'), [tasks]);
+  /** Only the people working on this deliverable, in the order they joined it. */
+  const team = useMemo(() => {
+    const ids: string[] = [];
+    for (const t of live) if (t.assigned_to && !ids.includes(t.assigned_to)) ids.push(t.assigned_to);
+    for (const id of extraPeople) if (!ids.includes(id)) ids.push(id);
+    return ids.map((id) => employees.find((e) => e.id === id) ?? { id, name: nameOf(id), designation: undefined } as AssignTarget);
+  }, [live, extraPeople, employees, nameOf]);
+  const onItCount = (id: string) => live.filter((t) => t.assigned_to === id && t.status !== 'completed').length;
+  const notOnIt = employees.filter((e) => !team.some((m) => m.id === e.id));
   const doneCount = live.filter((t) => t.status === 'completed').length;
   const openTasks = live.filter((t) => t.status !== 'completed');
   const unassigned = openTasks.filter((t) => !t.assigned_to);
@@ -380,15 +403,16 @@ export function DeliverablePage({
               <div className="flex flex-wrap gap-5 items-start">
                 <aside className="card p-4 w-full lg:w-[280px] shrink-0">
                   <div className="flex items-baseline justify-between">
-                    <h3 className="text-[14px] font-bold">Your team</h3>
-                    <span className="text-xs font-semibold text-ink-500">open now</span>
+                    <h3 className="text-[14px] font-bold">Working on this</h3>
+                    <span className="text-xs font-semibold text-ink-500">{team.length} {team.length === 1 ? 'person' : 'people'}</span>
                   </div>
                   <p className="text-[12.5px] text-ink-500 mt-1 mb-3 leading-snug">
                     {selectedIds.length ? `Click a name to give them the ${selectedIds.length} ticked task${selectedIds.length === 1 ? '' : 's'}.` : 'Tick tasks in the list, then click a name.'}
                   </p>
                   <ul className="space-y-2 max-h-[420px] overflow-y-auto">
-                    {employees.map((p) => {
+                    {team.map((p) => {
                       const n = load[p.id] ?? 0;
+                      const here = onItCount(p.id);
                       return (
                         <li key={p.id}>
                           <button
@@ -402,13 +426,36 @@ export function DeliverablePage({
                               <span className="block text-[13.5px] font-bold text-ink-900 truncate">{p.name}</span>
                               {p.designation && <span className="block text-[11.5px] text-ink-500 truncate">{p.designation}</span>}
                             </span>
-                            <span className={`text-[11.5px] font-bold whitespace-nowrap ${n >= 8 ? 'text-rose-700' : n >= 5 ? 'text-amber-800' : 'text-ink-600'}`}>{n} task{n === 1 ? '' : 's'}</span>
+                            <span className="text-right shrink-0">
+                              <span className="block text-[11.5px] font-bold text-ink-900 whitespace-nowrap">{here} here</span>
+                              <span className={`block text-[11px] font-semibold whitespace-nowrap ${n >= 8 ? 'text-rose-700' : n >= 5 ? 'text-amber-800' : 'text-ink-500'}`}>{n} open in all</span>
+                            </span>
                           </button>
                         </li>
                       );
                     })}
-                    {employees.length === 0 && <li className="text-[12.5px] text-ink-500">Nobody you can assign to yet.</li>}
+                    {team.length === 0 && <li className="text-[12.5px] text-ink-500 px-1 py-2">Nobody is on this yet. Add a person, or add a task with an owner.</li>}
                   </ul>
+                  {addPersonOpen ? (
+                    <div className="mt-2">
+                      <label className="sr-only" htmlFor="add-person">Add a person</label>
+                      <select
+                        id="add-person"
+                        autoFocus
+                        className="input !min-h-[40px] !py-2 text-[13px]"
+                        defaultValue=""
+                        onChange={(e) => { const v = e.target.value; if (v) setExtraPeople((x) => [...x, v]); setAddPersonOpen(false); }}
+                        onBlur={() => setAddPersonOpen(false)}
+                      >
+                        <option value="" disabled>Pick someone…</option>
+                        {notOnIt.map((p) => <option key={p.id} value={p.id}>{p.name}{p.designation ? ` · ${p.designation}` : ''} ({load[p.id] ?? 0} open)</option>)}
+                      </select>
+                    </div>
+                  ) : notOnIt.length > 0 && (
+                    <button type="button" onClick={() => setAddPersonOpen(true)} className="mt-2 w-full rounded-2xl border border-dashed border-ink-200 text-[13px] font-bold text-ink-700 py-2.5 hover:border-brand-300 hover:text-brand-700 flex items-center justify-center gap-1.5">
+                      <UserPlus className="w-4 h-4" />Add person
+                    </button>
+                  )}
                   {myEmployeeId && (
                     <div className="mt-3 pt-3 border-t border-ink-100">
                       <button type="button" disabled={!selectedIds.length || busy === 'assign'} onClick={() => void assign(selectedIds, myEmployeeId)} className="w-full rounded-2xl bg-ink-950 text-white text-[13.5px] font-bold py-3 disabled:opacity-40">Take it myself</button>
@@ -443,13 +490,13 @@ export function DeliverablePage({
                   ) : (
                     <div className="overflow-x-auto">
                       <div className="min-w-[640px]">
-                        <div className="grid grid-cols-[34px_minmax(0,2fr)_minmax(0,1.3fr)_92px_84px_116px] gap-3 px-5 py-2.5 bg-ink-50/70 border-b border-ink-100 text-[11px] font-extrabold tracking-[0.04em] text-ink-500">
+                        <div className="grid grid-cols-[34px_minmax(0,2fr)_minmax(0,1.3fr)_80px_72px_136px] gap-3 px-5 py-2.5 bg-ink-50/70 border-b border-ink-100 text-[11px] font-extrabold tracking-[0.04em] text-ink-500">
                           <span /><span>TASK</span><span>OWNER</span><span>DUE</span><span>TIME</span><span>STATUS</span>
                         </div>
                         {live.map((t) => {
                           const late = t.status !== 'completed' && !!t.due_date && t.due_date < today;
                           return (
-                            <div key={t.id} className={`grid grid-cols-[34px_minmax(0,2fr)_minmax(0,1.3fr)_92px_84px_116px] gap-3 px-5 py-3 border-b border-ink-100 items-center ${selected[t.id] ? 'bg-brand-50/50' : 'bg-white'}`}>
+                            <div key={t.id} className={`grid grid-cols-[34px_minmax(0,2fr)_minmax(0,1.3fr)_80px_72px_136px] gap-3 px-5 py-3 border-b border-ink-100 items-center ${selected[t.id] ? 'bg-brand-50/50' : 'bg-white'}`}>
                               <input
                                 type="checkbox"
                                 className="w-[17px] h-[17px] accent-[var(--brand)] cursor-pointer"
@@ -458,10 +505,10 @@ export function DeliverablePage({
                                 disabled={t.status === 'completed'}
                                 onChange={() => setSelected((s) => ({ ...s, [t.id]: !s[t.id] }))}
                               />
-                              <span className="min-w-0">
-                                <span className="block text-[14px] font-bold text-ink-900 truncate">{t.title}</span>
+                              <button type="button" onClick={() => void openTaskDetail(t.id)} className="min-w-0 text-left group" title="Open the task">
+                                <span className="block text-[14px] font-bold text-ink-900 truncate group-hover:text-brand-700 group-hover:underline">{t.title}</span>
                                 <span className="block text-[11.5px] text-ink-500 truncate">{t.description || 'No brief written'}</span>
-                              </span>
+                              </button>
                               <span className="min-w-0">
                                 <label className="sr-only" htmlFor={`owner-${t.id}`}>Owner of {t.title}</label>
                                 <select
@@ -478,7 +525,17 @@ export function DeliverablePage({
                               </span>
                               <span className={`text-[13px] font-semibold ${late ? 'text-rose-700' : 'text-ink-900'}`}>{t.due_date ? fmtDate(t.due_date).replace(/ \d{4}$/, '') : '—'}</span>
                               <span className="text-[13px] text-ink-600 tnum">{mins(t.time_spent_minutes)}</span>
-                              <span className={`justify-self-start text-[11.5px] font-bold px-2.5 py-1 rounded-full ${TASK_TONE[t.status] ?? 'bg-ink-100 text-ink-700'}`}>{TASK_LABEL[t.status] ?? t.status}</span>
+                              <button type="button" onClick={() => void openTaskDetail(t.id)} className="justify-self-start text-left min-w-0" title={t.status_note ?? undefined}>
+                                <span className={`inline-block text-[11.5px] font-bold px-2.5 py-1 rounded-full ${TASK_TONE[t.status] ?? 'bg-ink-100 text-ink-700'}`}>
+                                  {TASK_LABEL[t.status] ?? t.status}{['in_progress', 'blocked', 'revision_required'].includes(t.status) && (t.progress_pct ?? 0) > 0 ? ` · ${t.progress_pct}%` : ''}
+                                </span>
+                                <span className="block text-[10.5px] text-ink-500 mt-0.5 truncate">
+                                  {t.status === 'completed' && t.completed_at ? when(t.completed_at)
+                                    : t.status === 'awaiting_review' && t.submitted_at ? `in ${when(t.submitted_at)}`
+                                    : t.started_at ? `since ${when(t.started_at)}`
+                                    : t.accepted_at ? `${when(t.accepted_at)}` : ''}
+                                </span>
+                              </button>
                             </div>
                           );
                         })}
@@ -560,6 +617,17 @@ export function DeliverablePage({
           </>
         )}
       </div>
+
+      {openTask && (
+        <TaskDetail
+          task={openTask}
+          tasks={[]}
+          employees={employees as unknown as Employee[]}
+          viewer={{ employeeId: myEmployeeId ?? '', isAdmin: !myEmployeeId }}
+          onClose={() => setOpenTask(null)}
+          onChanged={async () => { await reload(); await openTaskDetail(openTask.id); }}
+        />
+      )}
 
       {addOpen && d && (
         <Modal title="Assign work" onClose={() => setAddOpen(false)} closeDisabled={busy === 'new'} wide>

@@ -4,12 +4,12 @@ import type { Tone } from '../ui';
 
 /** Task workflow vocabulary shared by every task screen. */
 export const TASK_STATUS: Record<TaskStatus, { label: string; tone: Tone; hint: string }> = {
-  assigned: { label: 'New', tone: 'sky', hint: 'Waiting for the assignee to accept' },
-  accepted: { label: 'Accepted', tone: 'brand', hint: 'Accepted, not started yet' },
+  assigned: { label: 'Not started', tone: 'sky', hint: 'Assigned, not picked up yet' },
+  accepted: { label: 'Started', tone: 'brand', hint: 'Picked up, the actual work has not begun' },
   in_progress: { label: 'In progress', tone: 'brand', hint: 'Being worked on' },
-  blocked: { label: 'Blocked', tone: 'rose', hint: 'Can’t continue — see the reason' },
-  awaiting_review: { label: 'In review', tone: 'amber', hint: 'Handed in, waiting for the reviewer' },
-  revision_required: { label: 'Changes requested', tone: 'rose', hint: 'Sent back with notes' },
+  blocked: { label: 'Stuck', tone: 'rose', hint: 'Can’t continue — see the reason' },
+  awaiting_review: { label: 'Waiting for OK', tone: 'amber', hint: 'Completed and handed in, waiting for the reviewer' },
+  revision_required: { label: 'Changes asked', tone: 'rose', hint: 'Sent back with notes' },
   completed: { label: 'Completed', tone: 'mint', hint: 'Approved' },
   cancelled: { label: 'Cancelled', tone: 'ink', hint: 'No longer needed' },
 };
