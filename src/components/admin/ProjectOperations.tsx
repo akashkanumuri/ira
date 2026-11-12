@@ -273,7 +273,7 @@ function UploadBox({
 export function ProjectOperations({ projectId, projectName, clientId, employees, mode, initialTab }: Props & { initialTab?: string }) {
   const [ws, setWs] = useState<ProjectWorkspace | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState(initialTab || 'overview');
+  const [tab, setTab] = useState(() => (mode !== 'admin' && (initialTab === 'contract' || initialTab === 'billing') ? 'overview' : initialTab || 'overview'));
 
   const reload = useCallback(async () => {
     try {
@@ -312,20 +312,21 @@ export function ProjectOperations({ projectId, projectName, clientId, employees,
         onChange={setTab}
         tabs={[
           { id: 'overview', label: 'Overview' },
-          { id: 'contract', label: 'Contract' },
+          // Contract terms and money are admin-only; a project manager runs the work, not the account.
+          ...(mode === 'admin' ? [{ id: 'contract', label: 'Contract' }] : []),
           { id: 'deliverables', label: 'Deliverables', count: ws.deliverables.length },
           { id: 'modifications', label: 'Modifications', count: pendingMods || undefined },
           { id: 'dependencies', label: 'Client dependencies', count: uploadedDeps || undefined },
-          { id: 'billing', label: 'Billing', count: pendingPayments || undefined },
+          ...(mode === 'admin' ? [{ id: 'billing', label: 'Billing', count: pendingPayments || undefined }] : []),
           ...(mode === 'admin' ? [{ id: 'activity', label: 'Activity' }] : []),
         ]}
       />
-      {tab === 'overview' && <Overview ws={ws} go={setTab} />}
-      {tab === 'contract' && <ContractTab ws={ws} projectId={projectId} projectName={projectName} clientId={clientId} reload={reload} />}
+      {tab === 'overview' && <Overview ws={ws} go={setTab} money={mode === 'admin'} />}
+      {tab === 'contract' && mode === 'admin' && <ContractTab ws={ws} projectId={projectId} projectName={projectName} clientId={clientId} reload={reload} />}
       {tab === 'deliverables' && <DeliverablesTab ws={ws} projectId={projectId} employees={employees} reload={reload} />}
       {tab === 'modifications' && <ModificationsTab ws={ws} reload={reload} />}
       {tab === 'dependencies' && <DependenciesTab ws={ws} reload={reload} />}
-      {tab === 'billing' && <BillingTab ws={ws} projectId={projectId} clientId={clientId} mode={mode} reload={reload} />}
+      {tab === 'billing' && mode === 'admin' && <BillingTab ws={ws} projectId={projectId} clientId={clientId} mode={mode} reload={reload} />}
       {tab === 'activity' && mode === 'admin' && <ActivityTab projectId={projectId} />}
     </div>
   );
@@ -333,7 +334,7 @@ export function ProjectOperations({ projectId, projectName, clientId, employees,
 
 /* ---------------------------------------------------------------- Overview */
 
-function Overview({ ws, go }: { ws: ProjectWorkspace; go: (t: string) => void }) {
+function Overview({ ws, go, money }: { ws: ProjectWorkspace; go: (t: string) => void; money: boolean }) {
   const today = todayIST();
   const prog = computeProgress(ws.deliverables);
   const contract = ws.contracts[0];
@@ -348,7 +349,8 @@ function Overview({ ws, go }: { ws: ProjectWorkspace; go: (t: string) => void })
   const overdueAmt = billable.filter(i => i.status === 'Overdue').reduce((s, i) => s + installmentTotal(i) - Number(i.amount_paid), 0);
 
   const exceptions: { text: string; tab: string; tone: 'err' | 'warn' | 'info' }[] = [];
-  if (!contract) exceptions.push({ text: 'No contract created yet', tab: 'contract', tone: 'warn' });
+  if (!money) { /* managers: no contract or billing items */ }
+  else if (!contract) exceptions.push({ text: 'No contract created yet', tab: 'contract', tone: 'warn' });
   else if (contract.status === 'Draft') exceptions.push({ text: 'Contract is still a draft — send it to the client', tab: 'contract', tone: 'warn' });
   else if (contract.status === 'Declined') exceptions.push({ text: `Client declined the contract: ${contract.decline_reason ?? ''}`, tab: 'contract', tone: 'err' });
   if (overdue.length) exceptions.push({ text: `${overdue.length} deliverable${overdue.length > 1 ? 's are' : ' is'} past due`, tab: 'deliverables', tone: 'err' });
@@ -358,15 +360,17 @@ function Overview({ ws, go }: { ws: ProjectWorkspace; go: (t: string) => void })
   const up = ws.dependencies.filter(d => d.status === 'Uploaded').length;
   if (up) exceptions.push({ text: `${up} client upload${up > 1 ? 's' : ''} to review`, tab: 'dependencies', tone: 'info' });
   const sub = ws.payments.filter(p => p.status === 'Submitted').length;
-  if (sub) exceptions.push({ text: `${sub} payment${sub > 1 ? 's' : ''} awaiting verification`, tab: 'billing', tone: 'info' });
-  if (overdueAmt > 0) exceptions.push({ text: `${inr(overdueAmt)} overdue from the client`, tab: 'billing', tone: 'err' });
+  if (money && sub) exceptions.push({ text: `${sub} payment${sub > 1 ? 's' : ''} awaiting verification`, tab: 'billing', tone: 'info' });
+  if (money && overdueAmt > 0) exceptions.push({ text: `${inr(overdueAmt)} overdue from the client`, tab: 'billing', tone: 'err' });
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Deliverables" value={prog.total} sub={`${overdue.length} overdue · ${waitingClient.length} waiting on client`} tone={overdue.length ? 'err' : undefined} onClick={() => go('deliverables')} />
         <Stat label="Completion" value={`${prog.weightedPct ?? prog.countPct}%`} sub={prog.weightedPct != null ? 'Weighted' : 'By count'} />
-        <Stat label="Billed / collected" value={inr(collected)} sub={`of ${inr(billed)} billed`} onClick={() => go('billing')} />
+        {money
+          ? <Stat label="Billed / collected" value={inr(collected)} sub={`of ${inr(billed)} billed`} onClick={() => go('billing')} />
+          : <Stat label="Waiting on client" value={waitingClient.length} sub="Review or material from them" />}
         <Stat label="Download locks" value={locked.length} sub={locked.length ? 'Deliverables locked' : 'None'} tone={locked.length ? 'warn' : undefined} />
       </div>
       <Card>
