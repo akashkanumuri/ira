@@ -291,3 +291,15 @@ do $$ begin
   perform cron.schedule('performance-monthly', '30 0 1 * *',
     $c$select public.performance_evaluate(((now() at time zone 'Asia/Kolkata') - interval '1 month')::date)$c$);
 end $$;
+
+-- Read access for signed-in users; row-level security decides which rows. No direct writes.
+grant select on public.performance_rules to authenticated;
+grant select on public.performance_flags to authenticated;
+revoke insert, update, delete on public.performance_rules from authenticated, anon;
+revoke insert, update, delete on public.performance_flags from authenticated, anon;
+revoke all on public.performance_rules from anon;
+revoke all on public.performance_flags from anon;
+
+-- Applied 2026-11-13 (performance_evaluate_admin_or_cron): inside a SECURITY DEFINER function
+-- current_user is the owner, so "current_user in (postgres…)" let any signed-in user run the check.
+-- The guard is now: private.is_admin() or (no signed-in user and session_user in ('postgres','supabase_admin')).
