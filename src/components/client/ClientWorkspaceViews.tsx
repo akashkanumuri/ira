@@ -677,7 +677,8 @@ export function ClientContracts({ user, project, ws, reload, go }: ViewProps) {
 
 type ModForm = { type: 'quantity' | 'timeline' | 'scope' | 'other'; quantity: string; date: string; value: string; reason: string };
 
-export function ClientDeliverables({ user, ws, reload }: ViewProps) {
+export function ClientDeliverables(props: ViewProps) {
+  const { user, ws, reload } = props;
   const toast = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -807,7 +808,7 @@ export function ClientDeliverables({ user, ws, reload }: ViewProps) {
     <>
       <PageHeader
         title="Deliverables"
-        desc="The agreed scope of work. To change quantity, scope or timeline, submit a modification request — the original scope is never overwritten and every approved change is versioned."
+        desc="Where each piece of work stands, and what needs you. Open one to review it, download it or ask for a change."
       />
       <FilterBar>
         <SearchField value={search} onChange={setSearch} placeholder="Search deliverables" className="w-full sm:w-64" />
@@ -816,35 +817,8 @@ export function ClientDeliverables({ user, ws, reload }: ViewProps) {
         </Select>
       </FilterBar>
 
-      <DataTable
-        rows={rows}
-        pageSize={12}
-        onRow={r => { setSelectedId(r.id); setPanel('detail'); }}
-        empty={<Empty icon={Package} title="No matching deliverables" desc="Adjust the search or status filter." />}
-        cols={[
-          { key: 'n', head: 'No.', w: '84px', mobile: 'hide', render: r => <span className="font-mono text-xs text-ink-2">{r.deliverable_number}</span> },
-          {
-            key: 'name', head: 'Deliverable', mobile: 'title',
-            render: r => (
-              <div className="py-1 min-w-0">
-                <div className="font-medium text-ink truncate">{r.name}</div>
-                <div className="text-xs text-ink-3 hidden md:block truncate max-w-[320px]">{r.category ? `${r.category} · ` : ''}{r.description ?? ''}</div>
-              </div>
-            ),
-          },
-          { key: 'q', head: 'Quantity', render: r => <span className="tnum">{fmtQty(r.quantity, r.unit)}</span> },
-          { key: 'due', head: 'Due', render: r => <span className="text-xs text-ink-2">{r.timeline ? `${r.timeline} · ` : ''}{fmtDate(r.due_date)}</span> },
-          { key: 's', head: 'Status', render: r => <Status s={clientStatus(r)} /> },
-          {
-            key: 'a', head: 'Your action',
-            render: r =>
-              r.status === 'Awaiting Client Review' ? <Badge tone="warn">Review</Badge>
-              : openMod(r.id) ? <Badge tone={openMod(r.id)!.status === 'Counter Proposed' ? 'warn' : 'info'}>{openMod(r.id)!.status}</Badge>
-              : r.client_action ? <span className="text-xs text-warn truncate">{r.client_action}</span>
-              : <span className="text-ink-3">—</span>,
-          },
-        ]}
-      />
+      {/* One place for deliverables: where each one stands, and everything you can do with it. */}
+      <ClientProgress {...props} embedded visibleIds={new Set(rows.map(r => r.id))} onOpen={id => { setSelectedId(id); setPanel('detail'); }} />
 
       <SidePanel
         open={!!d && panel === 'detail'}
@@ -1052,7 +1026,13 @@ export function ClientDeliverables({ user, ws, reload }: ViewProps) {
    4. Progress Tracker (with client dependencies)
 ========================================================================= */
 
-export function ClientProgress({ project, ws, reload, go }: ViewProps) {
+export function ClientProgress({ project, ws, reload, go, embedded, onOpen, visibleIds }: ViewProps & {
+  /** Rendered inside the Deliverables page: no page header, and View/Review open the deliverable there. */
+  embedded?: boolean;
+  onOpen?: (deliverableId: string) => void;
+  /** Only these deliverables (search / status filter from the page). */
+  visibleIds?: Set<string>;
+}) {
   const toast = useToast();
   const prog = computeProgress(ws.deliverables);
   const [depId, setDepId] = useState<string | null>(null);
@@ -1083,11 +1063,12 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
     }
   };
 
-  const rows = ws.deliverables.filter(d => d.status !== 'Cancelled');
+  const rows = ws.deliverables.filter(d => d.status !== 'Cancelled' && (!visibleIds || visibleIds.has(d.id)));
+  const open = (id: string) => (onOpen ? onOpen(id) : go('deliverables'));
 
   return (
     <>
-      <PageHeader title="Progress Tracker" desc={`${project.name} · where each deliverable stands`} />
+      {!embedded && <PageHeader title="Progress Tracker" desc={`${project.name} · where each deliverable stands`} />}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <Stat label="Completed" value={`${prog.done}/${prog.total}`} sub={`${prog.countPct}% by count`} />
         {prog.weightedPct != null
@@ -1129,9 +1110,9 @@ export function ClientProgress({ project, ws, reload, go }: ViewProps) {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {open.length > 0 && <Button size="sm" variant="primary" icon={Upload} onClick={() => setDepId(open[0].id)}>Send it now</Button>}
-                    {open.length === 0 && r.status === 'Awaiting Client Review' && <Button size="sm" variant="primary" onClick={() => go('deliverables')}>Review now</Button>}
-                    {open.length === 0 && r.status === 'Ready for Download' && !isLocked(r.lock_state) && <Button size="sm" icon={Download} onClick={() => go('deliverables')}>Download</Button>}
-                    {open.length === 0 && !['Awaiting Client Review', 'Ready for Download'].includes(r.status) && <Button size="sm" variant="ghost" onClick={() => go('deliverables')}>View</Button>}
+                    {open.length === 0 && r.status === 'Awaiting Client Review' && <Button size="sm" variant="primary" onClick={() => open(r.id)}>Review now</Button>}
+                    {open.length === 0 && r.status === 'Ready for Download' && !isLocked(r.lock_state) && <Button size="sm" icon={Download} onClick={() => open(r.id)}>Download</Button>}
+                    {open.length === 0 && !['Awaiting Client Review', 'Ready for Download'].includes(r.status) && <Button size="sm" variant="ghost" onClick={() => open(r.id)}>View</Button>}
                   </div>
                 </div>
 

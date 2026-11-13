@@ -962,7 +962,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="fixed bottom-4 right-4 left-4 sm:left-auto z-[130] flex flex-col gap-2 items-end pointer-events-none"
+        className="fixed bottom-4 right-4 left-4 sm:left-auto z-[1000] flex flex-col gap-2 items-end pointer-events-none"
       >
         {items.map(t => {
           const I = toneIcon[t.tone] ?? Info;

@@ -23,7 +23,7 @@ export const CLIENT_PAGE_HELP: Record<string, { title: string; text: string }> =
   dashboard: { title: 'Dashboard', text: 'Your project at a glance: what’s done, what needs you, and what’s due next.' },
   contracts: { title: 'Sign Contract', text: 'Read your contract and accept it here. If something needs changing, you can decline with a reason.' },
   deliverables: { title: 'Deliverables', text: 'Everything we’re making for you. When a draft is ready, open it here and approve it or ask for changes.' },
-  progress: { title: 'Progress Tracker', text: 'Milestones and updates — and anything the team needs from you (logos, content, approvals).' },
+  progress: { title: 'Deliverables', text: 'Milestones and updates — and anything the team needs from you (logos, content, approvals).' },
   payments: { title: 'Billing & Payment', text: 'Your payment milestones and invoices. After paying, add the transfer reference here so we can confirm it.' },
   support: { title: 'Help & support', text: 'Ask a question or report a problem. The IRA team replies here and you get a notification.' },
   notifications: { title: 'Notifications', text: 'Every update from the team in one list. Click one to jump to it.' },
@@ -55,7 +55,7 @@ function computeTips(ws: ProjectWorkspace | null, projectName: string, unread: n
     const when = soon?.required_by ? (() => { const n = daysUntil(soon.required_by!, today); return n < 0 ? ' — it’s overdue' : n === 0 ? ' — needed today' : n === 1 ? ' — needed tomorrow' : ` — needed in ${n} days`; })() : '';
     tips.push({ key: `needs:${needs.map((d) => d.id + d.status).join(',')}`, priority: needs.some((d) => d.required_by && d.required_by < today) ? 1 : 2, mood: 'think',
       text: needs.length === 1 ? `The team needs “${needs[0].name}” from you to keep going${when}.` : `The team needs ${needs.length} things from you to keep going${when}.`,
-      action: { label: 'See what’s needed', to: 'progress' } });
+      action: { label: 'See what’s needed', to: 'deliverables' } });
   }
   const open = ws.installments.filter((i) => !['Paid', 'Cancelled', 'Waived'].includes(i.status));
   const owed = (i: (typeof open)[number]) => Math.max(0, installmentTotal(i) - Number(i.amount_paid || 0));

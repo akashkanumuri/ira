@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   FileSignature,
   Package,
-  TrendingUp,
   CreditCard,
   Settings,
   Bell,
@@ -42,7 +41,6 @@ import {
   ClientDashboard,
   ClientDeliverables,
   ClientPayments,
-  ClientProgress,
   type ClientPage,
   type WorkspaceProject,
 } from './ClientWorkspaceViews';
@@ -107,6 +105,8 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
   // A link from a push notification (/client/deliverables?deliverable=…) opens on that page.
   const [page, setPage] = useState<ClientNavPage>(() => { try { return ACTION_PAGES[window.location.pathname] ?? 'dashboard'; } catch { return 'dashboard'; } });
 
+  // Old links to the Progress Tracker open the merged Deliverables page.
+  useEffect(() => { if (page === 'progress') setPage('deliverables'); }, [page]);
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -259,8 +259,8 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
 
   const projectItems = [
     { id: 'contracts', label: gated ? 'Contract' : 'Sign Contract', icon: FileSignature, badge: contractPending ? 1 : undefined },
-    { id: 'deliverables', label: 'Deliverables', icon: Package, badge: reviewCount || undefined },
-    { id: 'progress', label: 'Progress Tracker', icon: TrendingUp, badge: pendingDependencyCount || undefined },
+    // Deliverables and the progress tracker are one section now.
+    { id: 'deliverables', label: 'Deliverables', icon: Package, badge: (reviewCount + pendingDependencyCount) || undefined },
     { id: 'payments', label: 'Billing & Payment', icon: CreditCard, badge: paymentDueCount || undefined },
   ].filter(i => !allowed || allowed.includes(i.id as ClientNavPage));
   const navGroups: ShellNavGroup[] = [
@@ -344,7 +344,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
       case 'deliverables':
         return <ClientDeliverables {...props} />;
       case 'progress':
-        return <ClientProgress {...props} />;
+        return <ClientDeliverables {...props} />;
       case 'payments':
         return <ClientPayments {...props} />;
       default:
@@ -358,7 +358,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
       groups={navGroups}
       active={page}
       onNavigate={id => setPage(id as ClientNavPage)}
-      mobilePrimary={gated ? (['dashboard', 'contracts', 'payments', 'support'] as ClientNavPage[]).filter(p => !allowed || allowed.includes(p)) : ['dashboard', 'deliverables', 'progress', 'payments']}
+      mobilePrimary={gated ? (['dashboard', 'contracts', 'payments', 'support'] as ClientNavPage[]).filter(p => !allowed || allowed.includes(p)) : ['dashboard', 'deliverables', 'payments', 'support']}
       user={{
         name: user.primaryContact || user.name,
         subtitle: user.companyName || 'Client',

@@ -24,7 +24,7 @@ export const ToastHost: React.FC = () => {
   }, []);
 
   return (
-    <div className="fixed right-4 top-4 sm:right-6 sm:top-6 z-[100] w-[min(92vw,420px)] space-y-2.5 pointer-events-none" aria-live="polite" aria-atomic="true">
+    <div className="fixed right-4 top-4 sm:right-6 sm:top-6 z-[1000] w-[min(92vw,420px)] space-y-2.5 pointer-events-none" aria-live="polite" aria-atomic="true">
       {items.map((item) => {
         const styles: Record<ToastType, string> = {
           success: 'border-emerald-200/80 bg-emerald-50/90 text-emerald-950',
