@@ -1064,7 +1064,7 @@ export function ClientProgress({ project, ws, reload, go, embedded, onOpen, visi
   };
 
   const rows = ws.deliverables.filter(d => d.status !== 'Cancelled' && (!visibleIds || visibleIds.has(d.id)));
-  const open = (id: string) => (onOpen ? onOpen(id) : go('deliverables'));
+  const openItem = (id: string) => (onOpen ? onOpen(id) : go('deliverables'));
 
   return (
     <>
@@ -1110,9 +1110,9 @@ export function ClientProgress({ project, ws, reload, go, embedded, onOpen, visi
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {open.length > 0 && <Button size="sm" variant="primary" icon={Upload} onClick={() => setDepId(open[0].id)}>Send it now</Button>}
-                    {open.length === 0 && r.status === 'Awaiting Client Review' && <Button size="sm" variant="primary" onClick={() => open(r.id)}>Review now</Button>}
-                    {open.length === 0 && r.status === 'Ready for Download' && !isLocked(r.lock_state) && <Button size="sm" icon={Download} onClick={() => open(r.id)}>Download</Button>}
-                    {open.length === 0 && !['Awaiting Client Review', 'Ready for Download'].includes(r.status) && <Button size="sm" variant="ghost" onClick={() => open(r.id)}>View</Button>}
+                    {open.length === 0 && r.status === 'Awaiting Client Review' && <Button size="sm" variant="primary" onClick={() => openItem(r.id)}>Review now</Button>}
+                    {open.length === 0 && r.status === 'Ready for Download' && !isLocked(r.lock_state) && <Button size="sm" icon={Download} onClick={() => openItem(r.id)}>Download</Button>}
+                    {open.length === 0 && !['Awaiting Client Review', 'Ready for Download'].includes(r.status) && <Button size="sm" variant="ghost" onClick={() => openItem(r.id)}>View</Button>}
                   </div>
                 </div>
 
