@@ -32,6 +32,7 @@ import { featureOn, useWorkContext } from './lib/workContext';
 import { DEFAULT_RULES, currentOf, fetchCurrentRulesMap, fetchProjectsLite, rulesBadge, fetchRulesHistory, fetchTemplates, legacyFields, normalizeRules, saveRules, validateRules, type FeatureKey, type WorkRules, type WorkRulesRow, type WorkTemplate } from './lib/workRules';
 import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
+import { BonusPipSettings } from './components/performance/BonusPip';
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
@@ -2244,7 +2245,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
 }
 
 function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
-  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles' | 'office' | 'patterns'>('rules');
+  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles' | 'office' | 'patterns' | 'bonus'>('rules');
   const [name, setName] = useState(''); const [canAssign, setCanAssign] = useState(false);
   const [deptName, setDeptName] = useState('');
   const [payrollDivisor, setPayrollDivisor] = useState<'calendar_days' | 'working_days'>('calendar_days');
@@ -2263,9 +2264,10 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
 
   return (
     <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments, the office location and the payroll policy.">
-      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'patterns', label: 'Work patterns' }, { id: 'office', label: 'Office location' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
+      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'bonus', label: 'Bonus & PIP' }, { id: 'patterns', label: 'Work patterns' }, { id: 'office', label: 'Office location' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
 
       {tab === 'leave' && <section className="anim-fade" key="leave"><LeavePolicySettings /></section>}
+      {tab === 'bonus' && <section className="anim-fade" key="bonus"><BonusPipSettings /></section>}
 
       {tab === 'roles' && <section className="anim-fade" key="roles"><RolesMatrix /></section>}
 

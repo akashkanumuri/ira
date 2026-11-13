@@ -1,5 +1,6 @@
 import { TeamReviewMetrics } from './ReviewMetrics';
 import { TeamPunctuality } from './Punctuality';
+import { BonusPipAdmin } from './BonusPip';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Award, CalendarRange, CheckCircle2, Clock3, Lock, Play, Plus, Target, Trash2, TrendingUp } from 'lucide-react';
 import type { Designation, Employee } from '../../types/attendance';
@@ -14,7 +15,7 @@ import { GrowthTimeline, MilestoneDialog } from './GrowthTimeline';
 import { useLiveRefresh } from '../../lib/live';
 
 export function PerformanceAdmin({ employees = [], designations = [] }: { employees?: Employee[]; designations?: Designation[] }) {
-  const [tab, setTab] = useState<'cycles' | 'quality' | 'punctuality' | 'promotions' | 'growth'>('cycles');
+  const [tab, setTab] = useState<'cycles' | 'quality' | 'punctuality' | 'promotions' | 'growth' | 'bonus'>('cycles');
   const [available, setAvailable] = useState<boolean | null>(null);
   useEffect(() => { void perfApi.available().then(setAvailable); }, []);
   const active = useMemo(() => employees.filter((e) => e.status === 'active'), [employees]);
@@ -29,10 +30,11 @@ export function PerformanceAdmin({ employees = [], designations = [] }: { employ
       )}
       {available && (
         <>
-          <PillTabs value={tab} onChange={setTab} items={[{ id: 'cycles', label: 'Review cycles' }, { id: 'quality', label: 'Work quality' }, { id: 'punctuality', label: 'Punctuality' }, { id: 'promotions', label: 'Promotions' }, { id: 'growth', label: 'Growth history' }]} />
+          <PillTabs value={tab} onChange={setTab} items={[{ id: 'cycles', label: 'Review cycles' }, { id: 'quality', label: 'Work quality' }, { id: 'punctuality', label: 'Punctuality' }, { id: 'bonus', label: 'Bonus & PIP' }, { id: 'promotions', label: 'Promotions' }, { id: 'growth', label: 'Growth history' }]} />
           {tab === 'cycles' && <Cycles employees={active} designations={designations} />}
           {tab === 'quality' && <TeamReviewMetrics />}
           {tab === 'punctuality' && <TeamPunctuality />}
+          {tab === 'bonus' && <BonusPipAdmin nameOf={(id) => employees.find((e) => e.id === id)?.name ?? 'Employee'} />}
           {tab === 'promotions' && <Promotions designations={designations} />}
           {tab === 'growth' && <Growth employees={active} designations={designations} />}
         </>
