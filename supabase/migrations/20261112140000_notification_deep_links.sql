@@ -66,3 +66,7 @@ end $function$;
 drop trigger if exists notification_deep_link on public.notifications;
 create trigger notification_deep_link before insert on public.notifications
   for each row execute function private.notification_deep_link();
+
+-- Billing, contract and WFH links (applied 2026-11-13 as notification_deep_links_billing_contract_wfh):
+-- pay-submitted / overdue-staff / lock-staff → the project's Billing tab; contract-accepted/declined →
+-- its Contract tab; wfh_submit → Requests on the WFH tab. Same function, extra branches.
