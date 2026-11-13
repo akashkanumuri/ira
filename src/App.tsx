@@ -1786,6 +1786,7 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [settings, setSettings] = useState<{ monthly: number; divisor: 'calendar_days' | 'working_days' }>({ monthly: 1.5, divisor: 'calendar_days' });
+  const [pq, setPq] = useState('');
   const period = [...(payrollPeriods as PayrollPeriod[])].find(p => p.monthStart.startsWith(month));
   const records = (payrollRecords as PayrollRecord[])
     .filter(r => period && r.periodId === period.id)
@@ -1896,12 +1897,12 @@ function PayrollAdmin({ employees, payrollPeriods, payrollRecords, onRefresh }: 
       </div>
 
       <section className="card overflow-hidden">
-        <div className="p-5 sm:p-6"><h2 className="font-display text-lg font-bold text-ink-950">Payroll records</h2><p className="text-[13px] text-ink-500 mt-1">Salary is the snapshot taken when the draft was generated. Absent = a working day with no check-in and no approved leave (half a day when worked hours are under the half-day mark), counted up to yesterday.</p></div>
+        <div className="p-5 sm:p-6 flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-display text-lg font-bold text-ink-950">Payroll records</h2><p className="text-[13px] text-ink-500 mt-1">Salary is the snapshot taken when the draft was generated. Absent = a working day with no check-in and no approved leave (half a day when worked hours are under the half-day mark), counted up to yesterday.</p></div><SearchInput value={pq} onChange={setPq} placeholder="Search employee" className="w-full sm:w-64" /></div>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead><tr><Th>Employee</Th><Th>Salary</Th><Th>Paid leave</Th><Th>Unpaid leave</Th><Th>Leave deduction</Th><Th>Absent</Th><Th>Late</Th><Th>Final pay</Th></tr></thead>
             <tbody>
-              {records.map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td mono>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td mono>{r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)}</Td><Td mono>{r.absentDays ? `${r.absentDays} d · − ${money(r.absentDeduction)}` : '—'}</Td><Td>{r.lateCount ? <button type="button" className="text-left underline decoration-dotted underline-offset-2 hover:text-brand-700" onClick={() => setLateFor(r)}>{r.lateCount} late · {r.lateDays ? `${r.lateDays} d · − ${money(r.lateDeduction)}` : 'warnings'}</button> : '—'}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
+              {records.filter((r: PayrollRecord) => !pq.trim() || r.employeeName.toLowerCase().includes(pq.trim().toLowerCase())).map((r: PayrollRecord) => <tr key={r.id}><Td strong>{r.employeeName}</Td><Td mono>{money(r.salarySnapshot)}</Td><Td>{r.paidLeaveDays}</Td><Td>{r.unpaidLeaveDays}</Td><Td mono>{r.leaveDeduction ? `− ${money(r.leaveDeduction)}` : money(0)}</Td><Td mono>{r.absentDays ? `${r.absentDays} d · − ${money(r.absentDeduction)}` : '—'}</Td><Td>{r.lateCount ? <button type="button" className="text-left underline decoration-dotted underline-offset-2 hover:text-brand-700" onClick={() => setLateFor(r)}>{r.lateCount} late · {r.lateDays ? `${r.lateDays} d · − ${money(r.lateDeduction)}` : 'warnings'}</button> : '—'}</Td><Td strong>{money(r.finalPay)}</Td></tr>)}
               {!records.length && <EmptyRow colSpan={8} text={period ? 'No records for this period. Regenerate the draft.' : 'Generate the draft for this month to see records.'} />}
             </tbody>
           </table>

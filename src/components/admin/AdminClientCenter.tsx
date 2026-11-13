@@ -162,6 +162,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
      TAB 1: CLIENT DIRECTORY & DETAIL
   ========================================================================= */
   const [clientSearch, setClientSearch] = useState('');
+  const [projectSearch, setProjectSearch] = useState('');
   const [clientStatusFilter, setClientStatusFilter] = useState('All');
   const [selectedClientId, setSelectedClientId] = useState<string | null>(deepLink.client || null);
   const [clientDetailTab, setClientDetailTab] = useState('overview');
@@ -645,6 +646,12 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
         {activeTab === 'projects' && (
           <div className="space-y-4">
             <FilterBar>
+              <SearchField
+                value={projectSearch}
+                onChange={setProjectSearch}
+                placeholder="Search project, client or manager"
+                className="w-full sm:w-72"
+              />
               <div className="flex-1" />
               <Button
                 variant="primary"
@@ -664,7 +671,7 @@ const AdminClientCenterInternal: React.FC<Props> = ({ employees }) => {
             </FilterBar>
 
             <DataTable
-              rows={projects}
+              rows={projects.filter((p: any) => !projectSearch.trim() || `${p.name ?? ''} ${p.clientName ?? ''} ${p.managerName ?? ''} ${p.status ?? ''}`.toLowerCase().includes(projectSearch.trim().toLowerCase()))}
               onRow={r => setSelectedProjectSideId(r.id)}
               empty={
                 <Empty
