@@ -107,3 +107,6 @@ create policy offer_lock on public.work_presence as restrictive for all to authe
 create policy offer_lock on public.work_rule_templates as restrictive for all to authenticated using (not (select private.offer_locked())) with check (not (select private.offer_locked()));
 create policy offer_lock on public.work_sessions as restrictive for all to authenticated using (not (select private.offer_locked())) with check (not (select private.offer_locked()));
 create policy offer_lock on public.work_settings as restrictive for all to authenticated using (not (select private.offer_locked())) with check (not (select private.offer_locked()));
+
+-- avatars_private_bucket (applied after the app update was live):
+update storage.buckets set public = false where id = 'avatars' and public;
