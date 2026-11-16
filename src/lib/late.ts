@@ -7,7 +7,7 @@ export interface LateMark { date: string; check_in: string; late_min: number; n:
 export interface LateStatus {
   month: string; enabled: boolean; warnings: number; from: string;
   count: number; cut_days: number; daily_rate: number | null; cut_amount: number | null;
-  next_n: number; next_cut: number; late_after: string | null; never_late: boolean;
+  next_n: number; next_cut: number; late_after: string | null; never_late: boolean; first_day?: boolean;
   marks: LateMark[];
 }
 

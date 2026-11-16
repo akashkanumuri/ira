@@ -135,7 +135,7 @@ export function computeNudges(x: NudgeInput): Nudge[] {
     const onLeaveToday = x.leaveRequests.some((l) => l.employeeId === me && l.status === 'approved' && l.startDate <= x.today && l.endDate >= x.today);
     const tracked = x.rules ? x.rules.attendance !== false : true;
     const workingDay = x.rules ? Boolean(x.rules.working_day) : true;
-    const lateAfter: string | null = x.rules?.late_after ?? x.late?.late_after ?? null;
+    const lateAfter: string | null = x.late?.first_day ? null : (x.rules?.late_after ?? x.late?.late_after ?? null);
     const shiftEnd: string | null = x.rules?.shift2?.end ?? x.rules?.shift?.end ?? x.rules?.core?.end ?? null;
     const myTasks = x.tasks.filter((t) => t.assignedTo === me && !t.archivedAt && OPEN.has(t.status));
 

@@ -33,7 +33,7 @@ import { DEFAULT_RULES, currentOf, fetchCurrentRulesMap, fetchProjectsLite, rule
 import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
 import { BonusPipSettings } from './components/performance/BonusPip';
-import { OfferBox, OfferGate, OfferTemplatesSettings, offerStatusLabel, useOfferStatuses } from './components/offers/Offers';
+import { OfferBox, OfferGate, OfferTemplatesSettings, useOfferStatuses } from './components/offers/Offers';
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
@@ -1370,7 +1370,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
                 </div>
               );
             })()}</td>
-            <Td><StatusBadge label={e.status} />{offers.map[e.id] && offers.map[e.id].status !== 'Accepted' && <span className="block mt-1 text-[11.5px] font-semibold text-amber-800">Offer: {offerStatusLabel(offers.map[e.id])}</span>}</Td>
+            <Td><StatusBadge label={e.status} />{offers.label(e.id) && <span className="block mt-1 text-[11.5px] font-semibold text-amber-800">Offer: {offers.label(e.id)}</span>}</Td>
             <td>
               <div className="flex items-center justify-end gap-1">
                 <button title="Offer letter" aria-label={`Offer letter for ${e.name}`} onClick={() => setOfferFor(e)} className="icon-btn"><FileSignature className="w-4 h-4" /></button>

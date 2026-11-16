@@ -444,13 +444,24 @@ export function OfferGate({ userName, onLogout, children }: { userName: string; 
 /** Small summary for the employees list: the latest offer status per employee. */
 export function useOfferStatuses(enabled: boolean) {
   const [map, setMap] = useState<Record<string, OfferLetter>>({});
+  const [required, setRequired] = useState<Set<string>>(new Set());
   const reload = useCallback(async () => {
     if (!enabled) return;
-    const { data } = await db().from('offer_letters').select('id, employee_id, status, expires_on, version_no, created_at').order('created_at', { ascending: false });
+    const [{ data }, req] = await Promise.all([
+      db().from('offer_letters').select('id, employee_id, status, expires_on, version_no, created_at').order('version_no', { ascending: false }),
+      db().from('employees').select('id').eq('offer_required', true),
+    ]);
     const m: Record<string, OfferLetter> = {};
     for (const o of (data ?? []) as OfferLetter[]) if (!m[o.employee_id]) m[o.employee_id] = o;
     setMap(m);
+    setRequired(new Set(((req.data ?? []) as { id: string }[]).map((r) => r.id)));
   }, [enabled]);
   useEffect(() => { void reload(); }, [reload]);
-  return useMemo(() => ({ map, reload }), [map, reload]);
+  /** What to show on the employees list, or null when nothing is pending. */
+  const label = useCallback((employeeId: string) => {
+    const o = map[employeeId];
+    if (o) return o.status === 'Accepted' ? null : offerStatusLabel(o);
+    return required.has(employeeId) ? 'not sent yet' : null;
+  }, [map, required]);
+  return useMemo(() => ({ map, reload, label }), [map, reload, label]);
 }
