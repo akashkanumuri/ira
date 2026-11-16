@@ -33,6 +33,7 @@ import { DEFAULT_RULES, currentOf, fetchCurrentRulesMap, fetchProjectsLite, rule
 import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
 import { BonusPipSettings } from './components/performance/BonusPip';
+import { OfferBox, OfferGate, OfferTemplatesSettings, offerStatusLabel, useOfferStatuses } from './components/offers/Offers';
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
@@ -80,7 +81,8 @@ import {
   Clock3, Coffee, Download, Eye, FileClock, FileText, Filter, Home, KeyRound, LayoutDashboard, Link2,
   Bell, LogOut, Menu, Pencil, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck, Trash2, UserRound,
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
-  FolderKanban, BadgeIndianRupee, History, UserX, Ban, Package, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy
+  FolderKanban, BadgeIndianRupee, History, UserX, Ban, Package, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy,
+  FileSignature,
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -182,7 +184,8 @@ export default function App() {
     return <ClientPortalView user={user} onLogout={signOut} />;
   }
 
-  return <Portal user={user} onLogout={signOut} />;
+  if (user.role === 'admin') return <Portal user={user} onLogout={signOut} />;
+  return <OfferGate userName={user.name} onLogout={signOut}><Portal user={user} onLogout={signOut} /></OfferGate>;
 }
 
 import { TaskAssignForm } from './components/tasks/TaskAssignForm';
@@ -1282,6 +1285,8 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
   }
   const [search, setSearch] = useState(''); const [status, setStatus] = useState('all'); const [modal, setModal] = useState<'create' | 'edit' | null>(null); const [editing, setEditing] = useState<Employee | null>(null); const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [rulesMap, setRulesMap] = useState<Map<string, WorkRulesRow> | null>(null);
+  const [offerFor, setOfferFor] = useState<Employee | null>(null);
+  const offers = useOfferStatuses(true);
   useEffect(() => { let alive = true; void fetchCurrentRulesMap(today()).then((m) => { if (alive) setRulesMap(m); }); return () => { alive = false; }; }, [employees, modal]);
   // Deep link from search: /admin-employees?employee=<id> opens that profile once.
   const deepEmployee = useRef<string | null>(typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('employee') : null);
@@ -1365,9 +1370,10 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
                 </div>
               );
             })()}</td>
-            <Td><StatusBadge label={e.status} /></Td>
+            <Td><StatusBadge label={e.status} />{offers.map[e.id] && offers.map[e.id].status !== 'Accepted' && <span className="block mt-1 text-[11.5px] font-semibold text-amber-800">Offer: {offerStatusLabel(offers.map[e.id])}</span>}</Td>
             <td>
               <div className="flex items-center justify-end gap-1">
+                <button title="Offer letter" aria-label={`Offer letter for ${e.name}`} onClick={() => setOfferFor(e)} className="icon-btn"><FileSignature className="w-4 h-4" /></button>
                 <button title="Edit" aria-label={`Edit ${e.name}`} onClick={() => { setEditing(e); setModal('edit') }} className="icon-btn"><Pencil className="w-4 h-4" /></button>
                 <button disabled={statusBusyId === e.id} title={e.status === 'active' ? 'Deactivate' : 'Activate'} aria-label={e.status === 'active' ? `Deactivate ${e.name}` : `Activate ${e.name}`} onClick={() => void toggleStatus(e)} className={`icon-btn ${e.status === 'active' ? 'hover:!text-rose-600 hover:!bg-rose-50' : 'hover:!text-mint-700 hover:!bg-mint-50'}`}>
                   {statusBusyId === e.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : e.status === 'active' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
@@ -1377,6 +1383,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
           </tr>
         ))}{!filtered.length && <EmptyRow colSpan={8} text={all.length ? 'Nobody matches this search.' : 'No employees yet. Add the first employee to create their login.'} />}</tbody>
       </table></div></div>
+      {offerFor && <OfferBox employee={offerFor} employees={employees} onClose={() => { setOfferFor(null); void offers.reload(); }} />}
       {modal && <EmployeeModal mode={modal} employee={editing} departments={departments} designations={designations} employees={employees} onClose={() => setModal(null)} onSaved={onRefresh} />}
     </PageShell>
   );
@@ -2245,7 +2252,7 @@ function ExportsAdmin({ employees, payrollPeriods }: any) {
 }
 
 function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
-  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles' | 'office' | 'patterns' | 'bonus'>('rules');
+  const [tab, setTab] = useState<'rules' | 'designations' | 'departments' | 'payroll' | 'leave' | 'roles' | 'office' | 'patterns' | 'bonus' | 'offers'>('rules');
   const [name, setName] = useState(''); const [canAssign, setCanAssign] = useState(false);
   const [deptName, setDeptName] = useState('');
   const [payrollDivisor, setPayrollDivisor] = useState<'calendar_days' | 'working_days'>('calendar_days');
@@ -2264,10 +2271,11 @@ function SettingsAdmin({ designations, departments, rules, onRefresh }: any) {
 
   return (
     <PageShell title="Settings" subtitle="How work is organised: who can assign tasks to whom, job titles, departments, the office location and the payroll policy.">
-      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'bonus', label: 'Bonus & PIP' }, { id: 'patterns', label: 'Work patterns' }, { id: 'office', label: 'Office location' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
+      <PillTabs value={tab} onChange={setTab} items={[{ id: 'rules', label: 'Assignment rules', count: rules.length }, { id: 'designations', label: 'Designations', count: designations.length }, { id: 'departments', label: 'Departments', count: departments.length }, { id: 'leave', label: 'Leave policy' }, { id: 'bonus', label: 'Bonus & PIP' }, { id: 'offers', label: 'Offer letters' }, { id: 'patterns', label: 'Work patterns' }, { id: 'office', label: 'Office location' }, { id: 'payroll', label: 'Payroll policy' }, { id: 'roles', label: 'Roles & access' }]} />
 
       {tab === 'leave' && <section className="anim-fade" key="leave"><LeavePolicySettings /></section>}
       {tab === 'bonus' && <section className="anim-fade" key="bonus"><BonusPipSettings /></section>}
+      {tab === 'offers' && <section className="anim-fade" key="offers"><OfferTemplatesSettings /></section>}
 
       {tab === 'roles' && <section className="anim-fade" key="roles"><RolesMatrix /></section>}
 
