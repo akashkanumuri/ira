@@ -200,8 +200,11 @@ async function ensureEmployeeLedgers(
 }
 
 /** A login nobody knows: random, never shown, replaced when the employee opens their setup link. */
+// Supabase Auth rejects passwords over 72 characters, so keep this well under: 32 random bytes → 43 chars + 4.
 function unguessablePassword() {
-  return crypto.randomUUID() + 'Aa1!' + crypto.randomUUID()
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  const b64 = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return b64 + 'Aa1!'
 }
 
 async function setupLinkFor(admin: ReturnType<typeof createClient>, email: string, appOrigin: string | null | undefined, origin: string | null) {
@@ -536,7 +539,7 @@ async function erasePerson(input: ErasePersonInput, admin: ReturnType<typeof cre
   const { error: authError } = await admin.auth.admin.updateUserById(input.profileId, {
     email: `erased-${crypto.randomUUID()}@erased.invalid`,
     email_confirm: true,
-    password: crypto.randomUUID() + crypto.randomUUID(),
+    password: unguessablePassword(),
     user_metadata: {},
     ban_duration: '876000h',
   })
