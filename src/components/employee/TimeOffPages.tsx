@@ -62,7 +62,7 @@ export function LeavePage({ user, leaveRequests, ledgers, employees = [], onRefr
   const docInput = useRef<HTMLInputElement>(null);
   const addDocFor = useRef<string | null>(null);
 
-  const types = policy.types.filter((t) => t.active);
+  const types = policy.types.filter((t) => t.active && t.code !== 'optional_holiday'); // chosen from the Holidays page
   const chosen = types.find((t) => t.code === leaveType) ?? types[0];
   const current = ledgers.find((l) => l.periodStart === `${today().slice(0, 7)}-01`);
   const mine = useMemo(() => [...leaveRequests].sort((a, b) => b.startDate.localeCompare(a.startDate)), [leaveRequests]);
@@ -510,10 +510,125 @@ export function HolidayList({ holidays, renderActions }: { holidays: Holiday[]; 
   );
 }
 
-export function HolidaysPage({ holidays }: { holidays: Holiday[] }) {
+interface OptionalHoliday { id: string; name: string; date: string; description: string | null }
+
+/**
+ * Optional holidays: each employee takes ONE a year. Choosing sends an "Optional holiday" leave request
+ * (approved like any leave, fully paid, not taken from the leave balance). Admins add or remove the dates.
+ */
+export function OptionalHolidays({ employeeId, admin = false }: { employeeId?: string | null; admin?: boolean }) {
+  const [rows, setRows] = useState<OptionalHoliday[] | null>(null);
+  const [mine, setMine] = useState<{ start_date: string; status: string }[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const year = today().slice(0, 4);
+  const load = React.useCallback(async () => {
+    const db = supabase as any;
+    const { data } = await db.from('optional_holidays').select('id,name,date,description').order('date');
+    setRows((data ?? []) as OptionalHoliday[]);
+    if (employeeId) {
+      const { data: lr } = await db.from('leave_requests').select('start_date,status').eq('employee_id', employeeId)
+        .eq('leave_type', 'optional_holiday').in('status', ['pending', 'approved']);
+      setMine((lr ?? []) as { start_date: string; status: string }[]);
+    }
+  }, [employeeId]);
+  React.useEffect(() => { void load(); }, [load]);
+
+  const thisYear = (rows ?? []).filter((h) => h.date.startsWith(year) || h.date > today());
+  const taken = mine.find((m) => m.start_date.startsWith(year));
+
+  async function choose(h: OptionalHoliday) {
+    if (!employeeId) return;
+    if (!(await confirmDialog({ title: `Take ${h.name} as your optional holiday?`, message: 'You can choose only one optional holiday a year. It goes to your approver like a leave request and doesn’t use your leave balance.', confirmLabel: 'Request it' }))) return;
+    setBusy(h.id);
+    try {
+      const { error } = await (supabase as any).from('leave_requests').insert({
+        employee_id: employeeId, leave_type: 'optional_holiday', start_date: h.date, end_date: h.date, duration: 'full', reason: `Optional holiday: ${h.name}`,
+      });
+      if (error) throw new Error(error.message);
+      notify('Optional holiday requested.', 'success');
+      await load();
+    } catch (e) { notify(e instanceof Error ? e.message : 'Could not request it.', 'error'); } finally { setBusy(null); }
+  }
+  async function remove(h: OptionalHoliday) {
+    if (!(await confirmDialog({ title: `Remove ${h.name}?`, message: 'It will no longer be offered as an optional holiday. Requests already approved stay as they are.', confirmLabel: 'Remove', danger: true }))) return;
+    setBusy(h.id);
+    try {
+      const { error } = await (supabase as any).from('optional_holidays').delete().eq('id', h.id);
+      if (error) throw new Error(error.message);
+      notify('Optional holiday removed.', 'success');
+      await load();
+    } catch (e) { notify(e instanceof Error ? e.message : 'Could not remove it.', 'error'); } finally { setBusy(null); }
+  }
+  async function add(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const name = String(fd.get('name') || '').trim(); const date = String(fd.get('date') || '');
+    if (name.length < 2 || !date) { notify('Give it a name and a date.', 'error'); return; }
+    setBusy('add');
+    try {
+      const { data: me } = await supabase.auth.getUser();
+      const { error } = await (supabase as any).from('optional_holidays').insert({ name, date, description: 'Optional · choose any one optional holiday a year', created_by: me.user?.id ?? null });
+      if (error) throw new Error(error.message.includes('duplicate') ? 'There is already an optional holiday on that date.' : error.message);
+      notify('Optional holiday added.', 'success');
+      setAdding(false);
+      await load();
+    } catch (err) { notify(err instanceof Error ? err.message : 'Could not add it.', 'error'); } finally { setBusy(null); }
+  }
+
+  if (rows === null) return null;
+  if (!rows.length && !admin) return null;
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <CardHeader title="Optional holidays" subtitle={admin ? 'Each employee may take one of these a year. Employees request it from their Holidays page.' : taken ? `You’ve chosen your optional holiday for ${year}.` : 'Choose any one of these as a paid day off this year.'} />
+        {admin && <Button variant="secondary" size="sm" onClick={() => setAdding(true)}><Plus className="w-4 h-4" />Add optional holiday</Button>}
+      </div>
+      {!rows.length ? <p className="mt-3 text-sm text-ink-500">No optional holidays yet.</p> : (
+        <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {(admin ? rows : thisYear).map((h) => {
+            const past = h.date < today();
+            const mineHere = mine.find((m) => m.start_date === h.date);
+            return (
+              <li key={h.id} className={cx('rounded-2xl border border-ink-100 p-4 flex items-center gap-4', past && !mineHere && 'opacity-60')}>
+                <span className="w-14 h-14 shrink-0 rounded-2xl flex flex-col items-center justify-center leading-none bg-amber-50 text-amber-800">
+                  <span className="text-[10px] font-bold uppercase opacity-80">{new Date(`${h.date}T12:00:00Z`).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })}</span>
+                  <span className="font-display text-xl font-bold">{Number(h.date.slice(8))}</span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-ink-900 truncate">{h.name}</p>
+                  <p className="text-xs text-ink-500">{dateLabel(h.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                </div>
+                {admin ? (
+                  <button type="button" className="icon-btn hover:!text-rose-600" aria-label={`Remove ${h.name}`} disabled={busy === h.id} onClick={() => void remove(h)}><Undo2 className="w-4 h-4" /></button>
+                ) : mineHere ? (
+                  <Badge tone={mineHere.status === 'approved' ? 'mint' : 'amber'} dot>{mineHere.status === 'approved' ? 'Your holiday' : 'Waiting for OK'}</Badge>
+                ) : past ? <Badge tone="ink">Passed</Badge> : taken ? null : (
+                  <Button size="sm" variant="secondary" disabled={!!busy} onClick={() => void choose(h)}>Choose</Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {adding && (
+        <Modal title="Add an optional holiday" onClose={() => setAdding(false)} closeDisabled={busy === 'add'}>
+          <form onSubmit={add} className="space-y-4">
+            <label className="block"><span className="label">Name</span><input name="name" className="input" maxLength={120} placeholder="e.g. Good Friday" required /></label>
+            <label className="block"><span className="label">Date</span><input name="date" type="date" className="input" required /></label>
+            <div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setAdding(false)}>Cancel</button><button className="btn-primary" disabled={busy === 'add'}>Add</button></div>
+          </form>
+        </Modal>
+      )}
+    </Card>
+  );
+}
+
+export function HolidaysPage({ holidays, user }: { holidays: Holiday[]; user?: AuthUser }) {
   return (
     <Page>
-      <PageHeader title="Holidays" subtitle="Company and public holidays are paid days off." />
+      <PageHeader title="Holidays" subtitle="Company holidays are paid days off for everyone. You may also take one optional holiday a year." />
+      <OptionalHolidays employeeId={user?.employeeDbId ?? null} />
       <HolidayList holidays={holidays} />
     </Page>
   );

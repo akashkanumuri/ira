@@ -37,7 +37,7 @@ import { OfferBox, OfferGate, OfferTemplatesSettings, useOfferStatuses } from '.
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
-import { HolidayList, HolidaysPage, LeavePage, WfhPage } from './components/employee/TimeOffPages';
+import { HolidayList, HolidaysPage, LeavePage, OptionalHolidays, WfhPage } from './components/employee/TimeOffPages';
 import { useLinkableDeliverables, type LinkableDeliverable } from './lib/linkableDeliverables';
 import { ManagerClientWork } from './components/manager/ManagerClientWork';
 import { AppShell, type NavGroup } from './ui/AppShell';
@@ -1978,9 +1978,10 @@ function HolidaysAdmin({ holidays, user, onRefresh }: any) {
   return (
     <PageShell
       title="Holidays"
-      subtitle="Company holidays you add are paid non-working days for everyone."
+      subtitle="Company holidays are paid non-working days for everyone. Optional holidays: each employee picks one a year."
       actions={<button onClick={() => setOpen(true)} className="btn-primary"><Plus className="w-4 h-4" />Add holiday</button>}
     >
+      <OptionalHolidays admin />
       <HolidayList
         holidays={holidays}
         renderActions={(h) => h.holidayType !== 'public'
