@@ -9,6 +9,7 @@ import { DeliverableThread } from '../common/DeliverableThread';
 import { DeliverablePage } from '../delivery/DeliverablePage';
 import { StaffClientReview } from '../common/StaffClientReview';
 import { ContractWizard } from './ContractWizard';
+import { ScopeOfWorkCard } from '../contracts/ScopeOfWork';
 import { ClientAccessCard, ExtraChargesCard, PaymentDetailsCard, RequestPaymentDialog } from './BillingExtras';
 import {
   AlertTriangle,
@@ -579,6 +580,10 @@ function ContractTab({ ws, projectId, projectName, clientId, reload }: { ws: Pro
             </Card>
           </div>
         </div>
+      )}
+
+      {contract && contract.status !== 'Terminated' && (
+        <ScopeOfWorkCard contract={contract} deliverables={ws.deliverables} frozen={current?.scope ?? null} reload={reload} />
       )}
 
       <ContractWizard

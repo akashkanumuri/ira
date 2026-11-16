@@ -83,6 +83,7 @@ import {
 import { Stat as UiStat } from '../../ui';
 import { DELIVERY_STAGES, clientStageLabel, clientStageLine, deliveryStageIndex } from '../../lib/deliveryStages';
 import { DeliverableThread } from '../common/DeliverableThread';
+import { ScopeTable } from '../contracts/ScopeOfWork';
 import { ClientVersions } from './ClientVersions';
 import { Gauge, Ring } from '../../ui/charts';
 import { greeting } from '../../ui/motion';
@@ -548,6 +549,13 @@ export function ClientContracts({ user, project, ws, reload, go }: ViewProps) {
                 </div>
               </div>
             )}
+            {(version?.scope?.length ?? 0) > 0 && (
+              <div className="mt-5 pt-5 border-t border-line">
+                <div className="text-xs text-ink-3 mb-2">Scope of work · what you will receive</div>
+                <ScopeTable rows={version!.scope!} />
+                <p className="text-[12px] text-ink-3 mt-2">Each task becomes a deliverable you can track and review once you sign. Changes after signing go through a change request.</p>
+              </div>
+            )}
             {plan.length > 0 && (
               <div className="mt-5 pt-5 border-t border-line">
                 <div className="text-xs text-ink-3 mb-2">Payment plan</div>
@@ -586,7 +594,7 @@ export function ClientContracts({ user, project, ws, reload, go }: ViewProps) {
           ) : awaiting ? (
             <Card>
               <CardHead title="Sign the contract" desc="Read the terms above, tick the box and type your full name." />
-              <Checkbox checked={agree} onChange={setAgree} label="I have read and agree to the terms and conditions of this contract." />
+              <Checkbox checked={agree} onChange={setAgree} label={(version?.scope?.length ?? 0) > 0 ? 'I have read and agree to the terms and conditions and the scope of work of this contract.' : 'I have read and agree to the terms and conditions of this contract.'} />
               <div className="mt-3 max-w-sm">
                 <Field label="Your full name" required hint="Typing your name signs the contract.">
                   <Input value={signer} onChange={e => setSigner(e.target.value)} autoComplete="name" placeholder={user.name ?? 'Full name'} />

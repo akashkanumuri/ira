@@ -127,6 +127,20 @@ export interface ContractVersionRow {
   end_date: string | null;
   change_note: string | null;
   created_at: string;
+  /** The scope of work as it was when this version was sent: what the client sees and signs. */
+  scope?: ScopeRow[] | null;
+}
+
+/** One row of a contract's scope of work (frozen into the version when it is sent). */
+export interface ScopeRow {
+  no: string | null;
+  task: string;
+  scope: string | null;
+  handover: string[];
+  quantity: number | null;
+  unit: string | null;
+  timeline: string | null;
+  drafts: number | null;
 }
 
 export interface AcceptanceRow {
@@ -160,6 +174,10 @@ export interface DeliverableRow {
   reference_url: string | null;
   responsible_id: string | null;
   responsible_name: string | null;
+  /** What is handed over for this deliverable (from the contract's scope of work). */
+  handover?: string[] | null;
+  included_drafts?: number | null;
+  sort_order?: number | null;
   assigned_team: string | null;
   status: DeliverableStatus;
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
