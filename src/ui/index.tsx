@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useCountUp } from './motion';
+import { useAvatarSrc } from '../lib/avatarUrl';
 
 const cx = (...parts: Array<string | number | false | null | undefined>) => parts.filter((p) => typeof p === 'string' && p).join(' ');
 export { cx };
@@ -228,7 +229,8 @@ export function Avatar({ name, src, size = 40, tone = 'brand' }: { name?: string
     .map((p) => p[0]?.toUpperCase())
     .join('');
   const style = { width: size, height: size, fontSize: Math.max(11, size * 0.36) };
-  if (src) return <img src={src} alt={name ?? ''} style={style} className="rounded-full object-cover shrink-0 ring-2 ring-white" />;
+  const shown = useAvatarSrc(src);
+  if (shown) return <img src={shown} alt={name ?? ''} style={style} className="rounded-full object-cover shrink-0 ring-2 ring-white" />;
   return (
     <span style={style} className={cx('inline-flex shrink-0 items-center justify-center rounded-full font-bold ring-2 ring-white', toneSoft[tone])}>
       {initials || '?'}
