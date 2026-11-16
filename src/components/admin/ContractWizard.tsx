@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus, Save, Send, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { fmtDate, inr, rpc, type ContractRow, type ContractVersionRow, type InstallmentRow, todayIST } from '../../lib/sigma';
+import { fmtDate, inr, rpc, type ContractRow, type ContractVersionRow, type DeliverableRow, type InstallmentRow, todayIST } from '../../lib/sigma';
+import { ScopeEditor, ScopeTable, blankScopeRow, saveScope, scopeDrafts, scopePreview, scopeProblem, scopeRowFrom, type EditRow } from '../contracts/ScopeOfWork';
 import { Button, Field, Input, Select, SidePanel, Textarea, cx, useToast } from '../client/ClientUI';
 
 const db = supabase as any;
 
 /**
- * Admin writes the whole contract in SIGMA: details → terms → payment plan → review & send.
+ * Admin writes the whole contract in SIGMA: details → scope of work → terms → payment plan → review & send.
+ * The scope rows are the deliverables the client sees and signs; signing turns them into active deliverables.
  * The contract value is final (GST included). Accepting it requests Term 1; the client gets
  * full access once that payment is verified. Later terms are requested from Billing.
  */
 
-type Step = 'details' | 'terms' | 'plan' | 'review';
+type Step = 'details' | 'scope' | 'terms' | 'plan' | 'review';
 const STEPS: { id: Step; label: string }[] = [
   { id: 'details', label: 'Details' },
+  { id: 'scope', label: 'Scope of work' },
   { id: 'terms', label: 'Terms' },
   { id: 'plan', label: 'Payment plan' },
   { id: 'review', label: 'Review & send' },
@@ -59,10 +62,12 @@ interface Props {
   contract?: ContractRow | null;
   version?: ContractVersionRow | null;
   plan?: InstallmentRow[];
+  /** The project's deliverables: its Draft ones (not on another contract) are this contract's scope. */
+  deliverables?: DeliverableRow[];
   onSaved: () => Promise<void>;
 }
 
-export function ContractWizard({ open, onClose, projectId, projectName, clientId, contract, version, plan = [], onSaved }: Props) {
+export function ContractWizard({ open, onClose, projectId, projectName, clientId, contract, version, plan = [], deliverables = [], onSaved }: Props) {
   const toast = useToast();
   const [step, setStep] = useState<Step>('details');
   const [title, setTitle] = useState('');
@@ -76,6 +81,8 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
   const [clientName, setClientName] = useState('the client');
   const [templates, setTemplates] = useState<{ id: string; name: string; body: string }[]>([]);
   const [busy, setBusy] = useState<'draft' | 'send' | 'template' | null>(null);
+  const existingScope = useMemo(() => scopeDrafts(deliverables, contract?.id ?? null), [deliverables, contract?.id]);
+  const [scopeRows, setScopeRows] = useState<EditRow[]>([blankScopeRow()]);
 
   const planTerms = plan.filter(i => i.term_no != null).sort((a, b) => (a.term_no ?? 0) - (b.term_no ?? 0));
   /** Once a term was asked for or paid, the plan can only change from Billing. */
@@ -91,6 +98,7 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
     setDueDays(String(contract?.first_term_due_days ?? 7));
     setDocUrl('');
     setBody(version?.terms_body ?? '');
+    setScopeRows(existingScope.length ? existingScope.map(scopeRowFrom) : [blankScopeRow()]);
     setTerms(planTerms.length ? planTerms.map(t => ({ name: t.name, pct: String(t.percentage ?? '') })) : termsFrom([50, 30, 20]));
     void (async () => {
       if (clientId) {
@@ -121,6 +129,8 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
     else if (end && start && end < start) p.details = 'End date can’t be before the start date.';
     else if (!(Number(dueDays) >= 0 && Number(dueDays) <= 90)) p.details = 'Term 1 due days must be 0–90.';
     else if (docUrl.trim() && !/^https:\/\/\S+$/i.test(docUrl.trim())) p.details = 'The document link must start with https://';
+    const sp = scopeProblem(scopeRows);
+    if (sp) p.scope = sp;
     if (body.trim().length < 20 && !docUrl.trim() && !version?.document_url) p.terms = 'Write the terms (at least a few lines) or add a document link.';
     if (!planLocked) {
       if (terms.length < 1) p.plan = 'Add at least one payment term.';
@@ -128,11 +138,11 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
       else if (Math.abs(pctTotal - 100) >= 0.01) p.plan = `The terms must add up to 100% (now ${Number(pctTotal.toFixed(2))}%).`;
     }
     return p;
-  }, [title, amount, start, end, dueDays, docUrl, body, terms, pctTotal, planLocked, version?.document_url]);
+  }, [title, amount, start, end, dueDays, docUrl, body, terms, pctTotal, planLocked, version?.document_url, scopeRows]);
 
   const idx = STEPS.findIndex(s => s.id === step);
   const canNext = !problems[step as Exclude<Step, 'review'>];
-  const allOk = !problems.details && !problems.terms && !problems.plan;
+  const allOk = !problems.details && !problems.scope && !problems.terms && !problems.plan;
 
   const saveTemplate = async () => {
     const name = window.prompt('Template name', `${title.trim() || 'Standard'} terms`);
@@ -179,6 +189,7 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
         p_terms_body: body.trim() ? fill(body.trim()) : null,
         p_first_term_due_days: Number(dueDays),
       });
+      await saveScope(id!, scopeRows, existingScope);
       if (!planLocked) {
         await rpc('staff_set_payment_plan', {
           p_contract_id: id,
@@ -250,6 +261,14 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
             </Field>
           )}
           {problems.details && <p className="text-[12px] text-warn">{problems.details}</p>}
+        </div>
+      )}
+
+      {step === 'scope' && (
+        <div className="space-y-3">
+          <p className="text-[12.5px] text-ink-600">What you’ll deliver. The client sees this table on the contract before signing, and each row becomes a deliverable once they accept.</p>
+          <ScopeEditor rows={scopeRows} onChange={setScopeRows} />
+          {problems.scope && <p className="text-[12px] text-warn">{problems.scope}</p>}
         </div>
       )}
 
@@ -346,6 +365,10 @@ export function ContractWizard({ open, onClose, projectId, projectName, clientId
               <span className="text-ink-500">Dates</span><span className="text-right">{start ? fmtDate(start) : '—'} → {end ? fmtDate(end) : '—'}</span>
               <span className="text-ink-500">Term 1 due</span><span className="text-right">{Number(dueDays) === 0 ? 'On acceptance' : `${dueDays} days after acceptance`}</span>
             </div>
+          </div>
+          <div className="rounded-2xl border border-ink-100 p-4">
+            <p className="text-[12px] font-semibold text-ink-500 uppercase tracking-wide mb-2">Scope of work</p>
+            <ScopeTable rows={scopePreview(scopeRows)} />
           </div>
           <div className="rounded-2xl border border-ink-100 p-4">
             <p className="text-[12px] font-semibold text-ink-500 uppercase tracking-wide mb-2">Payment plan</p>

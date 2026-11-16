@@ -595,6 +595,7 @@ function ContractTab({ ws, projectId, projectName, clientId, reload }: { ws: Pro
         contract={editableDraft ? contract : null}
         version={editableDraft ? current ?? null : null}
         plan={editableDraft ? ws.installments.filter(i => i.contract_id === contract!.id) : []}
+        deliverables={ws.deliverables}
         onSaved={reload}
       />
 
