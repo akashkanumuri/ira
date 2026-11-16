@@ -12,10 +12,11 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKe
  * Read before the client below consumes the URL: did this page open from a one-time password reset link?
  * 'ok' = link accepted (Supabase signs the person in and we ask for a new password); 'expired' = link used or too old.
  */
-export const recoveryLinkState: 'ok' | 'expired' | null = (() => {
+export const recoveryLinkState: 'ok' | 'expired' | 'verify' | null = (() => {
   if (typeof window === 'undefined') return null;
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const query = new URLSearchParams(window.location.search);
+  if (query.get('set-password') === '1' && query.get('token_hash')) return 'verify';
   if (hash.get('type') === 'recovery') return 'ok';
   if (query.get('set-password') === '1') return hash.get('error') || query.get('error') ? 'expired' : 'ok';
   return null;

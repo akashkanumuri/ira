@@ -10,6 +10,8 @@ function clearUrl() {
   try {
     const url = new URL(window.location.href);
     url.searchParams.delete('set-password');
+    url.searchParams.delete('token_hash');
+    url.searchParams.delete('type');
     url.hash = '';
     window.history.replaceState(null, '', url.pathname + url.search);
   } catch { /* nothing to clean */ }
@@ -20,7 +22,7 @@ function clearUrl() {
  * No password is ever sent or shown to anyone; Supabase stores only its hash.
  */
 export function RecoveryGate() {
-  const [state, setState] = useState<'ok' | 'expired' | null>(recoveryLinkState);
+  const [state, setState] = useState<'ok' | 'expired' | 'verify' | null>(recoveryLinkState);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,6 +31,19 @@ export function RecoveryGate() {
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') setState('ok'); });
     return () => data.subscription.unsubscribe();
+  }, []);
+
+  // Setup / reset link: exchange its one-time token here, then take it out of the address bar.
+  useEffect(() => {
+    if (recoveryLinkState !== 'verify') return;
+    const tokenHash = new URLSearchParams(window.location.search).get('token_hash');
+    void (async () => {
+      const { error: e } = tokenHash
+        ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' })
+        : { error: new Error('missing') };
+      clearUrl();
+      setState(e ? 'expired' : 'ok');
+    })();
   }, []);
 
   if (!state) return null;
@@ -59,7 +74,12 @@ export function RecoveryGate() {
     <div className="fixed inset-0 z-[120] grid place-items-center bg-ink-950/60 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
       <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl p-6 sm:p-7">
         <span className="grid place-items-center w-11 h-11 rounded-2xl bg-primary/10 text-primary"><KeyRound size={20} /></span>
-        {state === 'expired' ? (
+        {state === 'verify' ? (
+          <>
+            <h1 id="recovery-title" className="mt-4 font-display text-[22px] font-bold text-ink-950">Checking your link…</h1>
+            <p className="mt-2 text-[14px] text-ink-600">One moment.</p>
+          </>
+        ) : state === 'expired' ? (
           <>
             <h1 id="recovery-title" className="mt-4 font-display text-[22px] font-bold text-ink-950">This link has expired</h1>
             <p className="mt-2 text-[14px] text-ink-600">Reset links work once and only for a short time. Ask your admin for a new one.</p>

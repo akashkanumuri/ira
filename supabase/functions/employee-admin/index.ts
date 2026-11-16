@@ -210,8 +210,11 @@ function unguessablePassword() {
 async function setupLinkFor(admin: ReturnType<typeof createClient>, email: string, appOrigin: string | null | undefined, origin: string | null) {
   const base = allowedOrigin(appOrigin ?? null) ?? allowedOrigin(origin) ?? 'https://ira-eta-two.vercel.app'
   const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo: `${base}/?set-password=1` } })
-  if (error || !data?.properties?.action_link) return null
-  return data.properties.action_link as string
+  const hashed = data?.properties?.hashed_token
+  if (error || !hashed) return null
+  // The link opens SIGMA directly and the page exchanges the one-time token itself (verifyOtp), so it never
+  // depends on Supabase's redirect allow-list / Site URL, and link previews can't use the token up.
+  return `${base}/?set-password=1&type=recovery&token_hash=${encodeURIComponent(hashed)}`
 }
 
 async function createEmployee(input: CreateEmployeeInput, admin: ReturnType<typeof createClient>, actorId: string, origin: string | null) {
