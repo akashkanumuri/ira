@@ -122,7 +122,8 @@ const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x6a5a3c, 0.9);
 scene.add(hemi);
 
 const loader = new THREE.TextureLoader();
-const waterNormals = loader.load('./assets/waternormals.jpg', (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; });
+const WATER_NORMALS = document.querySelector('meta[name="water-normals"]')?.content || './assets/waternormals.jpg';
+const waterNormals = loader.load(WATER_NORMALS, (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; });
 const water = new Water(new THREE.PlaneGeometry(14000, 14000), {
   textureWidth: MOBILE ? 256 : 512, textureHeight: MOBILE ? 256 : 512, waterNormals,
   sunDirection: new THREE.Vector3(), sunColor: 0xffffff, waterColor: 0x0d6f8f, distortionScale: 2.4, fog: false, alpha: 1,
