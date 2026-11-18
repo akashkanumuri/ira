@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SIGMA City</title>
+  <meta name="description" content="SIGMA City — a living 3D view of the company: sky, sea, mountains and the SIGMA town." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./src/styles.css" />
+  <script type="importmap">
+    { "imports": {
+        "three": "./vendor/three/three.module.min.js",
+        "three/addons/": "./vendor/three/addons/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="scene" aria-label="SIGMA City 3D view"></div>
+  <div id="labels" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">SIGMA<b>1</b></span>
+      <span class="sub">City</span>
+      <span class="chip proto" title="Numbers on this prototype are sample data, not SIGMA records">Prototype · sample data</span>
+    </div>
+    <div class="time" role="group" aria-label="Time of day">
+      <button data-time="live" class="on">Live <span id="clock"></span></button>
+      <button data-time="6.2">Sunrise</button>
+      <button data-time="12">Day</button>
+      <button data-time="17.9">Sunset</button>
+      <button data-time="22">Night</button>
+    </div>
+  </header>
+
+  <aside class="pulse" aria-label="Company pulse">
+    <p class="eyebrow">Company pulse</p>
+    <div class="weather" id="weather"></div>
+    <ul id="pulse-list"></ul>
+  </aside>
+
+  <aside class="panel" id="panel" hidden>
+    <button class="close" id="panel-close" aria-label="Close">×</button>
+    <p class="eyebrow" id="panel-kind"></p>
+    <h2 id="panel-title"></h2>
+    <p class="lead" id="panel-lead"></p>
+    <dl id="panel-stats"></dl>
+    <button class="primary" id="panel-open">Open in SIGMA</button>
+    <p class="note">In the real product this opens the matching SIGMA page.</p>
+  </aside>
+
+  <footer class="dock" aria-label="Try the live moments">
+    <span class="dock-label">Try it</span>
+    <button data-event="checkin">Morning check-ins</button>
+    <button data-event="deliverable">Deliverable done</button>
+    <button data-event="payment">Payment received</button>
+    <button data-event="overdue">Task goes overdue</button>
+    <button data-event="client">New client signs</button>
+    <button data-event="tour" class="ghost">Fly-over</button>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="loading" id="loading"><span>Building SIGMA City…</span></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
