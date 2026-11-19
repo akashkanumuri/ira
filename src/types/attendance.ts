@@ -16,6 +16,9 @@ export interface Designation {
   id: string;
   name: string;
   canAssignTasks: boolean;
+  /** Sales workspace this designation gets (Telecaller, Field Sales Executive, Sales Manager). */
+  salesRole?: string | null;
+  defaultDepartmentId?: string | null;
 }
 
 export interface Employee {

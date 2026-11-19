@@ -126,25 +126,6 @@ export function useSalesRoles(enabled: boolean) {
   return { map, reload };
 }
 
-export async function saveSalesRole(employeeId: string, role: SalesRole | '' | null) {
-  const { error } = await db().rpc('set_sales_role', { p_employee: employeeId, p_role: role || null });
-  if (error) throw new Error(errText(error, 'Could not save the sales team.'));
-}
-
-/** The "Sales team" field in Add / Edit employee. */
-export function SalesTeamField({ value, onChange }: { value: SalesRole | ''; onChange: (v: SalesRole | '') => void }) {
-  return (
-    <label className="block">
-      <span className="label">Sales team <span className="font-normal text-ink-400 ml-1">optional</span></span>
-      <select value={value} onChange={(e) => onChange(e.target.value as SalesRole | '')} className="input">
-        <option value="">Not in sales</option>
-        {SALES_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-      </select>
-      <span className="block mt-1 text-[12px] text-ink-500">{value ? SALES_ROLES.find((r) => r.id === value)?.hint : 'Gives access to Leads. Leave empty for everyone else.'}</span>
-    </label>
-  );
-}
-
 /* ---------------------------------------------------------------- page */
 
 export function LeadsPage({ user, employees, onSelectTab }: { user: any; employees: Employee[]; onSelectTab?: (t: string) => void }) {
@@ -189,7 +170,7 @@ export function LeadsPage({ user, employees, onSelectTab }: { user: any; employe
 
   if (!access.ready) return <div className="mx-auto max-w-[1320px] space-y-4"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
   if (!access.canCall && !access.canManage) {
-    return <div className="mx-auto max-w-[1320px]"><Card className="p-6"><EmptyState icon={<Inbox className="w-5 h-5" />} title="Leads are for the sales team" text="Ask admin to add you to the sales team in Employees → Edit → Sales team." /></Card></div>;
+    return <div className="mx-auto max-w-[1320px]"><Card className="p-6"><EmptyState icon={<Inbox className="w-5 h-5" />} title="Leads are for the sales team" text="Sales access comes with the Telecaller, Field Sales Executive or Sales Manager designation. Ask admin to set yours." /></Card></div>;
   }
 
   const all = leads ?? [];
@@ -206,7 +187,7 @@ export function LeadsPage({ user, employees, onSelectTab }: { user: any; employe
     (!search.trim() || `${l.lead_no} ${l.contact_name} ${l.company ?? ''} ${l.phone ?? ''} ${l.email ?? ''} ${l.city ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())));
 
   const tabs = [
-    ...(access.canCall && user.employeeDbId ? [{ id: 'queue', label: 'My queue', count: queue.length }] : []),
+    ...(access.canCall && user.employeeDbId ? [{ id: 'queue', label: 'Today', count: queue.length }] : []),
     ...(access.canManage ? [{ id: 'good', label: 'Good leads', count: goodInbox.filter((l) => l.stage === 'good').length }] : []),
     { id: 'all', label: access.canManage ? 'All leads' : 'My leads' },
     ...(access.canManage ? [{ id: 'reports', label: 'Reports' }] : []),
@@ -219,7 +200,7 @@ export function LeadsPage({ user, employees, onSelectTab }: { user: any; employe
     <div className="mx-auto w-full max-w-[1320px] space-y-5 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] sm:text-[30px] font-bold text-ink-950 tracking-tight">Leads</h1>
+          <h1 className="font-display text-[26px] sm:text-[30px] font-bold text-ink-950 tracking-tight">{access.role === 'sales_field' ? 'Visits & leads' : access.role === 'sales_caller' ? 'My calls' : 'Leads'}</h1>
           <p className="text-[14px] text-ink-500 mt-1">{access.canManage ? 'Every lead from calls and field visits. Good leads land here for you to take forward.' : access.canVisit ? 'Your leads and company visits. Mark a lead good once you know their need, budget, timeline and decision maker.' : 'Call your leads, set follow-ups, and mark good ones for admin.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -656,7 +637,7 @@ function AssignPanel({ team, current, busy, onCancel, onSave }: { team: TeamMemb
           <option value="">Nobody (unassigned)</option>
           {team.map((t) => <option key={t.employee_id} value={t.employee_id}>{t.name} · {salesRoleLabel(t.role_code)}</option>)}
         </select>
-        {!team.length && <p className="text-[12px] text-ink-600">Nobody is in the sales team yet. Add people in Employees → Edit → Sales team.</p>}
+        {!team.length && <p className="text-[12px] text-ink-600">Nobody is in the sales team yet. Give employees the Telecaller, Field Sales Executive or Sales Manager designation.</p>}
         <PanelActions busy={busy} onCancel={onCancel} label="Assign" />
       </form>
     </PanelBox>
