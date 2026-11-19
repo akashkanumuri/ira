@@ -22,14 +22,16 @@ import { invokeClientAdmin } from '../../lib/v2';
 interface Props {
   employees: Employee[];
   onClose: () => void;
-  onCreated?: () => Promise<void> | void;
+  onCreated?: (clientId?: string) => Promise<void> | void;
+  /** Prefill (e.g. when a won lead becomes a client). */
+  initial?: { companyName?: string; primaryContact?: string; email?: string; managerId?: string };
 }
 
-export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCreated }) => {
-  const [companyName, setCompanyName] = useState('');
-  const [primaryContact, setPrimaryContact] = useState('');
-  const [email, setEmail] = useState('');
-  const [managerId, setManagerId] = useState('');
+export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCreated, initial }) => {
+  const [companyName, setCompanyName] = useState(initial?.companyName ?? '');
+  const [primaryContact, setPrimaryContact] = useState(initial?.primaryContact ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [managerId, setManagerId] = useState(initial?.managerId ?? '');
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
 
@@ -107,7 +109,7 @@ export const ClientCreationModal: React.FC<Props> = ({ employees, onClose, onCre
           invitationUrl: res.invitationUrl,
           emailDelivery: res.emailDelivery,
         });
-        if (onCreated) await onCreated();
+        if (onCreated) await onCreated(res.clientId);
       } else {
         setError(res?.error || 'Failed to create client account.');
       }

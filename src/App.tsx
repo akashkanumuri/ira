@@ -34,6 +34,7 @@ import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
 import { BonusPipSettings } from './components/performance/BonusPip';
 import { OfferBox, OfferGate, OfferTemplatesSettings, useOfferStatuses } from './components/offers/Offers';
+import { LeadsPage, SalesTeamField, saveSalesRole, salesRoleLabel, useSalesAccess, useSalesRoles, type SalesRole } from './components/leads/Leads';
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
 import { EmployeeHome, MyAttendancePage } from './components/employee/EmployeeHome';
@@ -83,6 +84,7 @@ import {
   Users, WalletCards, X, Upload, Building2, CircleAlert, LockKeyhole, UserPlus, Smartphone, Sparkles,
   FolderKanban, BadgeIndianRupee, History, UserX, Ban, Package, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy,
   FileSignature,
+  PhoneCall,
 } from 'lucide-react';
 import type {
   AssignmentRule, AttendanceRecord, BreakEvent, Department, Designation, Employee, EmployeeDocument,
@@ -208,11 +210,11 @@ function LiveClockDisplay() {
   );
 }
 
-const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime'];
-const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-delivery', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time'];
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime', 'admin-leads'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-delivery', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time', 'emp-leads'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
-  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work', 'admin-delivery': 'emp-delivery', 'emp-delivery': 'admin-delivery',
+  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work', 'admin-delivery': 'emp-delivery', 'emp-delivery': 'admin-delivery', 'admin-leads': 'emp-leads', 'emp-leads': 'admin-leads',
 };
 /** Cross-role mappings whose pages understand the same deep-link query. */
 const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-tasks', 'emp-tasks>admin-tasks', 'admin-support>emp-support', 'emp-support>admin-support', 'admin-delivery>emp-delivery', 'emp-delivery>admin-delivery']);
@@ -642,11 +644,13 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const clientWorkKnown = user.role === 'admin' || managesPeople || (isProjectManager !== undefined && employees.length > 0);
   const seesClientWork = user.role === 'admin' || managesPeople || isProjectManager === true;
 
+  const sales = useSalesAccess(user.role === 'admin');
   const navGroups: NavGroup[] = user.role === 'admin'
     ? [
       { items: [{ id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
       {
         label: 'Clients & delivery', items: [
+          { id: 'admin-leads', label: 'Leads', icon: PhoneCall },
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
           { id: 'admin-delivery', label: 'Delivery', icon: Package },
           { id: 'admin-finance', label: 'Finance', icon: BadgeIndianRupee },
@@ -692,6 +696,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'emp-holidays', label: 'Holidays', icon: Sparkles },
         ]
       },
+      ...(sales.canCall ? [{ label: 'Sales', items: [{ id: 'emp-leads', label: 'Leads', icon: PhoneCall }] }] : []),
       ...(managesPeople ? [{ label: 'My team', items: [{ id: 'emp-team-time', label: 'Team time', icon: Users }, { id: 'emp-approvals', label: 'Team approvals', icon: ClipboardCheck }] }] : []),
       {
         label: 'Me', items: [
@@ -707,11 +712,12 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
     .filter(([, f]) => user.role !== 'admin' && !featureOn(workCtx, f))
     .map(([t]) => t));
   if (clientWorkKnown && !seesClientWork) { hiddenTabs.add('emp-client-work'); hiddenTabs.add('emp-delivery'); }
+  if (user.role !== 'admin' && sales.ready && !sales.canCall) hiddenTabs.add('emp-leads');
   const visibleNav = navGroups.map((g) => ({ ...g, items: g.items.filter((i) => !hiddenTabs.has(i.id)) })).filter((g) => g.items.length);
   const mobilePrimary = (user.role === 'admin'
     ? ['admin-dashboard', 'admin-clients', 'admin-attendance', 'admin-requests']
     : ['emp-dashboard', 'emp-attendance', 'emp-tasks', 'emp-leave']).filter((t) => !hiddenTabs.has(t));
-  useEffect(() => { if (hiddenTabs.has(activeTab)) setActiveTab(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard'); }, [activeTab, workCtx, clientWorkKnown, seesClientWork]);
+  useEffect(() => { if (hiddenTabs.has(activeTab)) setActiveTab(user.role === 'admin' ? 'admin-dashboard' : 'emp-dashboard'); }, [activeTab, workCtx, clientWorkKnown, seesClientWork, sales.ready, sales.canCall]);
 
 
   const navigate = (target: string) => {
@@ -826,11 +832,14 @@ function getPageTitle(tab: string) {
     'admin-worktime': 'Work time',
     'emp-time': 'My time',
     'emp-team-time': 'Team time',
+    'admin-leads': 'Leads',
+    'emp-leads': 'Leads',
   } as Record<string, string>)[tab] ?? 'Dashboard';
 }
 
 function AdminContent(props: any) {
   const { activeTab, user, onRefresh, onSelectTab } = props;
+  if (activeTab === 'admin-leads') return <LeadsPage user={user} employees={props.employees} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-clients') return <AdminClientCenter employees={props.employees} />;
   if (activeTab === 'admin-delivery') return (
     <PageShell title="Delivery" subtitle="Every promise made to a client, longest stuck first.">
@@ -864,6 +873,7 @@ function EmployeeContent(props: any) {
     </PageShell>
   );
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
+  if (activeTab === 'emp-leads') return <LeadsPage user={props.user} employees={props.employees} onSelectTab={props.onSelectTab} />;
   if (activeTab === 'emp-leave') return <LeavePage {...props} />;
   if (activeTab === 'emp-wfh') return <WfhPage {...props} />;
   if (activeTab === 'emp-payroll') return <PayrollEmployee {...props} />;
@@ -1275,6 +1285,7 @@ function useDeviceLocks() {
 
 function EmployeesAdmin({ employees, departments, designations, onRefresh }: any) {
   const { locks, reload: reloadLocks } = useDeviceLocks();
+  const salesRoles = useSalesRoles(true);
   async function releaseDevice(e: Employee) {
     if (!e.profileId) return;
     if (!(await confirmDialog({ title: `Release ${e.name}'s device?`, message: 'They will be signed out on that device within a minute and can then sign in on any one device.', confirmLabel: 'Release device' }))) return;
@@ -1354,7 +1365,7 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
                 <div className="min-w-0"><p className="font-bold text-ink-900 truncate">{e.name}</p><p className="text-[11px] text-ink-400 truncate">{e.empId} · login <span className="font-mono">{e.loginId}</span>{e.manager ? ` · reports to ${e.manager}` : ''}</p></div>
               </div>
             </td>
-            <td><p className="text-ink-800 font-semibold">{e.designation || '—'}</p><p className="text-[11px] text-ink-400">{e.department || '—'}</p></td>
+            <td><p className="text-ink-800 font-semibold">{e.designation || '—'}</p><p className="text-[11px] text-ink-400">{e.department || '—'}</p>{e.profileId && salesRoles.map[e.profileId] && <Badge tone="brand" className="mt-1">{salesRoleLabel(salesRoles.map[e.profileId])}</Badge>}</td>
             <Td>{rulesMap?.get(e.id) ? rulesBadge(rulesMap.get(e.id)!) : e.workMode === 'remote' ? 'Remote' : 'Office'}</Td>
             <Td mono>{money(e.currentSalary)}</Td>
             <td>{(() => {
@@ -1384,12 +1395,14 @@ function EmployeesAdmin({ employees, departments, designations, onRefresh }: any
         ))}{!filtered.length && <EmptyRow colSpan={8} text={all.length ? 'Nobody matches this search.' : 'No employees yet. Add the first employee to create their login.'} />}</tbody>
       </table></div></div>
       {offerFor && <OfferBox employee={offerFor} employees={employees} onClose={() => { setOfferFor(null); void offers.reload(); }} />}
-      {modal && <EmployeeModal mode={modal} employee={editing} departments={departments} designations={designations} employees={employees} onClose={() => setModal(null)} onSaved={onRefresh} />}
+      {modal && <EmployeeModal mode={modal} employee={editing} departments={departments} designations={designations} employees={employees} salesRole={editing?.profileId ? salesRoles.map[editing.profileId] ?? '' : ''} onClose={() => setModal(null)} onSaved={async () => { await onRefresh(); await salesRoles.reload(); }} />}
     </PageShell>
   );
 }
 
-function EmployeeModal({ mode, employee, departments, designations, employees, onClose, onSaved }: { mode: 'create' | 'edit'; employee: Employee | null; departments: Department[]; designations: Designation[]; employees: Employee[]; onClose: () => void; onSaved: () => Promise<void> }) {
+function EmployeeModal({ mode, employee, departments, designations, employees, salesRole = '', onClose, onSaved }: { mode: 'create' | 'edit'; employee: Employee | null; departments: Department[]; designations: Designation[]; employees: Employee[]; salesRole?: SalesRole | ''; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [sales, setSales] = useState<SalesRole | ''>(mode === 'edit' ? salesRole : '');
+  useEffect(() => { if (mode === 'edit') setSales(salesRole); }, [mode, salesRole]);
   const [busy, setBusy] = useState(false); const [resetBusy, setResetBusy] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState<{ loginId: string; password?: string } | null>(null); const [resetLink, setResetLink] = useState<SetupLink | null>(null); const [erasing, setErasing] = useState(false);
   const [docs, setDocs] = useState<{ type: string; file: File | null }[]>(ALL_DOCUMENT_TYPES.map(type => ({ type, file: null })));
   const [liveDesignations, setLiveDesignations] = useState<Designation[]>(designations);
@@ -1492,6 +1505,7 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
         // No password is chosen here: the employee sets their own through a one-time setup link.
         const result = await invokeEmployeeAdmin({ action: 'create_employee', appOrigin: window.location.origin, name: form.name, workEmail: form.workEmail || null, phone: form.phone || null, loginId: form.loginId, workMode: legacy.workMode, designationId: currentDesignation.id, designationName: currentDesignation.name, departmentId: currentDepartment?.id || null, departmentName: currentDepartment?.name || null, managerId: form.managerId || null, managerName: form.managerName || null, joinDate: form.joinDate, shiftStart: legacy.shiftStart, shiftEnd: legacy.shiftEnd, monthlySalary: monthlyAmount });
         if (rulesChanged) { try { await saveRules(result.employeeId, rules, rulesFrom) } catch (ruleError) { notify(`Employee created, but “How they work” wasn’t saved: ${ruleError instanceof Error ? ruleError.message : 'error'}. Open Edit to set it.`, 'error', 9000) } }
+        if (sales) { try { await saveSalesRole(result.employeeId, sales) } catch (salesError) { notify(`Employee created, but the sales team wasn’t saved: ${salesError instanceof Error ? salesError.message : 'error'}. Open Edit to set it.`, 'error', 9000) } }
         const failedDocs: string[] = [];
         for (const doc of docs) { if (!doc.file) continue; try { await uploadEmployeeDocument(result.employeeId, doc.file, doc.type) } catch (docError) { failedDocs.push(doc.type) } }
         if (failedDocs.length) { setError(`Employee created. Some HR documents still need uploading: ${failedDocs.join(', ')}.`); notify('Employee created; some HR documents need attention.', 'info') } else { notify('Employee created successfully.', 'success') }
@@ -1499,6 +1513,7 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
       } else {
         await invokeEmployeeAdmin({ action: 'update_employee', employeeId: employee!.id, name: form.name, workEmail: form.workEmail || null, phone: form.phone || null, workMode: legacy.workMode, designationId: currentDesignation.id, designationName: currentDesignation.name, departmentId: currentDepartment?.id || null, departmentName: currentDepartment?.name || null, managerId: form.managerId || null, managerName: form.managerName || null, joinDate: form.joinDate, shiftStart: legacy.shiftStart, shiftEnd: legacy.shiftEnd, monthlySalary: monthlyAmount });
         if (rulesChanged) await saveRules(employee!.id, rules, rulesFrom);
+        if (sales !== salesRole) await saveSalesRole(employee!.id, sales);
         const failedDocs: string[] = [];
         for (const doc of docs) { if (!doc.file) continue; try { await uploadEmployeeDocument(employee!.id, doc.file, doc.type) } catch { failedDocs.push(doc.type) } }
         if (failedDocs.length) notify(`Employee updated; failed document uploads: ${failedDocs.join(', ')}`, 'info'); else notify('Employee details updated.', 'success');
@@ -1515,7 +1530,7 @@ function EmployeeModal({ mode, employee, departments, designations, employees, o
     {error && <Notice type="error" text={error} />}
     <form onSubmit={save} className="space-y-6">
       <FormSection title="Personal details" icon={<UserRound className="w-4 h-4" />}><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Full name"><input value={form.name} onChange={e => set('name', e.target.value)} className="input" required /></Field><Field label="Work email"><input type="email" value={form.workEmail} onChange={e => set('workEmail', e.target.value)} className="input" /></Field><Field label="Phone"><input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" /></Field><Field label="Join date"><input type="date" value={form.joinDate} onChange={e => set('joinDate', e.target.value)} className="input" required /></Field></div></FormSection>
-      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4" />}><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Designation"><select disabled={refsLoading || !liveDesignations.length} value={form.designationName} onChange={e => { const name = e.target.value; const d = liveDesignations.find(x => x.name === name); setForm(f => ({ ...f, designationName: name, designationId: d?.id ?? '' })) }} className="input" required><option value="">Select designation</option>{liveDesignations.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Department"><select disabled={refsLoading} value={form.departmentName} onChange={e => { const name = e.target.value; const d = liveDepartments.find(x => x.name === name); setForm(f => ({ ...f, departmentName: name, departmentId: d?.id ?? '' })) }} className="input"><option value="">No department</option>{liveDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e => set('managerId', e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e: Employee) => e.status === 'active' && e.id !== employee?.id).map((e: Employee) => <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field>{rulesReady === false && <><Field label="Work mode"><select value={form.workMode} onChange={e => set('workMode', e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e => set('shiftStart', e.target.value)} className="input" required /></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e => set('shiftEnd', e.target.value)} className="input" required /></Field></>}{rulesReady === false && <Field label="Monthly salary"><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e => set('monthlySalary', e.target.value)} className="input" required /></Field>}</div></FormSection>
+      <FormSection title="Assignment" icon={<BriefcaseBusiness className="w-4 h-4" />}><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><Field label="Designation"><select disabled={refsLoading || !liveDesignations.length} value={form.designationName} onChange={e => { const name = e.target.value; const d = liveDesignations.find(x => x.name === name); setForm(f => ({ ...f, designationName: name, designationId: d?.id ?? '' })) }} className="input" required><option value="">Select designation</option>{liveDesignations.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Department"><select disabled={refsLoading} value={form.departmentName} onChange={e => { const name = e.target.value; const d = liveDepartments.find(x => x.name === name); setForm(f => ({ ...f, departmentName: name, departmentId: d?.id ?? '' })) }} className="input"><option value="">No department</option>{liveDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}</select></Field><Field label="Manager"><select value={form.managerId} onChange={e => set('managerId', e.target.value)} className="input"><option value="">No manager</option>{employees.filter((e: Employee) => e.status === 'active' && e.id !== employee?.id).map((e: Employee) => <option key={e.id} value={e.id}>{e.name} · {e.designation}</option>)}</select></Field><SalesTeamField value={sales} onChange={setSales} />{rulesReady === false && <><Field label="Work mode"><select value={form.workMode} onChange={e => set('workMode', e.target.value)} className="input"><option value="office">Office</option><option value="remote">Remote</option></select></Field><Field label="Shift start"><input type="time" value={form.shiftStart} onChange={e => set('shiftStart', e.target.value)} className="input" required /></Field><Field label="Shift end"><input type="time" value={form.shiftEnd} onChange={e => set('shiftEnd', e.target.value)} className="input" required /></Field></>}{rulesReady === false && <Field label="Monthly salary"><input type="number" min="0" step="0.01" value={form.monthlySalary} onChange={e => set('monthlySalary', e.target.value)} className="input" required /></Field>}</div></FormSection>
       {rulesReady && <FormSection title="How they work" icon={<Clock3 className="w-4 h-4" />}>
         {scheduledRules && <p className="mb-3 text-[12.5px] text-amber-800 bg-amber-50 rounded-xl px-3 py-2">A change is already scheduled from {dateLabel(scheduledRules.effective_from)}. Saving here sets the rules from the date below.</p>}
         <WorkRulesEditor value={rules} onChange={setRules} salary={form.monthlySalary} onSalary={v => set('monthlySalary', v)} effectiveFrom={rulesFrom} onEffectiveFrom={mode === 'edit' ? setRulesFrom : undefined} minEffective={today()} templates={templates} onTemplatesChanged={loadTemplates} projects={projectsLite} />
