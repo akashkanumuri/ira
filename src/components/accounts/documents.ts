@@ -85,7 +85,7 @@ function partyBox(title: string, p: any) {
 
 function shell(title: string, body: string) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${STYLE}</style></head>
-<body><div class="bar"><button class="ghost" onclick="window.close()">Close</button><button onclick="window.print()">Download PDF / Print</button></div>
+<body><div class="bar"><button type="button" class="ghost" id="doc-close">Close</button><button type="button" id="doc-print">Download PDF / Print</button></div>
 <div class="page">${body}</div><p class="note">Choose “Save as PDF” in the print window to download.</p></body></html>`;
 }
 
@@ -97,6 +97,9 @@ function openWindow(): Window | null {
 function fill(w: Window | null, html: string) {
   if (!w) throw new Error('Allow pop-ups for this site to open the document.');
   w.document.open(); w.document.write(html); w.document.close();
+  // The site's security policy blocks inline scripts, so the buttons are wired from here.
+  w.document.getElementById('doc-print')?.addEventListener('click', () => { w.focus(); w.print(); });
+  w.document.getElementById('doc-close')?.addEventListener('click', () => w.close());
 }
 function fail(w: Window | null, msg: string) {
   if (w) { w.document.open(); w.document.write(`<!doctype html><p style="font-family:system-ui;padding:24px">${esc(msg)}</p>`); w.document.close(); }
