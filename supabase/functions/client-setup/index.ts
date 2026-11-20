@@ -7,7 +7,7 @@ const BASE_CORS_HEADERS = {
 };
 
 // The live addresses of the app. Both are served while the custom domain is settling in.
-const LIVE_ORIGINS = ['https://sigma.irahospitality.co.in', 'https://ira-eta-two.vercel.app'];
+const LIVE_ORIGINS = ['https://sigma1.in', 'https://www.sigma1.in', 'https://ira-eta-two.vercel.app'];
 
 function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null;

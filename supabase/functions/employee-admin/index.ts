@@ -72,7 +72,7 @@ const BASE_CORS_HEADERS = {
 }
 
 // The live addresses of the app. Both are served while the custom domain is settling in.
-const LIVE_ORIGINS = ['https://sigma.irahospitality.co.in', 'https://ira-eta-two.vercel.app']
+const LIVE_ORIGINS = ['https://sigma1.in', 'https://www.sigma1.in', 'https://ira-eta-two.vercel.app']
 
 function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null
@@ -208,7 +208,7 @@ function unguessablePassword() {
 }
 
 async function setupLinkFor(admin: ReturnType<typeof createClient>, email: string, appOrigin: string | null | undefined, origin: string | null) {
-  const base = allowedOrigin(appOrigin ?? null) ?? allowedOrigin(origin) ?? 'https://ira-eta-two.vercel.app'
+  const base = allowedOrigin(appOrigin ?? null) ?? allowedOrigin(origin) ?? 'https://sigma1.in'
   const { data, error } = await admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo: `${base}/?set-password=1` } })
   const hashed = data?.properties?.hashed_token
   if (error || !hashed) return null

@@ -41,7 +41,7 @@ const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const DEFAULT_APP_BASE_URL = 'https://ira-eta-two.vercel.app';
+const DEFAULT_APP_BASE_URL = 'https://sigma1.in';
 
 export function getTrustedBaseUrl(): string {
   const envUrl = (
@@ -78,7 +78,7 @@ export function getTrustedBaseUrl(): string {
 }
 
 // The live addresses of the app. Both are served while the custom domain is settling in.
-const LIVE_ORIGINS = ['https://sigma.irahospitality.co.in', 'https://ira-eta-two.vercel.app'];
+const LIVE_ORIGINS = ['https://sigma1.in', 'https://www.sigma1.in', 'https://ira-eta-two.vercel.app'];
 
 function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null;

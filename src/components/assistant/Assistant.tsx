@@ -41,7 +41,7 @@ export interface AssistantProps {
 type View = 'none' | 'bubble' | 'panel' | 'setup' | 'tour';
 type SetupStep = 'welcome' | 'notify' | 'location' | 'awake' | 'tour' | 'done';
 /** The address this browser is on, so the "open it on your phone" hint always matches the real site. */
-const SITE = typeof window !== 'undefined' ? window.location.host : 'sigma.irahospitality.co.in';
+const SITE = typeof window !== 'undefined' ? window.location.host : 'sigma1.in';
 const nowIstTime = () => new Date().toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Kolkata' });
 const notifPerm = (): NotificationPermission | 'unsupported' => (typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported');
 
