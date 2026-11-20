@@ -111,49 +111,49 @@ export function TeamReviewMetrics() {
   if (error && /switch on/i.test(error)) return <Notice tone="sky">Team metrics switch on once the review database update is applied.</Notice>;
 
   const th = (id: typeof sort, label: string) => (
-    <th className="px-3 py-2.5 text-right font-semibold"><button type="button" onClick={() => setSort(id)} className={cx('hover:text-ink-900', sort === id && 'text-brand-700')}>{label}</button></th>
+    <th className="px-3 py-3 text-right font-semibold whitespace-nowrap"><button type="button" onClick={() => setSort(id)} aria-sort={sort === id ? 'descending' : undefined} className={cx('inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-900', sort === id && 'text-brand-700')}>{label}{sort === id && <span aria-hidden>↓</span>}</button></th>
   );
   return (
     <Card className="overflow-hidden">
-      <CardHeader title="Team work quality" subtitle="Draft approvals, rework and client approvals per person."
+      <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-4"><CardHeader title="Team work quality" subtitle="Draft approvals, rework and client approvals per person. Click a column to sort."
         action={<div className="flex items-center gap-2">
           <select className="input !w-auto !min-h-[36px] !text-[13px]" value={range} onChange={(e) => setRange(e.target.value as RangeId)} aria-label="Period">
             {RANGES.map((r) => <option key={r.id} value={r.id}>Last {r.label}</option>)}
           </select>
           <button type="button" className="btn-secondary btn-sm" disabled={!sorted.length} onClick={exportCsv}><Download className="w-3.5 h-3.5" />CSV</button>
-        </div>} />
-      {error && <p className="px-5 pb-4 text-[13px] text-rose-600">{error}</p>}
-      {!rows && !error && <div className="p-5 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}</div>}
-      {rows && !sorted.length && <p className="px-5 pb-5 text-[13px] text-ink-500">No tasks in this period.</p>}
+        </div>} /></div>
+      {error && <p className="px-5 sm:px-6 pb-4 text-[13px] text-rose-600">{error}</p>}
+      {!rows && !error && <div className="px-5 sm:px-6 pb-5 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}</div>}
+      {rows && !sorted.length && <p className="px-5 sm:px-6 pb-5 text-[13px] text-ink-500">No tasks in this period.</p>}
       {sorted.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead className="text-[11px] uppercase tracking-wide text-ink-500 bg-ink-50/70">
               <tr>
-                <th className="px-4 py-2.5 text-left font-semibold"><button type="button" onClick={() => setSort('name')} className={cx('hover:text-ink-900', sort === 'name' && 'text-brand-700')}>Employee</button></th>
-                <th className="px-3 py-2.5 text-right font-semibold">Tasks</th>
+                <th className="px-5 sm:px-6 py-3 text-left font-semibold"><button type="button" onClick={() => setSort('name')} className={cx('inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-900', sort === 'name' && 'text-brand-700')}>Employee{sort === 'name' && <span aria-hidden>↓</span>}</button></th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Done / tasks</th>
                 {th('first', 'First-draft ✓')}
                 {th('drafts', 'Drafts/task')}
                 {th('ontime', 'On time')}
                 {th('client', 'Client 1st-time ✓')}
-                <th className="px-3 py-2.5 text-right font-semibold">Tracked</th>
+                <th className="px-5 sm:px-6 py-3 text-right font-semibold">Tracked</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
               {sorted.map(({ employee_id, name, metrics: m }) => (
                 <tr key={employee_id} className="hover:bg-ink-50/50">
-                  <td className="px-4 py-2.5 font-semibold text-ink-900">{name}</td>
-                  <td className="px-3 py-2.5 text-right tnum text-ink-600">{m.completed}/{m.tasks}</td>
-                  <td className={cx('px-3 py-2.5 text-right tnum font-bold', goodTone(m.first_draft_approval_rate, 70, 45))}>{pct(m.first_draft_approval_rate)}</td>
-                  <td className="px-3 py-2.5 text-right tnum">{m.drafts_per_task ?? '—'}</td>
-                  <td className={cx('px-3 py-2.5 text-right tnum font-bold', goodTone(m.on_time_rate, 85, 65))}>{pct(m.on_time_rate)}</td>
-                  <td className={cx('px-3 py-2.5 text-right tnum font-bold', goodTone(m.client_first_time_rate, 75, 50))}>{pct(m.client_first_time_rate)}</td>
-                  <td className="px-3 py-2.5 text-right tnum text-ink-600">{fmtMinutes(m.logged_minutes)}</td>
+                  <td className="px-5 sm:px-6 py-3 font-semibold text-ink-900 whitespace-nowrap">{name}</td>
+                  <td className="px-3 py-3 text-right tnum text-ink-600">{m.completed}/{m.tasks}</td>
+                  <td className={cx('px-3 py-3 text-right tnum font-bold', goodTone(m.first_draft_approval_rate, 70, 45))}>{pct(m.first_draft_approval_rate)}</td>
+                  <td className="px-3 py-3 text-right tnum">{m.drafts_per_task ?? '—'}</td>
+                  <td className={cx('px-3 py-3 text-right tnum font-bold', goodTone(m.on_time_rate, 85, 65))}>{pct(m.on_time_rate)}</td>
+                  <td className={cx('px-3 py-3 text-right tnum font-bold', goodTone(m.client_first_time_rate, 75, 50))}>{pct(m.client_first_time_rate)}</td>
+                  <td className="px-5 sm:px-6 py-3 text-right tnum text-ink-600">{fmtMinutes(m.logged_minutes)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="px-4 py-3 text-[11px] text-ink-400 flex items-center gap-1.5"><Info className="w-3.5 h-3.5" />Counts tasks assigned in the period. Cancelled tasks are left out.</p>
+          <p className="px-5 sm:px-6 py-3.5 border-t border-ink-100 text-[11.5px] text-ink-500 flex items-center gap-1.5"><Info className="w-3.5 h-3.5" />Counts tasks assigned in the period. Cancelled tasks are left out.</p>
         </div>
       )}
     </Card>

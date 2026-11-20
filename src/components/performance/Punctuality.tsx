@@ -168,22 +168,22 @@ export function TeamPunctuality() {
   }
 
   const th = (id: typeof sort, label: string, left = false) => (
-    <th className={cx('px-3 py-2.5 font-semibold', left ? 'text-left pl-4' : 'text-right')}>
-      <button type="button" onClick={() => setSort(id)} className={cx('hover:text-ink-900', sort === id && 'text-brand-700')}>{label}</button>
+    <th className={cx('py-3 font-semibold whitespace-nowrap', left ? 'text-left px-5 sm:px-6' : 'text-right px-3')}>
+      <button type="button" onClick={() => setSort(id)} className={cx('inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink-900', sort === id && 'text-brand-700')}>{label}{sort === id && <span aria-hidden>↓</span>}</button>
     </th>
   );
   return (
     <Card className="overflow-hidden">
-      <CardHeader title="Team punctuality" subtitle="Check-ins against each person’s shift, and deadlines met. Select a person for their day-by-day view."
+      <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-4"><CardHeader title="Team punctuality" subtitle="Check-ins against each person’s shift, and deadlines met. Select a person for their day-by-day view."
         action={<div className="flex items-center gap-2">
           <select className="input !w-auto !min-h-[36px] !text-[13px]" value={days} onChange={(e) => setDays(Number(e.target.value) as 30 | 90)} aria-label="Period">
             {RANGES.map((r) => <option key={r.id} value={r.id}>Last {r.label}</option>)}
           </select>
           <button type="button" className="btn-secondary btn-sm" disabled={!sorted.length} onClick={exportCsv}><Download className="w-3.5 h-3.5" />CSV</button>
-        </div>} />
-      {error && <p className="px-5 pb-4 text-[13px] text-rose-600">{error}</p>}
-      {!rows && !error && <div className="p-5 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}</div>}
-      {rows && !sorted.length && <p className="px-5 pb-5 text-[13px] text-ink-500">No check-ins or due tasks in this period.</p>}
+        </div>} /></div>
+      {error && <p className="px-5 sm:px-6 pb-4 text-[13px] text-rose-600">{error}</p>}
+      {!rows && !error && <div className="px-5 sm:px-6 pb-5 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}</div>}
+      {rows && !sorted.length && <p className="px-5 sm:px-6 pb-5 text-[13px] text-ink-500">No check-ins or due tasks in this period.</p>}
       {sorted.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -191,31 +191,31 @@ export function TeamPunctuality() {
               <tr>
                 {th('name', 'Employee', true)}
                 {th('ontime', 'On-time check-ins')}
-                <th className="px-3 py-2.5 text-right font-semibold">Late days</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Late days</th>
                 {th('late', 'Avg late')}
-                <th className="px-3 py-2.5 text-right font-semibold">Left early</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Avg check-in</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Left early</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Avg check-in</th>
                 {th('tasks', 'Tasks on time')}
-                <th className="px-3 py-2.5 text-right font-semibold">Overdue</th>
+                <th className="px-5 sm:px-6 py-3 text-right font-semibold whitespace-nowrap">Overdue</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
               {sorted.map(({ employee_id, name, metrics: m }) => (
                 <tr key={employee_id} className="hover:bg-ink-50/50 cursor-pointer" tabIndex={0}
                   onClick={() => setOpen({ id: employee_id, name })} onKeyDown={(e) => { if (e.key === 'Enter') setOpen({ id: employee_id, name }); }}>
-                  <td className="px-4 py-2.5 font-semibold text-ink-900">{name}</td>
-                  <td className={cx('px-3 py-2.5 text-right tnum font-bold', tone(m.on_time_rate))}>{m.days_present ? `${pct(m.on_time_rate)}` : '—'}<span className="text-ink-400 font-normal"> {m.days_present ? `of ${m.days_present}d` : ''}</span></td>
-                  <td className={cx('px-3 py-2.5 text-right tnum', m.late_days ? 'text-rose-600 font-semibold' : 'text-ink-600')}>{m.late_days}</td>
-                  <td className="px-3 py-2.5 text-right tnum text-ink-600">{mins(m.avg_late_minutes)}</td>
-                  <td className={cx('px-3 py-2.5 text-right tnum', m.early_leave_days ? 'text-amber-700 font-semibold' : 'text-ink-600')}>{m.early_leave_days}</td>
-                  <td className="px-3 py-2.5 text-right tnum text-ink-600">{m.avg_check_in ?? '—'}</td>
-                  <td className={cx('px-3 py-2.5 text-right tnum font-bold', tone(m.task_on_time_rate, 85, 65))}>{pct(m.task_on_time_rate)}</td>
-                  <td className={cx('px-3 py-2.5 text-right tnum', m.tasks_overdue ? 'text-rose-600 font-semibold' : 'text-ink-600')}>{m.tasks_overdue}</td>
+                  <td className="px-5 sm:px-6 py-3 font-semibold text-ink-900 whitespace-nowrap">{name}</td>
+                  <td className={cx('px-3 py-3 text-right tnum font-bold', tone(m.on_time_rate))}>{m.days_present ? `${pct(m.on_time_rate)}` : '—'}<span className="text-ink-400 font-normal"> {m.days_present ? `of ${m.days_present}d` : ''}</span></td>
+                  <td className={cx('px-3 py-3 text-right tnum', m.late_days ? 'text-rose-600 font-semibold' : 'text-ink-600')}>{m.late_days}</td>
+                  <td className="px-3 py-3 text-right tnum text-ink-600">{mins(m.avg_late_minutes)}</td>
+                  <td className={cx('px-3 py-3 text-right tnum', m.early_leave_days ? 'text-amber-700 font-semibold' : 'text-ink-600')}>{m.early_leave_days}</td>
+                  <td className="px-3 py-3 text-right tnum text-ink-600">{m.avg_check_in ?? '—'}</td>
+                  <td className={cx('px-3 py-3 text-right tnum font-bold', tone(m.task_on_time_rate, 85, 65))}>{pct(m.task_on_time_rate)}</td>
+                  <td className={cx('px-5 sm:px-6 py-3 text-right tnum', m.tasks_overdue ? 'text-rose-600 font-semibold' : 'text-ink-600')}>{m.tasks_overdue}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="px-4 py-3 text-[11px] text-ink-400 flex items-center gap-1.5"><Info className="w-3.5 h-3.5" />Late means checking in after the shift start, the same rule as attendance. Leave days and days off are not counted.</p>
+          <p className="px-5 sm:px-6 py-3.5 border-t border-ink-100 text-[11.5px] text-ink-500 flex items-center gap-1.5"><Info className="w-3.5 h-3.5" />Late means checking in after the shift start, the same rule as attendance. Leave days and days off are not counted.</p>
         </div>
       )}
       {open && (
