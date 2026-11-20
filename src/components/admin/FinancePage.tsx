@@ -40,7 +40,7 @@ type View = 'milestones' | 'payments' | 'outstanding';
 
 const today = () => getKolkataDateString();
 
-export function FinancePage({ onSelectTab }: { onSelectTab: (tab: string) => void }) {
+export function FinancePage({ onSelectTab, embedded = false }: { onSelectTab: (tab: string) => void; embedded?: boolean }) {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,11 +128,11 @@ export function FinancePage({ onSelectTab }: { onSelectTab: (tab: string) => voi
 
   return (
     <Page>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Finance"
         subtitle="Billing, collections and what’s still owed — across every client."
         actions={<button type="button" className="btn-secondary" onClick={() => { setLoading(true); void load(); }}><RefreshCw className="w-4 h-4" /> Refresh</button>}
-      />
+      />}
       {error && <Notice tone="rose" title="Finance data couldn’t load">{error}</Notice>}
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">

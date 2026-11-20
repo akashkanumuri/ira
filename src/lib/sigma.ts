@@ -301,8 +301,9 @@ export interface PaymentRow {
   method: string | null;
   proof_file_id: string | null;
   status: 'Submitted' | 'Verified' | 'Rejected';
-  source: 'client' | 'finance';
+  source: 'client' | 'finance' | 'credit' | 'credit_note';
   notes: string | null;
+  receipt_no?: string | null;
   submitted_at: string;
   verified_at: string | null;
   rejection_reason: string | null;

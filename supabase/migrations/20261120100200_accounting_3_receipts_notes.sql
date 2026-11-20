@@ -258,7 +258,7 @@ begin
     perform private.decide_adjustment(v_id, true, null);
   else
     perform private.notify_admins('billing', 'Approve a ' || p_kind || ' note', v.invoice_no || ': ₹' || (round(p_taxable, 2) + v_tax) || ' — ' || btrim(p_reason),
-      '/admin-accounts', 'adj-req:' || v_id);
+      '/admin-finance', 'adj-req:' || v_id);
   end if;
   return v_id;
 end $$;

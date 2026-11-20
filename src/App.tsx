@@ -8,7 +8,7 @@ import { ClientPasswordSetupScreen } from './components/client/ClientPasswordSet
 import { ClientPortalView } from './components/client/ClientPortalView';
 import { AdminClientCenter } from './components/admin/AdminClientCenter';
 import { AdminHome } from './components/admin/AdminHome';
-import { FinancePage } from './components/admin/FinancePage';
+import { AccountsPage } from './components/accounts/Accounts';
 import { ActivityLogPage } from './components/admin/ActivityLogPage';
 import { NotificationsPage } from './components/common/NotificationsPage';
 import { GlobalSearch } from './components/common/GlobalSearch';
@@ -656,7 +656,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'admin-leads', label: 'Leads', icon: PhoneCall },
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
           { id: 'admin-delivery', label: 'Delivery', icon: Package },
-          { id: 'admin-finance', label: 'Finance', icon: BadgeIndianRupee },
+          { id: 'admin-finance', label: 'Finance & accounts', icon: BadgeIndianRupee },
           { id: 'admin-support', label: 'Client support', icon: LifeBuoy },
           { id: 'admin-tasks', label: 'Work & tasks', icon: BriefcaseBusiness, badge: tasks.filter(t => !t.archivedAt && t.status === 'awaiting_review').length },
         ]
@@ -835,7 +835,7 @@ function getPageTitle(tab: string) {
     'admin-performance': 'Performance',
     'admin-support': 'Client support',
     'emp-support': 'Client support',
-    'admin-finance': 'Finance',
+    'admin-finance': 'Finance & accounts',
     'admin-activity': 'Activity log',
     'admin-worktime': 'Work time',
     'emp-time': 'My time',
@@ -862,7 +862,7 @@ function AdminContent(props: any) {
   if (activeTab === 'admin-holidays') return <HolidaysAdmin {...props} />;
   if (activeTab === 'admin-export') return <ExportsAdmin {...props} />;
   if (activeTab === 'admin-settings') return <SettingsAdmin {...props} />;
-  if (activeTab === 'admin-finance') return <FinancePage onSelectTab={onSelectTab} />;
+  if (activeTab === 'admin-finance') return <AccountsPage user={user} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-activity') return <ActivityLogPage />;
   if (activeTab === 'admin-worktime') return <TeamTimePage admin />;
   if (activeTab === 'admin-support') return <SupportInbox employees={props.employees} canAssign />;

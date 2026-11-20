@@ -10,6 +10,7 @@ import { DeliverablePage } from '../delivery/DeliverablePage';
 import { StaffClientReview } from '../common/StaffClientReview';
 import { ContractWizard } from './ContractWizard';
 import { ScopeOfWorkCard } from '../contracts/ScopeOfWork';
+import { openForInstallment } from '../accounts/documents';
 import { ClientAccessCard, ExtraChargesCard, PaymentDetailsCard, RequestPaymentDialog } from './BillingExtras';
 import {
   AlertTriangle,
@@ -1213,7 +1214,8 @@ function BillingTab({ ws, projectId, clientId, mode, reload }: { ws: ProjectWork
         footer={inst && mode === 'admin' ? (
           <>
             {inst.term_no != null && !['Paid', 'Cancelled', 'Waived'].includes(inst.status) && <Button icon={Send} onClick={() => setReqId(inst.id)}>{inst.requested_at ? 'Change due date' : 'Request payment'}</Button>}
-            {!inst.invoice_number && !['Cancelled', 'Waived'].includes(inst.status) && <Button loading={busy === 'inv'} onClick={() => run('inv', async () => { await rpc('finance_issue_invoice', { p_installment_id: inst.id }); await reload(); }, 'Invoice number issued and client notified.')}>Issue invoice</Button>}
+            {!inst.invoice_number && !['Cancelled', 'Waived'].includes(inst.status) && <Button loading={busy === 'inv'} onClick={() => run('inv', async () => { await rpc('finance_issue_invoice', { p_installment_id: inst.id }); await reload(); }, 'GST invoice issued and client notified.')}>Issue invoice</Button>}
+            {inst.invoice_number && <Button onClick={() => { openForInstallment(inst.id).catch((e: unknown) => alert(e instanceof Error ? e.message : 'Could not open the invoice.')); }}>Invoice PDF</Button>}
             {!['Paid', 'Cancelled', 'Waived'].includes(inst.status) && <Button variant="primary" onClick={() => { setPf({ amount: String(installmentTotal(inst) - Number(inst.amount_paid)), reference: '', paidOn: todayIST(), method: 'bank_transfer', notes: '', key: idempotencyKey('rec') }); setPayDlg(true); }}>Record payment</Button>}
           </>
         ) : undefined}

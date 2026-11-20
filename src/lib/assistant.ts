@@ -51,7 +51,7 @@ export const PAGE_HELP: Record<string, { title: string; text: string }> = {
   'admin-dashboard': { title: 'Dashboard', text: 'The whole company today: who is in, what needs your attention, money in and out.' },
   'admin-clients': { title: 'Clients', text: 'Clients, their projects, contracts, deliverables and billing milestones.' },
   'admin-support': { title: 'Client support', text: 'Questions and requests from clients.' },
-  'admin-finance': { title: 'Finance', text: 'Payments to verify, invoices and what is overdue.' },
+  'admin-finance': { title: 'Finance & accounts', text: 'GST invoices, receipts, credit and debit notes, payments to verify, ageing and the month-end file.' },
   'admin-employees': { title: 'Employees / HR', text: 'Add people, set how they work (office, hybrid, remote, hours) and their pay.' },
   'admin-attendance': { title: 'Attendance', text: 'Who is in today, late marks, and check someone in when their location fails.' },
   'admin-worktime': { title: 'Work time', text: 'Tracked task and meeting time for everyone.' },

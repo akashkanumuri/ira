@@ -88,6 +88,7 @@ import { ClientVersions } from './ClientVersions';
 import { Gauge, Ring } from '../../ui/charts';
 import { greeting } from '../../ui/motion';
 import { PaymentDetailsBox, usePaymentDetails } from './ClientGate';
+import { openForInstallment, openReceipt } from '../accounts/documents';
 
 export type ClientPage = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications' | 'support';
 
@@ -1328,7 +1329,10 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
         onClose={() => setInstId(null)}
         title={inst?.name ?? ''}
         sub={inst ? `Milestone ${inst.installment_number}${inst.invoice_number ? ` · ${inst.invoice_number}` : ''}` : undefined}
-        footer={inst && canPay(inst) ? <Button variant="primary" onClick={() => startPay(inst)}>Submit payment</Button> : undefined}
+        footer={inst && (canPay(inst) || inst.invoice_number) ? <>
+          {inst.invoice_number && <Button onClick={() => { openForInstallment(inst.id).catch((e: unknown) => toast(e instanceof Error ? e.message : 'Could not open the invoice.', 'err')); }}>Download invoice</Button>}
+          {canPay(inst) && <Button variant="primary" onClick={() => startPay(inst)}>Submit payment</Button>}
+        </> : undefined}
       >
         {inst && (
           <div className="space-y-5">
@@ -1352,9 +1356,9 @@ export function ClientPayments({ user, project, ws, reload }: ViewProps) {
                 <Timeline
                   items={ws.payments.filter(p => p.installment_id === inst.id).map(p => ({
                     tone: p.status === 'Verified' ? ('ok' as const) : p.status === 'Rejected' ? ('err' as const) : ('warn' as const),
-                    title: `${inr(p.amount)} · ${p.status === 'Submitted' ? 'awaiting verification' : p.status.toLowerCase()}`,
-                    meta: `Ref ${p.reference} · paid ${fmtDate(p.paid_on)}`,
-                    body: p.rejection_reason ?? undefined,
+                    title: `${inr(p.amount)} · ${p.source === 'credit_note' ? 'credit note' : p.source === 'credit' ? 'from your credit' : p.status === 'Submitted' ? 'awaiting verification' : p.status.toLowerCase()}`,
+                    meta: `Ref ${p.reference} · ${fmtDate(p.paid_on)}${p.receipt_no ? ` · Receipt ${p.receipt_no}` : ''}`,
+                    body: p.rejection_reason ?? (p.receipt_no ? <button type="button" className="text-xs font-semibold underline" onClick={() => { openReceipt(p.receipt_no!).catch((e: unknown) => toast(e instanceof Error ? e.message : 'Could not open the receipt.', 'err')); }}>Download receipt</button> : undefined),
                   }))}
                 />
               )}
