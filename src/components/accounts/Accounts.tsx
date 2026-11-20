@@ -48,7 +48,7 @@ interface BillingProfile { client_id: string; legal_name: string; gstin: string 
 interface Ledger { id: string; client_id: string; amount: number; kind: string; note: string | null; created_at: string; receipt_group: string | null }
 
 interface Data {
-  invoices: InvoiceRow[]; insts: Inst[]; pays: Pay[]; adjs: Adj[]; clients: Client[]; profiles: BillingProfile[]; ledger: Ledger[]; company: any; projects: Record<string, string>;
+  invoices: InvoiceRow[]; insts: Inst[]; pays: Pay[]; adjs: Adj[]; clients: Client[]; profiles: BillingProfile[]; ledger: Ledger[]; company: any; projects: Record<string, string>; projectList: { id: string; name: string; client_id: string | null }[];
 }
 
 const PAY_TONE: Record<string, Tone> = { paid: 'mint', part_paid: 'amber', unpaid: 'sky', cancelled: 'rose' };
@@ -72,13 +72,13 @@ async function loadAll(): Promise<Data> {
     db().from('client_billing_profiles').select('*'),
     db().from('client_credit_ledger').select('id, client_id, amount, kind, note, created_at, receipt_group').order('created_at', { ascending: false }).limit(5000),
     db().from('company_profile').select('*').maybeSingle(),
-    db().from('projects').select('id, name'),
+    db().from('projects').select('id, name, client_id').is('deleted_at', null).order('name'),
   ]);
   const firstErr = [inv, insts, pays, adjs, clients].find((r) => r.error)?.error;
   if (firstErr) throw firstErr;
   const pm: Record<string, string> = {};
   for (const p of projects.data ?? []) pm[p.id] = p.name;
-  return { invoices: inv.data ?? [], insts: insts.data ?? [], pays: pays.data ?? [], adjs: adjs.data ?? [], clients: clients.data ?? [], profiles: profiles.data ?? [], ledger: ledger.data ?? [], company: company.data, projects: pm };
+  return { invoices: inv.data ?? [], insts: insts.data ?? [], pays: pays.data ?? [], adjs: adjs.data ?? [], clients: clients.data ?? [], profiles: profiles.data ?? [], ledger: ledger.data ?? [], company: company.data, projects: pm, projectList: projects.data ?? [] };
 }
 
 /* ================================================================ page */
@@ -202,6 +202,7 @@ function Invoices({ data, clientName, reload }: { data: Data; clientName: (id: s
   const [cancelFor, setCancelFor] = useState<InvoiceRow | null>(null); const [noteFor, setNoteFor] = useState<{ inv: InvoiceRow; kind: 'credit' | 'debit' } | null>(null);
   const toInvoice = data.insts.filter(canInvoice).sort((a, b) => (a.due_date ?? '9').localeCompare(b.due_date ?? '9'));
   const [profileFor, setProfileFor] = useState<Client | null>(null);
+  const [creating, setCreating] = useState(false);
   const hasProfile = (clientId: string) => data.profiles.some((p) => p.client_id === clientId);
   const list = data.invoices.filter((i) => (f === 'all' || (f === 'open' ? i.status === 'issued' && i.balance > 0 : f === 'paid' ? i.payment_status === 'paid' : i.status === 'cancelled'))
     && (!q.trim() || `${i.invoice_no} ${i.client_name} ${clientName(i.client_id)}`.toLowerCase().includes(q.trim().toLowerCase())));
@@ -227,6 +228,7 @@ function Invoices({ data, clientName, reload }: { data: Data; clientName: (id: s
       )}
       <div className="card p-3 sm:p-4 flex flex-wrap gap-3 items-center">
         <SearchInput value={q} onChange={setQ} placeholder="Search invoice no. or client" className="flex-1 min-w-[220px]" />
+        <button type="button" className="btn-primary btn-sm" onClick={() => setCreating(true)}><Plus className="w-4 h-4" />New invoice</button>
         <PillTabs size="sm" value={f} onChange={setF} items={[{ id: 'open', label: 'Unpaid' }, { id: 'paid', label: 'Paid' }, { id: 'cancelled', label: 'Cancelled' }, { id: 'all', label: 'All' }]} />
       </div>
       {!list.length ? <Card className="p-2"><EmptyState icon={<FileText className="w-5 h-5" />} title="No invoices here" text="Issue an invoice from a milestone above, or from the project’s Billing tab." /></Card> : (
@@ -252,10 +254,96 @@ function Invoices({ data, clientName, reload }: { data: Data; clientName: (id: s
           ))}</tbody>
         </table></div></div>
       )}
+      {creating && <ManualInvoiceModal data={data} onClose={() => setCreating(false)} onDone={reload} />}
       {profileFor && <BillingProfileModal client={profileFor} profile={data.profiles.find((p) => p.client_id === profileFor.id)} onClose={() => setProfileFor(null)} onDone={reload} />}
       {cancelFor && <CancelInvoice inv={cancelFor} onClose={() => setCancelFor(null)} onDone={reload} />}
       {noteFor && <NoteModal inv={noteFor.inv} kind={noteFor.kind} onClose={() => setNoteFor(null)} onDone={reload} />}
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------- manual invoice */
+
+interface DraftLine { key: string; description: string; sac: string; qty: string; rate: string; gst: string }
+const GST_RATES = ['0', '5', '12', '18', '28', '40'];
+
+function ManualInvoiceModal({ data, onClose, onDone }: { data: Data; onClose: () => void; onDone: () => Promise<void> }) {
+  const company = data.company ?? {};
+  const blank = (): DraftLine => ({ key: newKey(), description: '', sac: company.default_sac ?? '998361', qty: '1', rate: '', gst: String(company.gstin ? company.default_gst_rate ?? 18 : 0) });
+  const [client, setClient] = useState(''); const [project, setProject] = useState(''); const [title, setTitle] = useState('');
+  const [due, setDue] = useState(() => { const d = new Date(Date.now() + 7 * 86400000); return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); });
+  const [notes, setNotes] = useState(''); const [lines, setLines] = useState<DraftLine[]>([blank()]);
+  const [busy, setBusy] = useState(false); const [profileFor, setProfileFor] = useState<Client | null>(null);
+  const projects = data.projectList.filter((p) => p.client_id === client);
+  const profile = data.profiles.find((p) => p.client_id === client);
+  const intra = !!profile && profile.state_code === company.state_code;
+  const calc = lines.map((l) => { const taxable = Math.round(num(l.qty) * num(l.rate) * 100) / 100; const tax = Math.round(taxable * num(l.gst)) / 100; return { taxable, tax }; });
+  const taxable = calc.reduce((s, x) => s + x.taxable, 0); const tax = calc.reduce((s, x) => s + x.tax, 0);
+  const setLine = (key: string, k: keyof DraftLine, v: string) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, [k]: v } : l)));
+  const problem = !company.legal_name || !company.state_code ? 'Add your company details in Settings first.'
+    : !client ? 'Choose the client.' : !profile ? 'This client needs billing details first.' : !project ? 'Choose the project.'
+    : lines.some((l) => !l.description.trim()) ? 'Every line needs a description.' : lines.some((l) => num(l.qty) <= 0) ? 'Quantity must be more than 0.'
+    : lines.some((l) => num(l.gst) > 0) && !company.gstin ? 'Add your GSTIN in Settings to charge GST.' : taxable <= 0 ? 'The total is zero.' : '';
+  const go = async () => {
+    setBusy(true);
+    try {
+      const { data: res, error } = await db().rpc('finance_create_manual_invoice', {
+        p_project_id: project, p_due_date: due || null, p_notes: notes || null, p_title: title || null,
+        p_lines: lines.map((l) => ({ description: l.description, sac: l.sac, qty: num(l.qty), rate: num(l.rate), gst_rate: num(l.gst) })),
+      });
+      if (error) throw error;
+      notify(`Invoice ${res.invoice_no} issued. The client has been told.`, 'success');
+      await onDone(); onClose();
+      openInvoice(res.invoice_id).catch(() => undefined);
+    } catch (e) { notify(errText(e, 'Could not issue the invoice.'), 'error', 9000); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title="New invoice" onClose={onClose} closeDisabled={busy} wide>
+      <div className="space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block"><span className="label">Client</span><select className="input" value={client} onChange={(e) => { setClient(e.target.value); setProject(''); }}><option value="">Choose client</option>{data.clients.map((c) => <option key={c.id} value={c.id}>{c.company_name}</option>)}</select></label>
+          <label className="block"><span className="label">Project</span><select className="input" value={project} onChange={(e) => setProject(e.target.value)} disabled={!client}><option value="">{client && !projects.length ? 'This client has no project yet' : 'Choose project'}</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          <label className="block"><span className="label">Title <span className="font-normal text-ink-400 ml-1">optional — shown to the client</span></span><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="November retainer" /></label>
+          <label className="block"><span className="label">Due date</span><input className="input" type="date" value={due} min={todayIST()} onChange={(e) => setDue(e.target.value)} /></label>
+        </div>
+        {client && !profile && <Notice tone="amber"><span className="flex flex-wrap items-center gap-2">This client has no billing details yet (legal name and state).<button type="button" className="btn-secondary btn-sm" onClick={() => setProfileFor(data.clients.find((c) => c.id === client) ?? null)}><Building2 className="w-4 h-4" />Add billing details</button></span></Notice>}
+        <div className="rounded-2xl border border-ink-100 overflow-hidden">
+          <div className="overflow-x-auto"><table className="data-table">
+            <thead><tr><th>Description</th><th>SAC</th><th className="text-right">Qty</th><th className="text-right">Rate (₹)</th><th>GST</th><th className="text-right">Amount</th><th /></tr></thead>
+            <tbody>{lines.map((l, i) => (
+              <tr key={l.key}>
+                <td className="min-w-[220px]"><input className="input" value={l.description} onChange={(e) => setLine(l.key, 'description', e.target.value)} maxLength={300} placeholder="Brand identity design" /></td>
+                <td><input className="input !w-24 font-mono" value={l.sac} onChange={(e) => setLine(l.key, 'sac', e.target.value.replace(/\D/g, '').slice(0, 8))} inputMode="numeric" /></td>
+                <td><input className="input !w-20 text-right" type="number" min="0" step="0.01" value={l.qty} onChange={(e) => setLine(l.key, 'qty', e.target.value)} /></td>
+                <td><input className="input !w-32 text-right" type="number" min="0" step="0.01" value={l.rate} onChange={(e) => setLine(l.key, 'rate', e.target.value)} /></td>
+                <td><select className="input !w-24" value={l.gst} onChange={(e) => setLine(l.key, 'gst', e.target.value)}>{GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}</select></td>
+                <td className="text-right whitespace-nowrap font-semibold">{inrFmt(calc[i].taxable + calc[i].tax)}<div className="text-[11px] text-ink-400 font-normal">{inrFmt(calc[i].taxable)} + GST</div></td>
+                <td>{lines.length > 1 && <button type="button" className="icon-btn text-rose-700" title="Remove line" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}><XCircle className="w-4 h-4" /></button>}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+          <div className="p-3 border-t border-ink-100 flex flex-wrap items-start justify-between gap-4">
+            <button type="button" className="btn-ghost btn-sm" disabled={lines.length >= 50} onClick={() => setLines((ls) => [...ls, blank()])}><Plus className="w-4 h-4" />Add line</button>
+            <div className="text-[13px] min-w-[240px] space-y-1">
+              <div className="flex justify-between"><span className="text-ink-500">Taxable value</span><span>{inrFmt(taxable)}</span></div>
+              {profile ? (intra
+                ? <><div className="flex justify-between"><span className="text-ink-500">CGST</span><span>{inrFmt(tax / 2)}</span></div><div className="flex justify-between"><span className="text-ink-500">SGST</span><span>{inrFmt(tax / 2)}</span></div></>
+                : <div className="flex justify-between"><span className="text-ink-500">IGST</span><span>{inrFmt(tax)}</span></div>)
+                : <div className="flex justify-between"><span className="text-ink-500">GST</span><span>{inrFmt(tax)}</span></div>}
+              <div className="flex justify-between border-t border-ink-200 pt-1.5 text-[15px] font-bold"><span>Total</span><span>{inrFmt(taxable + tax)}</span></div>
+            </div>
+          </div>
+        </div>
+        <label className="block"><span className="label">Notes on the invoice <span className="font-normal text-ink-400 ml-1">optional</span></span><textarea className="input min-h-[60px]" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} placeholder="PO number, period covered…" /></label>
+        <p className="text-[12px] text-ink-500">Dated today and numbered automatically. Once issued it can’t be edited — cancel it (while unpaid) or raise a credit / debit note. The client sees it under the project and can pay it like any other invoice.</p>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {problem && <span className="text-[12.5px] text-amber-800 mr-auto">{problem}</span>}
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn-primary" disabled={busy || !!problem} onClick={() => void go()}><FileText className="w-4 h-4" />{busy ? 'Issuing…' : `Issue invoice · ${inrFmt(taxable + tax)}`}</button>
+        </div>
+      </div>
+      {profileFor && <BillingProfileModal client={profileFor} profile={undefined} onClose={() => setProfileFor(null)} onDone={onDone} />}
+    </Modal>
   );
 }
 
