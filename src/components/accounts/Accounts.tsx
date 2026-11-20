@@ -55,6 +55,8 @@ const PAY_TONE: Record<string, Tone> = { paid: 'mint', part_paid: 'amber', unpai
 const PAY_LABEL: Record<string, string> = { paid: 'Paid', part_paid: 'Part paid', unpaid: 'Unpaid', cancelled: 'Cancelled' };
 const METHODS = [{ id: 'bank_transfer', label: 'Bank transfer' }, { id: 'upi', label: 'UPI' }, { id: 'cheque', label: 'Cheque' }, { id: 'card', label: 'Card' }, { id: 'cash', label: 'Cash' }, { id: 'other', label: 'Other' }];
 const instDue = (i: Inst) => Math.max(0, num(i.amount) + num(i.tax_amount) - num(i.amount_paid));
+/** A milestone that can get an invoice: not cancelled, has an amount, and either requested, paid (invoice for records) or a plain milestone. */
+const canInvoice = (i: Inst) => !i.invoice_number && !['Cancelled', 'Waived'].includes(i.status) && num(i.amount) > 0 && (i.term_no == null || !!i.requested_at || num(i.amount_paid) > 0);
 const isOpenInst = (i: Inst) => !['Paid', 'Cancelled', 'Waived'].includes(i.status) && instDue(i) > 0;
 const daysLate = (due: string | null) => (due ? Math.max(0, Math.floor((new Date(`${todayIST()}T00:00:00Z`).getTime() - new Date(`${due}T00:00:00Z`).getTime()) / 86400000)) : 0);
 const bucketOf = (days: number) => (days <= 0 ? 'Not due' : days <= 30 ? '1–30 days' : days <= 60 ? '31–60 days' : days <= 90 ? '61–90 days' : '90+ days');
@@ -152,7 +154,7 @@ function Overview({ data, clientName, go, reload }: { data: Data; clientName: (i
   const collected = data.pays.filter((p) => ['client', 'finance'].includes(p.source) && p.paid_on?.startsWith(month)).reduce((s, p) => s + num(p.amount), 0)
     + data.ledger.filter((l) => l.kind === 'overpayment' && l.created_at.slice(0, 7) === month).reduce((s, l) => s + num(l.amount), 0);
   const credit = data.ledger.reduce((s, l) => s + num(l.amount), 0);
-  const toInvoice = data.insts.filter((i) => !i.invoice_number && isOpenInst(i) && (i.term_no == null || i.requested_at));
+  const toInvoice = data.insts.filter(canInvoice);
   const noProfile = data.clients.filter((c) => !data.profiles.some((p) => p.client_id === c.id) && data.insts.some((i) => i.client_id === c.id));
   const byBucket = BUCKETS.map((b) => ({ b, amt: rows.filter((r) => r.bucket === b).reduce((s, r) => s + r.due, 0), n: rows.filter((r) => r.bucket === b).length }));
   const max = Math.max(1, ...byBucket.map((x) => x.amt));
@@ -169,7 +171,7 @@ function Overview({ data, clientName, go, reload }: { data: Data; clientName: (i
         <Card className="p-5"><CardHeader title="Needs attention" />
           <ul className="mt-3 space-y-2 text-[13.5px]">
             {data.adjs.some((a) => a.status === 'pending') && <li className="flex items-center justify-between gap-3"><span><b>{data.adjs.filter((a) => a.status === 'pending').length}</b> credit / debit notes waiting for approval</span><button type="button" className="btn-secondary btn-sm" onClick={() => go('notes')}>Review</button></li>}
-            {toInvoice.length > 0 && <li className="flex items-center justify-between gap-3"><span><b>{toInvoice.length}</b> requested milestones without an invoice</span><button type="button" className="btn-secondary btn-sm" onClick={() => go('invoices')}>Issue invoices</button></li>}
+            {toInvoice.length > 0 && <li className="flex items-center justify-between gap-3"><span><b>{toInvoice.length}</b> milestones (requested or paid) without an invoice</span><button type="button" className="btn-secondary btn-sm" onClick={() => go('invoices')}>Issue invoices</button></li>}
             {noProfile.length > 0 && <li className="flex items-center justify-between gap-3"><span><b>{noProfile.length}</b> clients without billing details ({noProfile.slice(0, 3).map((c) => c.company_name).join(', ')}{noProfile.length > 3 ? '…' : ''})</span><button type="button" className="btn-secondary btn-sm" onClick={() => go('clients')}>Add details</button></li>}
           </ul>
         </Card>
@@ -198,8 +200,9 @@ function Overview({ data, clientName, go, reload }: { data: Data; clientName: (i
 function Invoices({ data, clientName, reload }: { data: Data; clientName: (id: string) => string; reload: () => Promise<void> }) {
   const [q, setQ] = useState(''); const [f, setF] = useState('open'); const [busy, setBusy] = useState<string | null>(null);
   const [cancelFor, setCancelFor] = useState<InvoiceRow | null>(null); const [noteFor, setNoteFor] = useState<{ inv: InvoiceRow; kind: 'credit' | 'debit' } | null>(null);
-  const toInvoice = data.insts.filter((i) => !i.invoice_number && isOpenInst(i) && (i.term_no == null || i.requested_at))
-    .sort((a, b) => (a.due_date ?? '9').localeCompare(b.due_date ?? '9'));
+  const toInvoice = data.insts.filter(canInvoice).sort((a, b) => (a.due_date ?? '9').localeCompare(b.due_date ?? '9'));
+  const [profileFor, setProfileFor] = useState<Client | null>(null);
+  const hasProfile = (clientId: string) => data.profiles.some((p) => p.client_id === clientId);
   const list = data.invoices.filter((i) => (f === 'all' || (f === 'open' ? i.status === 'issued' && i.balance > 0 : f === 'paid' ? i.payment_status === 'paid' : i.status === 'cancelled'))
     && (!q.trim() || `${i.invoice_no} ${i.client_name} ${clientName(i.client_id)}`.toLowerCase().includes(q.trim().toLowerCase())));
   const issue = async (i: Inst) => {
@@ -211,11 +214,14 @@ function Invoices({ data, clientName, reload }: { data: Data; clientName: (id: s
   return (
     <div className="space-y-5">
       {toInvoice.length > 0 && (
-        <Card className="p-5"><CardHeader title="Ready to invoice" subtitle="Milestones you’ve asked the client to pay, without an invoice yet" />
-          <div className="overflow-x-auto mt-3"><table className="data-table"><thead><tr><th>Client</th><th>Milestone</th><th className="text-right">Amount</th><th className="text-right">GST</th><th>Due</th><th /></tr></thead>
+        <Card className="p-5"><CardHeader title="Ready to invoice" subtitle="Milestones you’ve asked the client to pay — and ones already paid — that don’t have an invoice yet" />
+          <div className="overflow-x-auto mt-3"><table className="data-table"><thead><tr><th>Client</th><th>Milestone</th><th className="text-right">Amount</th><th className="text-right">GST</th><th>Status</th><th /></tr></thead>
             <tbody>{toInvoice.map((i) => <tr key={i.id}><td className="font-semibold">{clientName(i.client_id)}</td><td>{i.name}<div className="text-[11px] text-ink-400">{data.projects[i.project_id] ?? ''}</div></td>
-              <td className="text-right">{inrFmt(i.amount)}</td><td className="text-right">{inrFmt(i.tax_amount)}</td><td>{fmtDate(i.due_date)}</td>
-              <td className="text-right"><button type="button" className="btn-primary btn-sm" disabled={busy === i.id} onClick={() => void issue(i)}><FileText className="w-4 h-4" />{busy === i.id ? 'Issuing…' : 'Issue invoice'}</button></td></tr>)}</tbody></table></div>
+              <td className="text-right">{inrFmt(i.amount)}</td><td className="text-right">{inrFmt(i.tax_amount)}</td>
+              <td>{i.status === 'Paid' ? <Badge tone="mint" dot>Paid</Badge> : <span className="text-[13px]">Due {fmtDate(i.due_date)}</span>}</td>
+              <td className="text-right">{hasProfile(i.client_id)
+                ? <button type="button" className="btn-primary btn-sm" disabled={busy === i.id} onClick={() => void issue(i)}><FileText className="w-4 h-4" />{busy === i.id ? 'Issuing…' : 'Issue invoice'}</button>
+                : <button type="button" className="btn-secondary btn-sm" onClick={() => setProfileFor(data.clients.find((c) => c.id === i.client_id) ?? { id: i.client_id, company_name: clientName(i.client_id) })}><Building2 className="w-4 h-4" />Add billing details first</button>}</td></tr>)}</tbody></table></div>
           <p className="text-[12px] text-ink-500 mt-3">GST is taken from the milestone’s tax amount (it must match 5, 12, 18, 28 or 40%). CGST+SGST if the client is in your state, IGST otherwise.</p>
         </Card>
       )}
@@ -246,6 +252,7 @@ function Invoices({ data, clientName, reload }: { data: Data; clientName: (id: s
           ))}</tbody>
         </table></div></div>
       )}
+      {profileFor && <BillingProfileModal client={profileFor} profile={data.profiles.find((p) => p.client_id === profileFor.id)} onClose={() => setProfileFor(null)} onDone={reload} />}
       {cancelFor && <CancelInvoice inv={cancelFor} onClose={() => setCancelFor(null)} onDone={reload} />}
       {noteFor && <NoteModal inv={noteFor.inv} kind={noteFor.kind} onClose={() => setNoteFor(null)} onDone={reload} />}
     </div>
