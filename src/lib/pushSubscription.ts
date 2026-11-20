@@ -11,7 +11,9 @@ export const VAPID_PUBLIC_KEY = ((env.VITE_VAPID_PUBLIC_KEY as string | undefine
  * preview link would otherwise be registered twice and show every alert twice, so only the live address
  * (and localhost for development) registers; other addresses clean up any old registration instead.
  */
-const LIVE_ORIGINS = ['https://sigma1.in', 'https://www.sigma1.in', 'https://ira-eta-two.vercel.app'];
+const LIVE_ORIGINS = ['https://sigma1.in', 'https://www.sigma1.in'];
+/** Addresses SIGMA used before sigma1.in. Visitors are moved to sigma1.in after their old alert registration is removed. */
+const OLD_HOSTS = ['ira-eta-two.vercel.app', 'sigma.irahospitality.co.in'];
 export const PUSH_ORIGIN = ((env.VITE_PUSH_ORIGIN as string | undefined) || LIVE_ORIGINS[0]).replace(/\/$/, '');
 export function isPushOrigin(): boolean {
   if (typeof window === 'undefined') return false;
@@ -30,6 +32,21 @@ async function retireNonLiveRegistration(): Promise<void> {
   } catch {
     /* best effort */
   }
+}
+
+/**
+ * On an old address: remove this browser's alert registration there (so the browser stops labelling alerts
+ * with the old address), then continue on sigma1.in with the same page and link (setup links keep working).
+ * Returns true when the page is being moved.
+ */
+export async function leaveOldAddress(): Promise<boolean> {
+  if (typeof window === 'undefined' || !OLD_HOSTS.includes(window.location.hostname)) return false;
+  if ('serviceWorker' in navigator) {
+    await Promise.race([retireNonLiveRegistration(), new Promise((r) => setTimeout(r, 2500))]);
+  }
+  const { pathname, search, hash } = window.location;
+  window.location.replace(`${LIVE_ORIGINS[0]}${pathname}${search}${hash}`);
+  return true;
 }
 
 export type PushPermissionStatus = 'unsupported' | 'default' | 'granted' | 'denied';

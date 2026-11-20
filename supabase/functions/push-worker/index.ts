@@ -8,6 +8,7 @@ import webpush from 'npm:web-push@3.6.7'
 
 const APP_URL = (Deno.env.get('APP_URL') || 'https://sigma1.in').replace(/\/$/, '')
 // Set with: supabase secrets set VAPID_PUBLIC_KEY=... (never hardcode keys in source)
+const LIVE_ORIGINS = ['https://sigma1.in', 'https://www.sigma1.in']
 const VAPID_PUBLIC = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim()
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:admin@ira-presence.local'
 
@@ -60,7 +61,8 @@ Deno.serve(async (req) => {
 
     const recipients = [...new Set(rows.map((r) => r.recipient_id))]
     const [{ data: subs }, { data: profiles }] = await Promise.all([
-      db.from('push_subscriptions').select('id, user_id, endpoint, p256dh, auth').in('user_id', recipients),
+      // Only devices registered on the live address: the browser labels each alert with that address.
+      db.from('push_subscriptions').select('id, user_id, endpoint, p256dh, auth').in('user_id', recipients).in('origin', LIVE_ORIGINS),
       db.from('profiles').select('id, role').in('id', recipients),
     ])
     const unread = new Map<string, number>()
