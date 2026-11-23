@@ -150,15 +150,16 @@ function RequestDialog({ cat, ids, onRemove, onClose, onCreated }: {
 }) {
   const [brief, setBrief] = useState(''); const [timeline, setTimeline] = useState(''); const [date, setDate] = useState(''); const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   const picked = ids.map((id) => cat.services.find((s) => s.id === id)).filter(Boolean) as Service[];
   const submit = async () => {
-    if (brief.trim().length < 5) { notify('Describe what you need in a few words.', 'error'); return; }
-    setBusy(true);
+    if (brief.trim().length < 5) { setErr('Describe what you need in a few words (at least 5 characters).'); return; }
+    setErr(''); setBusy(true);
     try {
       const id = await servicesApi.create(ids, brief.trim(), timeline.trim(), date, notes.trim());
       notify('Request sent. We’ll prepare a quotation and let you know.', 'success');
       await onCreated(id);
-    } catch (e) { notify(errText(e, 'Could not send the request.'), 'error', 8000); } finally { setBusy(false); }
+    } catch (e) { const m = errText(e, 'Could not send the request.'); setErr(m); notify(m, 'error', 8000); } finally { setBusy(false); }
   };
   return (
     <Modal title="Request a quotation" onClose={onClose} closeDisabled={busy} wide>
@@ -175,13 +176,14 @@ function RequestDialog({ cat, ids, onRemove, onClose, onCreated }: {
           </div>
         </div>
         <label className="block"><span className="label">What do you need?</span>
-          <textarea className="input min-h-[120px]" value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={4000}
+          <textarea className="input min-h-[120px]" value={brief} onChange={(e) => { setBrief(e.target.value); setErr(''); }} maxLength={4000}
             placeholder="Your goal, audience, quantities, references, anything we should know." /></label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block"><span className="label">Timeline <span className="font-normal text-ink-400 ml-1">optional</span></span><input className="input" value={timeline} onChange={(e) => setTimeline(e.target.value)} maxLength={200} placeholder="e.g. within 3 weeks" /></label>
           <label className="block"><span className="label">Preferred start <span className="font-normal text-ink-400 ml-1">optional</span></span><input className="input" type="date" min={todayIST()} value={date} onChange={(e) => setDate(e.target.value)} /></label>
         </div>
         <label className="block"><span className="label">Anything else <span className="font-normal text-ink-400 ml-1">optional</span></span><textarea className="input min-h-[60px]" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} placeholder="Budget range, links, contact preferences…" /></label>
+        {err && <Notice tone="rose">{err}</Notice>}
         <p className="text-[12px] text-ink-500">You can add reference files after sending. Prices shown are a guide — your quotation has the final amount.</p>
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button loading={busy} onClick={() => void submit()}>Send request</Button></div>
       </div>

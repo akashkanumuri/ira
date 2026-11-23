@@ -186,7 +186,7 @@ export default function App() {
   if (!isSupabaseConfigured) return <LoadingScreen label="Supabase is not configured." />;
 
   if (user.role === 'client') {
-    return <ClientPortalView user={user} onLogout={signOut} />;
+    return <><ClientPortalView user={user} onLogout={signOut} /><ToastHost /></>;
   }
 
   if (user.role === 'admin') return <Portal user={user} onLogout={signOut} />;
