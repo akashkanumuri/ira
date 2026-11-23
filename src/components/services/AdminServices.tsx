@@ -502,7 +502,7 @@ function CatalogueEdit({ kind, item, parent, cat, onClose, onDone }: {
   kind: 'category' | 'subcategory' | 'service'; item: any; parent?: string; cat: Catalogue; onClose: () => void; onDone: () => Promise<void>;
 }) {
   const s = item as Service | null;
-  const [f, setF] = useState<Record<string, string | boolean>>(() => kind === 'service' ? {
+  const [f, setF] = useState<Record<string, string | boolean>>((): Record<string, string | boolean> => kind === 'service' ? {
     name: s?.name ?? '', description: s?.description ?? '', pricing_type: s?.pricing_type ?? 'quote', price_from: s?.price_from == null ? '' : String(s.price_from),
     price_to: s?.price_to == null ? '' : String(s.price_to), fixed_price: s?.fixed_price == null ? '' : String(s.fixed_price), gst_rate: String(s?.gst_rate ?? 18),
     sac: s?.sac ?? '', unit: s?.unit ?? '', requestable: s?.requestable ?? true, subcategory_id: s?.subcategory_id ?? parent ?? '',

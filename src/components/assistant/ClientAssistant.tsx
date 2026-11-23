@@ -14,7 +14,7 @@ import { getKolkataDateString } from '../../lib/workingDays';
  * Tips come only from the client's own project data already on screen — nothing is sent anywhere.
  */
 
-type Page = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications' | 'support';
+type Page = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications' | 'support' | 'services';
 interface Tip { key: string; priority: 1 | 2 | 3; mood: BuddyMood; text: string; action?: { label: string; to?: Page; tour?: boolean } }
 interface NavGroupLite { label?: string; items: Array<{ id: string; label: string }> }
 interface Mem { welcomed?: boolean; seen?: Record<string, boolean>; snooze?: Record<string, number>; closed?: { day: string; keys: string[] }; minimized?: boolean }
@@ -26,6 +26,7 @@ export const CLIENT_PAGE_HELP: Record<string, { title: string; text: string }> =
   progress: { title: 'Deliverables', text: 'Milestones and updates — and anything the team needs from you (logos, content, approvals).' },
   payments: { title: 'Billing & Payment', text: 'Your payment milestones and invoices. After paying, add the transfer reference here so we can confirm it.' },
   support: { title: 'Help & support', text: 'Ask a question or report a problem. The IRA team replies here and you get a notification.' },
+  services: { title: 'Services', text: 'Browse what we offer, pick one or more services and request a quotation. Accept it here and we start after the first payment.' },
   notifications: { title: 'Notifications', text: 'Every update from the team in one list. Click one to jump to it.' },
   settings: { title: 'Profile & Organisation', text: 'Your details, password, and (for admins) the people from your company who can sign in.' },
 };
