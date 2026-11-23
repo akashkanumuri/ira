@@ -12,11 +12,13 @@ import {
   Bell,
   AlertTriangle,
   LifeBuoy,
+  ShoppingBag,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { AppShell, type NavGroup as ShellNavGroup } from '../../ui/AppShell';
 import { SkeletonPage } from '../../ui';
 import { ClientSupport } from './ClientSupport';
+import { ClientServices } from '../services/ClientServices';
 import { ClientTeam } from './ClientTeam';
 import { ClientAssistant } from '../assistant/ClientAssistant';
 import {
@@ -68,11 +70,13 @@ const ACTION_PAGES: Record<string, ClientNavPage> = {
   '/client/progress': 'progress',
   '/client/payments': 'payments',
   '/client/support': 'support',
+  '/client/services': 'services',
   contracts: 'contracts',
   deliverables: 'deliverables',
   progress: 'progress',
   payments: 'payments',
   support: 'support',
+  services: 'services',
 };
 
 interface Props {
@@ -264,7 +268,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
     { id: 'payments', label: 'Billing & Payment', icon: CreditCard, badge: paymentDueCount || undefined },
   ].filter(i => !allowed || allowed.includes(i.id as ClientNavPage));
   const navGroups: ShellNavGroup[] = [
-    { items: [{ id: 'dashboard', label: gated ? 'Start here' : 'Dashboard', icon: LayoutDashboard }] },
+    { items: [{ id: 'dashboard', label: gated ? 'Start here' : 'Dashboard', icon: LayoutDashboard }, { id: 'services', label: 'Services', icon: ShoppingBag }] },
     ...(projectItems.length ? [{ label: 'My project', items: projectItems }] : []),
     {
       label: 'Account',
@@ -295,6 +299,7 @@ const ClientPortalInternal: React.FC<Props> = ({ user, onLogout }) => {
         />
       );
     }
+    if (page === 'services') return <ClientServices onOpenPayments={selectedProject ? () => setPage('payments') : undefined} />;
     if (page === 'support') return <ClientSupport projects={projects.map(p => ({ id: p.id, name: p.name }))} />;
     if (page === 'settings') return <ClientSettingsView user={user} changePassword={changePassword} />;
 

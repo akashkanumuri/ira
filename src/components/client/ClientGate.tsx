@@ -23,12 +23,12 @@ export interface ClientPortalState {
 
 /** Pages a client can open at each stage. Everything else waits until access opens. */
 export const ALLOWED_PAGES: Record<ClientStage, ClientPage[]> = {
-  none: ['dashboard', 'support', 'notifications', 'settings'],
-  no_contract: ['dashboard', 'contracts', 'support', 'notifications', 'settings'],
-  contract: ['dashboard', 'contracts', 'support', 'notifications', 'settings'],
-  pay_first: ['dashboard', 'contracts', 'payments', 'support', 'notifications', 'settings'],
-  locked: ['dashboard', 'contracts', 'payments', 'support', 'notifications', 'settings'],
-  open: ['dashboard', 'contracts', 'deliverables', 'progress', 'payments', 'support', 'notifications', 'settings'],
+  none: ['dashboard', 'support', 'services', 'notifications', 'settings'],
+  no_contract: ['dashboard', 'contracts', 'support', 'services', 'notifications', 'settings'],
+  contract: ['dashboard', 'contracts', 'support', 'services', 'notifications', 'settings'],
+  pay_first: ['dashboard', 'contracts', 'payments', 'support', 'services', 'notifications', 'settings'],
+  locked: ['dashboard', 'contracts', 'payments', 'support', 'services', 'notifications', 'settings'],
+  open: ['dashboard', 'contracts', 'deliverables', 'progress', 'payments', 'support', 'services', 'notifications', 'settings'],
 };
 export const isGated = (s: ClientStage | null | undefined) => !!s && s !== 'open';
 

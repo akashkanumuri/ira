@@ -34,6 +34,7 @@ import { PerformanceAdmin } from './components/performance/PerformanceAdmin';
 import { PerformancePage } from './components/performance/PerformancePage';
 import { BonusPipSettings } from './components/performance/BonusPip';
 import { OfferBox, OfferGate, OfferTemplatesSettings, useOfferStatuses } from './components/offers/Offers';
+import { AdminServices } from './components/services/AdminServices';
 import { LeadsPage, salesRoleLabel, useSalesAccess, useSalesRoles, SALES_ROLES } from './components/leads/Leads';
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
@@ -85,6 +86,7 @@ import {
   FolderKanban, BadgeIndianRupee, History, UserX, Ban, Package, UserCheck, CornerDownRight, ListChecks, ClipboardCheck, Target, LifeBuoy,
   FileSignature,
   PhoneCall,
+  ShoppingBag,
   MapPin,
 } from 'lucide-react';
 import type {
@@ -211,7 +213,7 @@ function LiveClockDisplay() {
   );
 }
 
-const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime', 'admin-leads'];
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime', 'admin-leads', 'admin-services'];
 /** Hidden for sales staff (their workspace is Leads + attendance, leave, holidays, payslips). */
 const SALES_HIDDEN_TABS = ['emp-dashboard', 'emp-tasks', 'emp-client-work', 'emp-delivery', 'emp-time', 'emp-wfh', 'emp-performance'];
 const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-delivery', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time', 'emp-leads'];
@@ -655,6 +657,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         label: 'Clients & delivery', items: [
           { id: 'admin-leads', label: 'Leads', icon: PhoneCall },
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
+          { id: 'admin-services', label: 'Services', icon: ShoppingBag },
           { id: 'admin-delivery', label: 'Delivery', icon: Package },
           { id: 'admin-finance', label: 'Finance & accounts', icon: BadgeIndianRupee },
           { id: 'admin-support', label: 'Client support', icon: LifeBuoy },
@@ -841,12 +844,14 @@ function getPageTitle(tab: string) {
     'emp-time': 'My time',
     'emp-team-time': 'Team time',
     'admin-leads': 'Leads',
+    'admin-services': 'Services',
     'emp-leads': 'Leads',
   } as Record<string, string>)[tab] ?? 'Dashboard';
 }
 
 function AdminContent(props: any) {
   const { activeTab, user, onRefresh, onSelectTab } = props;
+  if (activeTab === 'admin-services') return <AdminServices employees={props.employees} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-leads') return <LeadsPage user={user} employees={props.employees} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-clients') return <AdminClientCenter employees={props.employees} />;
   if (activeTab === 'admin-delivery') return (

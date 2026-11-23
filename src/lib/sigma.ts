@@ -419,7 +419,7 @@ export interface AttachOptions {
 /** Uploads into the caller's private folder, then registers the file against its parent record. */
 export async function uploadAndAttach(
   file: File,
-  parentType: 'deliverable' | 'dependency' | 'payment' | 'invoice' | 'contract' | 'task' | 'leave',
+  parentType: 'deliverable' | 'dependency' | 'payment' | 'invoice' | 'contract' | 'task' | 'leave' | 'service_request',
   parentId: string,
   opts: AttachOptions = {},
 ): Promise<string> {
