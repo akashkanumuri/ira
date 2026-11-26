@@ -8,12 +8,13 @@ import { ACCEPT_ATTR, openFile, uploadAndAttach } from '../../lib/sigma';
 import { Badge, Button, Card, EmptyState, Notice, PillTabs, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
 import {
-  CAMPAIGN_STATUS, OBJECTIVES, PLATFORMS, POST_STATUS, POST_TYPES, SOCIAL, errText, fmtDay, fmtWhen, inr, mkApi, moneySummary, num,
+  budgetByPerson, CAMPAIGN_STATUS, OBJECTIVES, PLATFORMS, POST_STATUS, POST_TYPES, SOCIAL, errText, fmtDay, fmtWhen, inr, mkApi, moneySummary, num,
   parseResultsCsv, platformOf, resultsOf, sumResults, todayIST,
-  type MkCampaign, type MkData, type MkMoney, type MkPost,
+  type MkBudget, type MkCampaign, type MkData, type MkMoney, type MkPost,
 } from '../../lib/marketing';
 
 export type Mode = 'admin' | 'team' | 'client';
+export interface People { marketers: { id: string; name: string }[]; me: string | null; nameOf: (id: string | null | undefined) => string }
 const db = () => supabase as any;
 interface FileLite { id: string; parent_id: string; name: string; storage_bucket: string; storage_path: string; mime_type: string | null; created_at: string }
 
@@ -233,7 +234,7 @@ function PostActDialog({ post, kind, onClose, onDone }: { post: MkPost; kind: 'p
 
 /* ====================================================================== ADS */
 
-export function AdsSection({ clientId, data, mode, reload }: { clientId: string; data: MkData; mode: Mode; reload: () => Promise<void> }) {
+export function AdsSection({ clientId, data, mode, reload, people }: { clientId: string; data: MkData; mode: Mode; reload: () => Promise<void>; people?: People }) {
   const [edit, setEdit] = useState<MkCampaign | 'new' | null>(null);
   const [results, setResults] = useState<MkCampaign | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -252,7 +253,7 @@ export function AdsSection({ clientId, data, mode, reload }: { clientId: string;
               <span className="w-2.5 h-2.5 rounded-full mt-1.5" style={{ background: platformOf(c.platform).color }} />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-[15px] text-ink-900">{c.name}</p>
-                <p className="text-[12px] text-ink-500">{platformOf(c.platform).label} · {OBJECTIVES.find((o) => o.id === c.objective)?.label} · {fmtDay(c.start_date)}{c.end_date ? ` – ${fmtDay(c.end_date)}` : ' onwards'}</p>
+                <p className="text-[12px] text-ink-500">{platformOf(c.platform).label} · {OBJECTIVES.find((o) => o.id === c.objective)?.label} · {fmtDay(c.start_date)}{c.end_date ? ` – ${fmtDay(c.end_date)}` : ' onwards'}{team && people ? ` · run by ${c.owner_id ? people.nameOf(c.owner_id) : 'no one yet'}` : ''}</p>
               </div>
               <Badge tone={CAMPAIGN_STATUS[c.status].tone} dot>{CAMPAIGN_STATUS[c.status].label}</Badge>
             </div>
@@ -286,7 +287,7 @@ export function AdsSection({ clientId, data, mode, reload }: { clientId: string;
           </Card>
         );
       })}
-      {edit && <CampaignDialog clientId={clientId} c={edit === 'new' ? null : edit} onClose={() => setEdit(null)} onSaved={reload} />}
+      {edit && <CampaignDialog clientId={clientId} c={edit === 'new' ? null : edit} admin={mode === 'admin'} marketers={people?.marketers ?? []} onClose={() => setEdit(null)} onSaved={reload} />}
       {results && <ResultsDialog c={results} onClose={() => setResults(null)} onSaved={reload} />}
     </div>
   );
@@ -295,13 +296,13 @@ const Stat = ({ label, value, sub }: { label: string; value: string; sub?: strin
   <div className="rounded-xl bg-ink-50/70 px-3 py-2"><p className="text-[11px] text-ink-500 font-semibold">{label}</p><p className="font-display font-bold text-[16px] text-ink-950 tnum">{value}</p>{sub && <p className="text-[11px] text-ink-500">{sub}</p>}</div>
 );
 
-function CampaignDialog({ clientId, c, onClose, onSaved }: { clientId: string; c: MkCampaign | null; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [f, setF] = useState({ name: c?.name ?? '', platform: c?.platform ?? 'meta', objective: c?.objective ?? 'leads', start_date: c?.start_date ?? todayIST(), end_date: c?.end_date ?? '', budget: c?.budget == null ? '' : String(c.budget), status: c?.status ?? 'running', notes: c?.notes ?? '' });
+function CampaignDialog({ clientId, c, admin, marketers, onClose, onSaved }: { clientId: string; c: MkCampaign | null; admin: boolean; marketers: { id: string; name: string }[]; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [f, setF] = useState({ owner_id: c?.owner_id ?? (admin ? marketers[0]?.id ?? '' : ''), name: c?.name ?? '', platform: c?.platform ?? 'meta', objective: c?.objective ?? 'leads', start_date: c?.start_date ?? todayIST(), end_date: c?.end_date ?? '', budget: c?.budget == null ? '' : String(c.budget), status: c?.status ?? 'running', notes: c?.notes ?? '' });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
   const go = async () => {
     setBusy(true);
-    try { await mkApi.saveCampaign(c?.id ?? null, c ? null : clientId, f); notify(c ? 'Campaign updated.' : 'Campaign added.', 'success'); await onSaved(); onClose(); }
+    try { const { owner_id, ...rest } = f; await mkApi.saveCampaign(c?.id ?? null, c ? null : clientId, admin ? { ...rest, owner_id } : rest); notify(c ? 'Campaign updated.' : 'Campaign added.', 'success'); await onSaved(); onClose(); }
     catch (e) { notify(errText(e, 'Could not save.'), 'error', 8000); } finally { setBusy(false); }
   };
   return (
@@ -316,6 +317,8 @@ function CampaignDialog({ clientId, c, onClose, onSaved }: { clientId: string; c
           <Field label="Budget ₹" hint="optional"><input className="input" type="number" min="0" value={f.budget} onChange={(e) => set('budget', e.target.value)} /></Field>
           <Field label="Status"><select className="input" value={f.status} onChange={(e) => set('status', e.target.value)}>{Object.entries(CAMPAIGN_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></Field>
         </div>
+        {admin && <Field label="Run by" hint="their ad budget pays for it"><select className="input" value={f.owner_id} onChange={(e) => set('owner_id', e.target.value)}>
+          <option value="">Not assigned</option>{marketers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></Field>}
         <Field label="Notes" hint="optional"><textarea className="input min-h-[60px]" value={f.notes} maxLength={2000} onChange={(e) => set('notes', e.target.value)} /></Field>
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button loading={busy} disabled={!f.name.trim()} onClick={() => void go()}>Save</Button></div>
       </div>
@@ -458,7 +461,7 @@ function ReportDialog({ clientId, onClose, onSaved }: { clientId: string; onClos
 
 const MONEY_LABEL: Record<MkMoney['kind'], string> = { request: 'Requested from client', receipt: 'Payment received', refund: 'Refunded to client', adjustment: 'Adjustment' };
 
-export function MoneySection({ clientId, data, mode, reload }: { clientId: string; data: MkData; mode: Mode; reload: () => Promise<void> }) {
+export function MoneySection({ clientId, data, mode, reload, people }: { clientId: string; data: MkData; mode: Mode; reload: () => Promise<void>; people?: People }) {
   const s = moneySummary(data.money, data.results);
   const [adding, setAdding] = useState<MkMoney['kind'] | null>(null);
   const [voiding, setVoiding] = useState<MkMoney | null>(null);
@@ -501,6 +504,7 @@ export function MoneySection({ clientId, data, mode, reload }: { clientId: strin
         ) : <p className="px-5 py-8 text-center text-[13px] text-ink-400">No ad money recorded yet.</p>}
       </Card>
       <p className="text-[12px] text-ink-500">Spent is the total of the daily ad results. Your management fee is billed separately on invoices.</p>
+      {mode !== 'client' && people && <TeamBudget clientId={clientId} data={data} admin={admin} people={people} received={s.received} reload={reload} />}
       {adding && <MoneyDialog clientId={clientId} kind={adding} openRequests={s.requests.filter((r) => r.open > 0)} onClose={() => setAdding(null)} onSaved={reload} />}
       {voiding && <VoidDialog m={voiding} onClose={() => setVoiding(null)} onSaved={reload} />}
     </div>
@@ -561,3 +565,138 @@ function VoidDialog({ m, onClose, onSaved }: { m: MkMoney; onClose: () => void; 
   );
 }
 
+
+/* ====================================================================== TEAM BUDGET (internal: admin → performance marketer) */
+
+function TeamBudget({ clientId, data, admin, people, received, reload }: { clientId: string; data: MkData; admin: boolean; people: People; received: number; reload: () => Promise<void> }) {
+  const rows = budgetByPerson(data.budget, data.campaigns, data.results);
+  const withTeam = rows.reduce((a, r) => a + r.given, 0);
+  const free = received - withTeam;
+  const mine = rows.find((r) => r.employeeId === people.me);
+  const [give, setGive] = useState<{ employeeId: string; amount?: number; requestId?: string } | null>(null);
+  const [ret, setRet] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [decline, setDecline] = useState<MkBudget | null>(null);
+  const [voiding, setVoiding] = useState<MkBudget | null>(null);
+  const openRequests = data.budget.filter((b) => b.kind === 'request' && b.status === 'open' && !b.voided_at);
+  const history = data.budget.filter((b) => b.kind !== 'request' || b.status !== 'open');
+  const isMarketer = !!people.me && people.marketers.some((m) => m.id === people.me);
+
+  return (
+    <Card className="p-5 space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-display font-bold text-[16px] text-ink-900 mr-auto">{admin ? 'Budget with the marketing team' : 'My ad budget'}</h3>
+        <Badge tone="ink">Internal · client doesn’t see this</Badge>
+      </div>
+      {admin ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <MiniMoney label="Received from client" value={received} />
+            <MiniMoney label="Given to team" value={withTeam} />
+            <MiniMoney label="Still with you" value={free} tone={free < 0 ? 'rose' : 'ink'} />
+          </div>
+          {openRequests.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3">
+              <div className="min-w-0 flex-1 text-[13px] text-amber-900"><b>{people.nameOf(r.employee_id)}</b> asks for <b>{inr(r.amount)}</b>{r.note ? ` — ${r.note}` : ''}<span className="text-amber-700"> · {fmtDay(r.entry_date)}</span></div>
+              <button type="button" className="btn-ghost btn-sm text-rose-700" onClick={() => setDecline(r)}>Decline</button>
+              <Button size="sm" disabled={free <= 0} title={free <= 0 ? 'Record the client’s payment first' : undefined} onClick={() => setGive({ employeeId: r.employee_id, amount: Math.min(Number(r.amount), free), requestId: r.id })}>Give {inr(Math.min(Number(r.amount), Math.max(free, 0)))}</Button>
+            </div>
+          ))}
+          <div className="rounded-2xl border border-ink-100 overflow-x-auto">
+            <table className="data-table">
+              <thead><tr><th>Marketer</th><th className="text-right">Given</th><th className="text-right">Spent on ads</th><th className="text-right">Left with them</th><th /></tr></thead>
+              <tbody>
+                {people.marketers.map((m) => {
+                  const r = rows.find((x) => x.employeeId === m.id) ?? { given: 0, spent: 0, left: 0 };
+                  return (
+                    <tr key={m.id}>
+                      <td className="font-semibold text-ink-900">{m.name}</td>
+                      <td className="text-right tnum">{inr(r.given)}</td>
+                      <td className="text-right tnum">{inr(r.spent)}</td>
+                      <td className={cx('text-right tnum font-semibold', r.left < 0 ? 'text-rose-700' : r.left < (data.settings?.low_balance ?? 0) ? 'text-amber-700' : 'text-ink-900')}>{inr(r.left)}</td>
+                      <td className="whitespace-nowrap text-right">
+                        <Button size="sm" disabled={free <= 0} title={free <= 0 ? 'Record the client’s payment first' : undefined} onClick={() => setGive({ employeeId: m.id })}>Give budget</Button>
+                        {r.given > 0 && <button type="button" className="btn-ghost btn-sm ml-1" onClick={() => setRet(m.id)}>Returned</button>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!people.marketers.length && <tr><td colSpan={5} className="text-[13px] text-ink-500">No one has the Performance Marketing designation yet. Set it in Employees.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {free <= 0 && <p className="text-[12px] text-ink-500">You can only give budget from what the client has paid. Record the client’s payment above first.</p>}
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <MiniMoney label="Given to me" value={mine?.given ?? 0} />
+            <MiniMoney label="Spent on my campaigns" value={mine?.spent ?? 0} />
+            <MiniMoney label="Left with me" value={mine?.left ?? 0} tone={(mine?.left ?? 0) < 0 ? 'rose' : (mine?.left ?? 0) < (data.settings?.low_balance ?? 0) ? 'amber' : 'ink'} />
+          </div>
+          {mine?.open.map((r) => <p key={r.id} className="text-[12.5px] text-amber-800 rounded-xl bg-amber-50 px-3 py-2">Waiting for admin: {inr(r.amount)} requested {fmtDay(r.entry_date)}</p>)}
+          {isMarketer && <div className="flex justify-end"><Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setAsking(true)}>Ask admin for more budget</Button></div>}
+        </>
+      )}
+      {history.length > 0 && (
+        <details className="text-[13px]">
+          <summary className="cursor-pointer font-semibold text-ink-600">History ({history.length})</summary>
+          <ul className="mt-2 divide-y divide-ink-100">
+            {history.map((b) => (
+              <li key={b.id} className={cx('py-2 flex flex-wrap items-center gap-2', b.voided_at && 'opacity-50 line-through')}>
+                <span className="text-ink-500 w-24">{fmtDay(b.entry_date, true)}</span>
+                <span className="flex-1 text-ink-800">{b.kind === 'given' ? `Given to ${people.nameOf(b.employee_id)}` : b.kind === 'returned' ? `Returned by ${people.nameOf(b.employee_id)}` : `${people.nameOf(b.employee_id)} asked (${b.status})`}{b.note ? ` · ${b.note}` : ''}{b.voided_at ? ` · voided: ${b.void_reason}` : ''}</span>
+                <span className="tnum font-semibold">{inr(b.amount)}</span>
+                {admin && !b.voided_at && b.kind !== 'request' && <button type="button" className="btn-ghost btn-sm text-rose-700" onClick={() => setVoiding(b)}>Void</button>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {give && <AmountDialog title={`Give budget to ${people.nameOf(give.employeeId)}`} max={free} initial={give.amount} hint={`Up to ${inr(free)} — what the client has paid that is still with you.`}
+        onClose={() => setGive(null)} onSave={async (amt, note) => { await mkApi.giveBudget(clientId, give.employeeId, amt, note, give.requestId ?? null); notify('Budget given. They have been notified.', 'success'); await reload(); }} />}
+      {ret && <AmountDialog title={`Money returned by ${people.nameOf(ret)}`} max={rows.find((x) => x.employeeId === ret)?.given ?? 0} hint="Unused budget handed back to you."
+        onClose={() => setRet(null)} onSave={async (amt, note) => { await mkApi.returnBudget(clientId, ret, amt, note); notify('Saved.', 'success'); await reload(); }} />}
+      {asking && <AmountDialog title="Ask admin for more budget" hint="The admin gets a notification." noteRequired
+        onClose={() => setAsking(false)} onSave={async (amt, note) => { await mkApi.requestBudget(clientId, amt, note); notify('Request sent to the admin.', 'success'); await reload(); }} />}
+      {decline && <ReasonDialog title="Decline this request?" onClose={() => setDecline(null)} onSave={async (r) => { await mkApi.decideBudget(decline.id, 'decline', r); notify('Declined.', 'success'); await reload(); }} />}
+      {voiding && <ReasonDialog title="Void this entry?" required onClose={() => setVoiding(null)} onSave={async (r) => { await mkApi.decideBudget(voiding.id, 'void', r); notify('Voided.', 'success'); await reload(); }} />}
+    </Card>
+  );
+}
+const MiniMoney = ({ label, value, tone = 'ink' }: { label: string; value: number; tone?: 'ink' | 'amber' | 'rose' }) => (
+  <div className="rounded-2xl bg-ink-50/70 px-3 py-2.5"><p className="text-[11.5px] text-ink-500 font-semibold">{label}</p>
+    <p className={cx('font-display text-[20px] font-bold tnum', tone === 'rose' ? 'text-rose-700' : tone === 'amber' ? 'text-amber-700' : 'text-ink-950')}>{inr(value)}</p></div>
+);
+
+function AmountDialog({ title, hint, max, initial, noteRequired, onClose, onSave }: {
+  title: string; hint?: string; max?: number; initial?: number; noteRequired?: boolean; onClose: () => void; onSave: (amount: number, note: string) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(initial ? String(initial) : ''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false);
+  const n = Number(amount);
+  const bad = !n || n <= 0 || (max != null && n > max + 0.001) || (noteRequired && note.trim().length < 3);
+  const go = async () => { setBusy(true); try { await onSave(n, note.trim()); onClose(); } catch (e) { notify(errText(e, 'That didn’t work.'), 'error', 9000); } finally { setBusy(false); } };
+  return (
+    <Modal title={title} onClose={onClose} closeDisabled={busy}>
+      <div className="space-y-4">
+        <Field label="Amount ₹"><input className="input text-right" type="number" min="1" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus /></Field>
+        {hint && <p className="text-[12px] text-ink-500">{hint}</p>}
+        {max != null && n > max && <p className="text-[12px] text-rose-700">That is more than {inr(max)}.</p>}
+        <Field label="Note" hint={noteRequired ? 'what it’s for' : 'optional'}><input className="input" value={note} maxLength={600} onChange={(e) => setNote(e.target.value)} /></Field>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button><Button loading={busy} disabled={bad} onClick={() => void go()}>Save</Button></div>
+      </div>
+    </Modal>
+  );
+}
+function ReasonDialog({ title, required, onClose, onSave }: { title: string; required?: boolean; onClose: () => void; onSave: (reason: string) => Promise<void> }) {
+  const [reason, setReason] = useState(''); const [busy, setBusy] = useState(false);
+  const go = async () => { setBusy(true); try { await onSave(reason.trim()); onClose(); } catch (e) { notify(errText(e, 'That didn’t work.'), 'error', 8000); } finally { setBusy(false); } };
+  return (
+    <Modal title={title} onClose={onClose} closeDisabled={busy}>
+      <div className="space-y-4">
+        <Field label="Reason" hint={required ? undefined : 'optional'}><input className="input" value={reason} maxLength={400} onChange={(e) => setReason(e.target.value)} /></Field>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Back</Button><Button loading={busy} disabled={!!required && reason.trim().length < 3} className="!bg-rose-600" onClick={() => void go()}>Confirm</Button></div>
+      </div>
+    </Modal>
+  );
+}

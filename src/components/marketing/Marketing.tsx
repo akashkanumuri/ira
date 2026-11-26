@@ -6,15 +6,15 @@ import { useLiveRefresh } from '../../lib/live';
 import { Badge, Button, Card, EmptyState, Notice, PillTabs, SearchInput, cx } from '../../ui';
 import { Modal } from '../../ui/Modal';
 import type { Employee } from '../../types/attendance';
-import { errText, inr, loadMarketing, mkApi, moneySummary, type MkClient, type MkData, type MkMoney, type MkResult } from '../../lib/marketing';
+import { errText, inr, loadMarketing, mkApi, moneySummary, useMarketers, type MkClient, type MkData, type MkMoney, type MkResult } from '../../lib/marketing';
 import { MarketingDashboard } from './Dashboard';
-import { AdsSection, MoneySection, PostsSection, ReportsSection, type Mode } from './Sections';
+import { AdsSection, MoneySection, PostsSection, ReportsSection, type Mode, type People } from './Sections';
 
 const db = () => supabase as any;
 type Tab = 'overview' | 'posts' | 'ads' | 'reports' | 'money' | 'settings';
 
 /** Admin and marketing team: marketing clients, then one client's dashboard, posts, ads, reports and ad money. */
-export function MarketingWorkspace({ admin, employees }: { admin: boolean; employees: Employee[] }) {
+export function MarketingWorkspace({ admin, employees, myEmployeeId }: { admin: boolean; employees: Employee[]; myEmployeeId?: string | null }) {
   const [rows, setRows] = useState<{ settings: MkClient; name: string; money: MkMoney[]; results: Pick<MkResult, 'spend' | 'day'>[]; team: string[] }[]>([]);
   const [clients, setClients] = useState<{ id: string; company_name: string }[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -47,7 +47,7 @@ export function MarketingWorkspace({ admin, employees }: { admin: boolean; emplo
   useEffect(() => { void load(); }, [load]);
 
   const open = rows.find((r) => r.settings.client_id === openId);
-  if (open) return <ClientWorkspace clientId={open.settings.client_id} name={open.name} mode={admin ? 'admin' : 'team'} employees={employees} team={open.team} onBack={() => { setOpenId(null); void load(); }} />;
+  if (open) return <ClientWorkspace clientId={open.settings.client_id} name={open.name} mode={admin ? 'admin' : 'team'} employees={employees} team={open.team} myEmployeeId={myEmployeeId ?? null} onBack={() => { setOpenId(null); void load(); }} />;
 
   const term = q.trim().toLowerCase();
   const shown = rows.filter((r) => !term || r.name.toLowerCase().includes(term));
@@ -119,7 +119,13 @@ function AddClientDialog({ clients, onClose, onDone }: { clients: { id: string; 
   );
 }
 
-function ClientWorkspace({ clientId, name, mode, employees, team, onBack }: { clientId: string; name: string; mode: Mode; employees: Employee[]; team: string[]; onBack: () => void }) {
+function ClientWorkspace({ clientId, name, mode, employees, team, myEmployeeId, onBack }: { clientId: string; name: string; mode: Mode; employees: Employee[]; team: string[]; myEmployeeId: string | null; onBack: () => void }) {
+  const marketerDesignations = useMarketers(true);
+  const people: People = useMemo(() => ({
+    marketers: employees.filter((e) => e.status === 'active' && e.designationId && marketerDesignations.includes(e.designationId)).map((e) => ({ id: e.id, name: e.name })),
+    me: myEmployeeId,
+    nameOf: (id) => (id ? employees.find((e) => e.id === id)?.name ?? (id === myEmployeeId ? 'Me' : 'Team member') : '—'),
+  }), [employees, marketerDesignations, myEmployeeId]);
   const [data, setData] = useState<MkData | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [error, setError] = useState('');
@@ -148,9 +154,9 @@ function ClientWorkspace({ clientId, name, mode, employees, team, onBack }: { cl
       {!data && !error && <div className="skeleton h-72 rounded-3xl" />}
       {data && tab === 'overview' && <MarketingDashboard data={data} audience="team" />}
       {data && tab === 'posts' && <PostsSection clientId={clientId} data={data} mode={mode} reload={load} />}
-      {data && tab === 'ads' && <AdsSection clientId={clientId} data={data} mode={mode} reload={load} />}
+      {data && tab === 'ads' && <AdsSection clientId={clientId} data={data} mode={mode} reload={load} people={people} />}
       {data && tab === 'reports' && <ReportsSection clientId={clientId} data={data} mode={mode} reload={load} />}
-      {data && tab === 'money' && <MoneySection clientId={clientId} data={data} mode={mode} reload={load} />}
+      {data && tab === 'money' && <MoneySection clientId={clientId} data={data} mode={mode} reload={load} people={people} />}
       {data && tab === 'settings' && mode === 'admin' && <SettingsPanel clientId={clientId} settings={data.settings} employees={employees} team={team} reload={load} />}
     </div>
   );
@@ -186,7 +192,7 @@ function SettingsPanel({ clientId, settings, employees, team, reload }: { client
       </Card>
       <Card className="p-5 space-y-3">
         <h3 className="font-display font-bold text-[16px] text-ink-900">Marketing team</h3>
-        <p className="text-[12.5px] text-ink-500">Only these people (and admins) can see and work on this client. They don’t see ad money controls.</p>
+        <p className="text-[12.5px] text-ink-500">Everyone with the <b>Performance Marketing</b> designation already works on all marketing clients. Add anyone else who should help with this client here.</p>
         <SearchInput value={q} onChange={setQ} placeholder="Search people…" />
         <ul className="max-h-72 overflow-auto divide-y divide-ink-100 rounded-2xl border border-ink-100">
           {shown.map((e) => (

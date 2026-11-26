@@ -859,7 +859,7 @@ function getPageTitle(tab: string) {
 
 function AdminContent(props: any) {
   const { activeTab, user, onRefresh, onSelectTab } = props;
-  if (activeTab === 'admin-marketing') return <MarketingWorkspace admin employees={props.employees} />;
+  if (activeTab === 'admin-marketing') return <MarketingWorkspace admin employees={props.employees} myEmployeeId={user.employeeDbId ?? null} />;
   if (activeTab === 'admin-services') return <AdminServices employees={props.employees} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-leads') return <LeadsPage user={user} employees={props.employees} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-clients') return <AdminClientCenter employees={props.employees} />;
@@ -895,7 +895,7 @@ function EmployeeContent(props: any) {
     </PageShell>
   );
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
-  if (activeTab === 'emp-marketing') return <MarketingWorkspace admin={false} employees={props.employees} />;
+  if (activeTab === 'emp-marketing') return <MarketingWorkspace admin={false} employees={props.employees} myEmployeeId={props.user.employeeDbId ?? null} />;
   if (activeTab === 'emp-leads') return <LeadsPage user={props.user} employees={props.employees} onSelectTab={props.onSelectTab} />;
   if (activeTab === 'emp-leave') return <LeavePage {...props} />;
   if (activeTab === 'emp-wfh') return <WfhPage {...props} />;

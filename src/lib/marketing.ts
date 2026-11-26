@@ -22,7 +22,7 @@ export interface MkPost {
 }
 export interface MkCampaign {
   id: string; client_id: string; name: string; platform: Platform; objective: string; start_date: string; end_date: string | null;
-  budget: number | null; status: 'planned' | 'running' | 'paused' | 'completed'; notes: string | null; created_at: string;
+  budget: number | null; status: 'planned' | 'running' | 'paused' | 'completed'; notes: string | null; created_at: string; owner_id: string | null;
 }
 export interface MkResult {
   id: string; campaign_id: string; client_id: string; day: string; spend: number; impressions: number; reach: number; clicks: number;
@@ -33,7 +33,23 @@ export interface MkMoney {
   id: string; client_id: string; kind: 'request' | 'receipt' | 'refund' | 'adjustment'; amount: number; entry_date: string; due_date: string | null;
   request_id: string | null; method: string | null; reference: string | null; note: string | null; voided_at: string | null; void_reason: string | null; created_at: string;
 }
-export interface MkData { settings: MkClient | null; posts: MkPost[]; campaigns: MkCampaign[]; results: MkResult[]; reports: MkReport[]; money: MkMoney[] }
+export interface MkBudget {
+  id: string; client_id: string; employee_id: string; kind: 'given' | 'returned' | 'request'; amount: number; entry_date: string;
+  request_id: string | null; status: 'open' | 'approved' | 'declined' | null; note: string | null; voided_at: string | null; void_reason: string | null; created_at: string;
+}
+export interface MkData { settings: MkClient | null; posts: MkPost[]; campaigns: MkCampaign[]; results: MkResult[]; reports: MkReport[]; money: MkMoney[]; budget: MkBudget[] }
+
+/** Per marketer: budget given (minus returned), spent on the campaigns they run, and what is left with them. */
+export function budgetByPerson(budget: MkBudget[], campaigns: MkCampaign[], results: MkResult[]) {
+  const live = budget.filter((b) => !b.voided_at);
+  const ids = new Set([...live.filter((b) => b.kind !== 'request').map((b) => b.employee_id), ...campaigns.map((c) => c.owner_id).filter(Boolean) as string[]]);
+  return [...ids].map((id) => {
+    const given = live.filter((b) => b.employee_id === id).reduce((a, b) => a + (b.kind === 'given' ? +b.amount : b.kind === 'returned' ? -b.amount : 0), 0);
+    const mine = new Set(campaigns.filter((c) => c.owner_id === id).map((c) => c.id));
+    const spent = results.filter((r) => mine.has(r.campaign_id)).reduce((a, r) => a + Number(r.spend), 0);
+    return { employeeId: id, given, spent, left: given - spent, open: live.filter((b) => b.employee_id === id && b.kind === 'request' && b.status === 'open') };
+  });
+}
 
 export type Platform = 'meta' | 'google' | 'linkedin' | 'youtube' | 'other';
 /** Fixed colour per platform (categorical slots, never reassigned by rank). */
@@ -108,15 +124,16 @@ export const resultsOf = (t: Totals) => t.leads + t.messages + t.sales;
 
 export async function loadMarketing(clientId: string): Promise<MkData> {
   const must = async (q: PromiseLike<{ data: any; error: any }>) => { const { data, error } = await q; if (error) throw error; return data; };
-  const [settings, posts, campaigns, results, reports, money] = await Promise.all([
+  const [settings, posts, campaigns, results, reports, money, budget] = await Promise.all([
     must(db().from('mk_clients').select('*').eq('client_id', clientId).maybeSingle()),
     must(db().from('mk_posts').select('*').eq('client_id', clientId).order('scheduled_for', { ascending: false }).limit(1000)),
     must(db().from('mk_campaigns').select('*').eq('client_id', clientId).order('start_date', { ascending: false }).limit(500)),
     must(db().from('mk_results').select('*').eq('client_id', clientId).order('day').limit(20000)),
     must(db().from('mk_reports').select('*').eq('client_id', clientId).is('archived_at', null).order('created_at', { ascending: false }).limit(500)),
     must(db().from('mk_money').select('*').eq('client_id', clientId).order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(2000)),
+    must(db().from('mk_budget').select('*').eq('client_id', clientId).order('created_at', { ascending: false }).limit(2000)),
   ]);
-  return { settings, posts, campaigns, results, reports, money };
+  return { settings, posts, campaigns, results, reports, money, budget };
 }
 
 export const mkApi = {
@@ -131,6 +148,12 @@ export const mkApi = {
   publishReport: (id: string) => db().rpc('mk_report_publish', { p_id: id }).then(ok),
   addMoney: (clientId: string, p: Record<string, unknown>) => db().rpc('mk_money_add', { p_client: clientId, p }).then(ok),
   voidMoney: (id: string, reason: string) => db().rpc('mk_money_void', { p_id: id, p_reason: reason }).then(ok),
+  giveBudget: (clientId: string, employeeId: string, amount: number, note: string, requestId: string | null) =>
+    db().rpc('mk_budget_give', { p_client: clientId, p_employee: employeeId, p_amount: amount, p_note: note || null, p_request: requestId }).then(ok),
+  returnBudget: (clientId: string, employeeId: string, amount: number, note: string) =>
+    db().rpc('mk_budget_return', { p_client: clientId, p_employee: employeeId, p_amount: amount, p_note: note || null }).then(ok),
+  requestBudget: (clientId: string, amount: number, note: string) => db().rpc('mk_budget_request', { p_client: clientId, p_amount: amount, p_note: note || null }).then(ok),
+  decideBudget: (id: string, action: 'decline' | 'void', reason: string) => db().rpc('mk_budget_decide', { p_id: id, p_action: action, p_reason: reason || null }).then(ok),
 };
 function ok({ data, error }: { data: any; error: any }) { if (error) throw error; return data; }
 
@@ -140,7 +163,7 @@ export function useMarketingAccess(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    void db().from('mk_team').select('client_id', { count: 'exact', head: true }).then(({ count }: any) => { if (alive) setOn((count ?? 0) > 0); });
+    void db().rpc('my_marketing_access').then(({ data }: any) => { if (alive) setOn(data === true); });
     return () => { alive = false; };
   }, [enabled]);
   return on;
@@ -216,4 +239,16 @@ export function parseResultsCsv(text: string): { rows: Record<string, number | s
     byDay.set(day, row);
   }
   return { rows: [...byDay.values()].sort((a, b) => String(a.day).localeCompare(String(b.day))), matched: Object.keys(col).filter((k) => k !== 'day') };
+}
+
+/** Employees whose designation is Performance Marketing (they can hold budgets and run campaigns). */
+export function useMarketers(enabled: boolean) {
+  const [ids, setIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    void db().from('designations').select('id').eq('marketing_role', true).then(({ data }: any) => { if (alive) setIds((data ?? []).map((d: any) => d.id)); });
+    return () => { alive = false; };
+  }, [enabled]);
+  return ids;
 }
