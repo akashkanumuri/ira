@@ -502,17 +502,20 @@ export function MoneySection({ clientId, data, mode, reload, people }: { clientI
               <h3 className="font-display font-bold text-[16px] text-ink-900">Paid your ad budget?</h3>
               <p className="text-[12.5px] text-ink-500">Tell us the amount and UTR. It shows as received once our team confirms it in the bank.</p>
             </div>
-            <Button icon={<Send className="w-4 h-4" />} onClick={() => setPaying({ requestId: s.requests.find((r) => r.open > 0)?.id ?? null, amount: s.requests.find((r) => r.open > 0)?.open })}>I’ve paid</Button>
+            {!s.requests.some((r) => r.open > 0) && <Button icon={<Send className="w-4 h-4" />} onClick={() => setPaying({ requestId: null })}>I’ve paid</Button>}
           </div>
           {s.requests.filter((r) => r.open > 0).map((r) => {
             const waiting = pending.filter((c) => c.request_id === r.id).reduce((a, c) => a + Number(c.amount), 0);
             return (
               <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 text-[13px]">
                 <span className="flex-1 text-amber-950">Requested {fmtDay(r.entry_date)}{r.due_date ? ` · due ${fmtDay(r.due_date)}` : ''} — <b className="tnum">{inr(r.open)}</b> to pay{waiting ? ` · ${inr(waiting)} waiting for confirmation` : ''}</span>
-                <button type="button" className="btn-secondary btn-sm" onClick={() => setPaying({ requestId: r.id, amount: Math.max(0, r.open - waiting) || r.open })}>I’ve paid this</button>
+                <Button size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => setPaying({ requestId: r.id, amount: Math.max(0, r.open - waiting) || r.open })}>I’ve paid this</Button>
               </div>
             );
           })}
+          {s.requests.some((r) => r.open > 0) && (
+            <button type="button" className="text-[12.5px] font-semibold text-brand-700 hover:underline" onClick={() => setPaying({ requestId: null })}>Paid a different amount? Tell us here</button>
+          )}
           {data.claims.length > 0 && (
             <ul className="divide-y divide-ink-100">
               {data.claims.slice(0, 10).map((c) => (
