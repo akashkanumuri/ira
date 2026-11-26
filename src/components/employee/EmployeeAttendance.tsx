@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Briefcase, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Coffee, Home, LogOut, MapPin, Play, TriangleAlert } from 'lucide-react';
 import type { AuthUser } from '../../contexts/AuthContext';
 import type { AttendanceRecord, Holiday, LeaveRequest, WfhRequest } from '../../types/attendance';
-import { performCheckIn, performCheckOut, performResumeWork, performStartBreak, fetchAttendanceRecord } from '../../lib/attendance';
+import { closePreviousShift, performCheckIn, performCheckOut, performResumeWork, performStartBreak, fetchAttendanceRecord } from '../../lib/attendance';
 import { OFF_REASON_TEXT, isPlannedHomeDay, useWorkContext } from '../../lib/workContext';
 import { GeoError, fetchOffice, fmtDistance, getFix, locationHelp, type Fix, type OfficeLocation } from '../../lib/officeLocation';
 import { classifyDay, formatKolkataTime, getKolkataDateString } from '../../lib/workingDays';
@@ -275,9 +275,9 @@ export function AttendanceToday({ user, attendance, holidays, leaveRequests = []
               <TriangleAlert className="w-5 h-5 text-amber-600 shrink-0" />
               <div className="flex-1 text-[13px] text-amber-900">
                 <p className="font-bold">{previousOpen.mode === 'wfh' ? 'Your WFH shift is still open' : 'Your previous shift is still open'}</p>
-                <p className="mt-0.5">{dateLabel(previousOpen.date)} was never checked out. Close it before starting today.</p>
+                <p className="mt-0.5">{dateLabel(previousOpen.date)} was never checked out{previousOpen.attendanceState === 'on_break' ? ' (it was left on a break)' : ''}. Close it before starting today — it will be closed at that day’s shift end.</p>
               </div>
-              <Button variant="secondary" loading={busy} onClick={() => void run(() => performCheckOut(previousOpen), 'Previous shift closed.')}>
+              <Button variant="secondary" loading={busy} onClick={() => void run(() => closePreviousShift(previousOpen), 'Previous shift closed. Ask for a correction if you worked later.')}>
                 Close previous shift
               </Button>
             </div>

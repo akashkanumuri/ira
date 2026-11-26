@@ -320,6 +320,21 @@ export async function performCheckOut(record: AttendanceRecord): Promise<Result>
   return { success: true, attendanceRecord: recovered ?? buildRecord(data, record.employeeName, record.employeeEmpId, record.department) };
 }
 
+/**
+ * Close a past day's shift the employee forgot to check out (even if it was left on a break).
+ * The server closes it at that day's shift end (or midnight), never "now", so missed days aren't counted as work.
+ */
+export async function closePreviousShift(record: AttendanceRecord): Promise<Result> {
+  const unavailable = emptyResult();
+  if (unavailable) return unavailable;
+  const { error } = await (supabase as any).rpc('close_previous_shift', { p_attendance: record.id });
+  if (error) {
+    log.error('[Attendance] Close previous shift failed', error);
+    return { success: false, error: String(error.message ?? 'Unable to close the previous shift.').replace(/^.*?P0001:\s*/, '') };
+  }
+  return { success: true };
+}
+
 export function formatWorkingTime(seconds: number): string {
   const safe = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
   return `${String(Math.floor(safe / 3600)).padStart(2, '0')}h ${String(Math.floor((safe % 3600) / 60)).padStart(2, '0')}m`;
