@@ -23,12 +23,12 @@ export interface ClientPortalState {
 
 /** Pages a client can open at each stage. Everything else waits until access opens. */
 export const ALLOWED_PAGES: Record<ClientStage, ClientPage[]> = {
-  none: ['dashboard', 'support', 'services', 'notifications', 'settings'],
-  no_contract: ['dashboard', 'contracts', 'support', 'services', 'notifications', 'settings'],
-  contract: ['dashboard', 'contracts', 'support', 'services', 'notifications', 'settings'],
-  pay_first: ['dashboard', 'contracts', 'payments', 'support', 'services', 'notifications', 'settings'],
-  locked: ['dashboard', 'contracts', 'payments', 'support', 'services', 'notifications', 'settings'],
-  open: ['dashboard', 'contracts', 'deliverables', 'progress', 'payments', 'support', 'services', 'notifications', 'settings'],
+  none: ['dashboard', 'support', 'services', 'marketing', 'notifications', 'settings'],
+  no_contract: ['dashboard', 'contracts', 'support', 'services', 'marketing', 'notifications', 'settings'],
+  contract: ['dashboard', 'contracts', 'support', 'services', 'marketing', 'notifications', 'settings'],
+  pay_first: ['dashboard', 'contracts', 'payments', 'support', 'services', 'marketing', 'notifications', 'settings'],
+  locked: ['dashboard', 'contracts', 'payments', 'support', 'services', 'marketing', 'notifications', 'settings'],
+  open: ['dashboard', 'contracts', 'deliverables', 'progress', 'payments', 'support', 'services', 'marketing', 'notifications', 'settings'],
 };
 export const isGated = (s: ClientStage | null | undefined) => !!s && s !== 'open';
 

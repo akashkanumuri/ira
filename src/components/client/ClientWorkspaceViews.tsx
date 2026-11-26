@@ -90,7 +90,7 @@ import { greeting } from '../../ui/motion';
 import { PaymentDetailsBox, usePaymentDetails } from './ClientGate';
 import { openForInstallment, openReceipt } from '../accounts/documents';
 
-export type ClientPage = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications' | 'support' | 'services';
+export type ClientPage = 'dashboard' | 'contracts' | 'deliverables' | 'progress' | 'payments' | 'settings' | 'notifications' | 'support' | 'services' | 'marketing';
 
 export interface WorkspaceProject {
   id: string;

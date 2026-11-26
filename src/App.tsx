@@ -35,6 +35,8 @@ import { PerformancePage } from './components/performance/PerformancePage';
 import { BonusPipSettings } from './components/performance/BonusPip';
 import { OfferBox, OfferGate, OfferTemplatesSettings, useOfferStatuses } from './components/offers/Offers';
 import { AdminServices } from './components/services/AdminServices';
+import { MarketingWorkspace } from './components/marketing/Marketing';
+import { useMarketingAccess } from './lib/marketing';
 import { LeadsPage, salesRoleLabel, useSalesAccess, useSalesRoles, SALES_ROLES } from './components/leads/Leads';
 import { leaveApi } from './lib/leave';
 import { openFile } from './lib/sigma';
@@ -87,6 +89,7 @@ import {
   FileSignature,
   PhoneCall,
   ShoppingBag,
+  Megaphone,
   MapPin,
 } from 'lucide-react';
 import type {
@@ -213,13 +216,13 @@ function LiveClockDisplay() {
   );
 }
 
-const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime', 'admin-leads', 'admin-services'];
+const ADMIN_TABS = ['admin-dashboard', 'admin-clients', 'admin-delivery', 'admin-attendance', 'admin-tasks', 'admin-requests', 'admin-employees', 'admin-payroll', 'admin-holidays', 'admin-export', 'admin-settings', 'admin-finance', 'admin-activity', 'admin-notifications', 'admin-performance', 'admin-support', 'admin-worktime', 'admin-leads', 'admin-services', 'admin-marketing'];
 /** Hidden for sales staff (their workspace is Leads + attendance, leave, holidays, payslips). */
 const SALES_HIDDEN_TABS = ['emp-dashboard', 'emp-tasks', 'emp-client-work', 'emp-delivery', 'emp-time', 'emp-wfh', 'emp-performance'];
-const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-delivery', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time', 'emp-leads'];
+const EMP_TABS = ['emp-dashboard', 'emp-attendance', 'emp-client-work', 'emp-delivery', 'emp-tasks', 'emp-leave', 'emp-wfh', 'emp-holidays', 'emp-payroll', 'emp-profile', 'emp-notifications', 'emp-approvals', 'emp-performance', 'emp-support', 'emp-time', 'emp-team-time', 'emp-leads', 'emp-marketing'];
 const CROSS_ROLE: Record<string, string> = {
   'admin-tasks': 'emp-tasks', 'admin-attendance': 'emp-attendance', 'admin-holidays': 'emp-holidays', 'admin-payroll': 'emp-payroll', 'admin-notifications': 'emp-notifications',
-  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work', 'admin-delivery': 'emp-delivery', 'emp-delivery': 'admin-delivery', 'admin-leads': 'emp-leads', 'emp-leads': 'admin-leads',
+  'emp-tasks': 'admin-tasks', 'emp-attendance': 'admin-attendance', 'emp-holidays': 'admin-holidays', 'emp-payroll': 'admin-payroll', 'emp-leave': 'admin-requests', 'emp-wfh': 'admin-requests', 'emp-notifications': 'admin-notifications', 'emp-approvals': 'admin-requests', 'emp-performance': 'admin-performance', 'admin-performance': 'emp-performance', 'admin-support': 'emp-support', 'emp-support': 'admin-support', 'admin-clients': 'emp-client-work', 'admin-delivery': 'emp-delivery', 'emp-delivery': 'admin-delivery', 'admin-leads': 'emp-leads', 'emp-leads': 'admin-leads', 'admin-marketing': 'emp-marketing', 'emp-marketing': 'admin-marketing',
 };
 /** Cross-role mappings whose pages understand the same deep-link query. */
 const QUERY_SAFE = new Set(['admin-clients>emp-client-work', 'admin-tasks>emp-tasks', 'emp-tasks>admin-tasks', 'admin-support>emp-support', 'emp-support>admin-support', 'admin-delivery>emp-delivery', 'emp-delivery>admin-delivery']);
@@ -650,6 +653,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   const seesClientWork = user.role === 'admin' || managesPeople || isProjectManager === true;
 
   const sales = useSalesAccess(user.role === 'admin');
+  const onMarketing = useMarketingAccess(user.role !== 'admin');
   const navGroups: NavGroup[] = user.role === 'admin'
     ? [
       { items: [{ id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -658,6 +662,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'admin-leads', label: 'Leads', icon: PhoneCall },
           { id: 'admin-clients', label: 'Clients', icon: Building2 },
           { id: 'admin-services', label: 'Services', icon: ShoppingBag },
+          { id: 'admin-marketing', label: 'Marketing', icon: Megaphone },
           { id: 'admin-delivery', label: 'Delivery', icon: Package },
           { id: 'admin-finance', label: 'Finance & accounts', icon: BadgeIndianRupee },
           { id: 'admin-support', label: 'Client support', icon: LifeBuoy },
@@ -691,6 +696,7 @@ function Portal({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           { id: 'emp-tasks', label: 'Work & tasks', icon: BriefcaseBusiness, badge: employeeOpenTasksCount },
           { id: 'emp-client-work', label: 'Client Projects', icon: FolderKanban },
           { id: 'emp-delivery', label: 'Delivery', icon: Package },
+          ...(onMarketing ? [{ id: 'emp-marketing', label: 'Marketing', icon: Megaphone }] : []),
         ]
       },
       {
@@ -845,12 +851,15 @@ function getPageTitle(tab: string) {
     'emp-team-time': 'Team time',
     'admin-leads': 'Leads',
     'admin-services': 'Services',
+    'admin-marketing': 'Marketing',
+    'emp-marketing': 'Marketing',
     'emp-leads': 'Leads',
   } as Record<string, string>)[tab] ?? 'Dashboard';
 }
 
 function AdminContent(props: any) {
   const { activeTab, user, onRefresh, onSelectTab } = props;
+  if (activeTab === 'admin-marketing') return <MarketingWorkspace admin employees={props.employees} />;
   if (activeTab === 'admin-services') return <AdminServices employees={props.employees} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-leads') return <LeadsPage user={user} employees={props.employees} onSelectTab={onSelectTab} />;
   if (activeTab === 'admin-clients') return <AdminClientCenter employees={props.employees} />;
@@ -886,6 +895,7 @@ function EmployeeContent(props: any) {
     </PageShell>
   );
   if (activeTab === 'emp-tasks') return <TasksEmployee {...props} />;
+  if (activeTab === 'emp-marketing') return <MarketingWorkspace admin={false} employees={props.employees} />;
   if (activeTab === 'emp-leads') return <LeadsPage user={props.user} employees={props.employees} onSelectTab={props.onSelectTab} />;
   if (activeTab === 'emp-leave') return <LeavePage {...props} />;
   if (activeTab === 'emp-wfh') return <WfhPage {...props} />;
