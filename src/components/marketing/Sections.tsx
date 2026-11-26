@@ -10,7 +10,7 @@ import { Modal } from '../../ui/Modal';
 import {
   budgetByPerson, CAMPAIGN_STATUS, OBJECTIVES, PLATFORMS, POST_STATUS, POST_TYPES, SOCIAL, errText, fmtDay, fmtWhen, inr, mkApi, moneySummary, num,
   parseResultsCsv, platformOf, resultsOf, sumResults, todayIST,
-  type MkBudget, type MkCampaign, type MkData, type MkMoney, type MkPost,
+  type MkBudget, type MkCampaign, type MkClaim, type MkData, type MkMoney, type MkPost,
 } from '../../lib/marketing';
 
 export type Mode = 'admin' | 'team' | 'client';
@@ -467,8 +467,66 @@ export function MoneySection({ clientId, data, mode, reload, people }: { clientI
   const [voiding, setVoiding] = useState<MkMoney | null>(null);
   const admin = mode === 'admin';
   const openReq = new Map(s.requests.map((r) => [r.id, r]));
+  const [paying, setPaying] = useState<{ requestId: string | null; amount?: number } | null>(null);
+  const [rejecting, setRejecting] = useState<MkClaim | null>(null);
+  const [busyClaim, setBusyClaim] = useState<string | null>(null);
+  const pending = data.claims.filter((c) => c.status === 'pending');
+  const confirm = async (c: MkClaim) => {
+    setBusyClaim(c.id);
+    try { await mkApi.decideClaim(c.id, 'confirm', ''); notify('Payment confirmed. Added to the ad money and the client has been told.', 'success'); await reload(); }
+    catch (e) { notify(errText(e, 'Could not confirm.'), 'error', 8000); } finally { setBusyClaim(null); }
+  };
   return (
     <div className="space-y-4">
+      {pending.length > 0 && mode !== 'client' && (
+        <Card className="p-4 space-y-2 border-amber-200">
+          <h3 className="font-display font-bold text-[15px] text-ink-900">Client says paid — {admin ? 'check your bank and confirm' : 'waiting for admin to confirm'}</h3>
+          {pending.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3">
+              <div className="min-w-0 flex-1 text-[13px] text-amber-950">
+                <b className="tnum">{inr(c.amount)}</b> paid {fmtDay(c.paid_on, true)} by {c.method.replace('_', ' ')}{c.reference ? <> · UTR <b className="font-mono">{c.reference}</b></> : ''}
+                {c.note && <span className="text-amber-800"> · {c.note}</span>}
+              </div>
+              {admin && <>
+                <button type="button" className="btn-ghost btn-sm text-rose-700" onClick={() => setRejecting(c)}>Not received</button>
+                <Button size="sm" disabled={busyClaim === c.id} icon={<CheckCircle2 className="w-4 h-4" />} onClick={() => void confirm(c)}>Confirm received</Button>
+              </>}
+            </div>
+          ))}
+        </Card>
+      )}
+      {mode === 'client' && (
+        <Card className="p-4 sm:p-5 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display font-bold text-[16px] text-ink-900">Paid your ad budget?</h3>
+              <p className="text-[12.5px] text-ink-500">Tell us the amount and UTR. It shows as received once our team confirms it in the bank.</p>
+            </div>
+            <Button icon={<Send className="w-4 h-4" />} onClick={() => setPaying({ requestId: s.requests.find((r) => r.open > 0)?.id ?? null, amount: s.requests.find((r) => r.open > 0)?.open })}>I’ve paid</Button>
+          </div>
+          {s.requests.filter((r) => r.open > 0).map((r) => {
+            const waiting = pending.filter((c) => c.request_id === r.id).reduce((a, c) => a + Number(c.amount), 0);
+            return (
+              <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 text-[13px]">
+                <span className="flex-1 text-amber-950">Requested {fmtDay(r.entry_date)}{r.due_date ? ` · due ${fmtDay(r.due_date)}` : ''} — <b className="tnum">{inr(r.open)}</b> to pay{waiting ? ` · ${inr(waiting)} waiting for confirmation` : ''}</span>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => setPaying({ requestId: r.id, amount: Math.max(0, r.open - waiting) || r.open })}>I’ve paid this</button>
+              </div>
+            );
+          })}
+          {data.claims.length > 0 && (
+            <ul className="divide-y divide-ink-100">
+              {data.claims.slice(0, 10).map((c) => (
+                <li key={c.id} className="py-2 flex flex-wrap items-center gap-2 text-[13px]">
+                  <span className="text-ink-500 w-24">{fmtDay(c.paid_on, true)}</span>
+                  <span className="flex-1 text-ink-800">{c.method.replace('_', ' ')}{c.reference ? ` · ${c.reference}` : ''}{c.status === 'rejected' && c.reject_reason ? ` — ${c.reject_reason}` : ''}</span>
+                  <span className="tnum font-semibold">{inr(c.amount)}</span>
+                  <Badge tone={c.status === 'confirmed' ? 'mint' : c.status === 'rejected' ? 'rose' : 'amber'} dot>{c.status === 'confirmed' ? 'Confirmed' : c.status === 'rejected' ? 'Not confirmed' : 'Waiting for confirmation'}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Big label="Ad money received" value={s.received} />
         <Big label="Spent on ads" value={s.spent} />
@@ -507,6 +565,9 @@ export function MoneySection({ clientId, data, mode, reload, people }: { clientI
       {mode !== 'client' && people && <TeamBudget clientId={clientId} data={data} admin={admin} people={people} received={s.received} reload={reload} />}
       {adding && <MoneyDialog clientId={clientId} kind={adding} openRequests={s.requests.filter((r) => r.open > 0)} onClose={() => setAdding(null)} onSaved={reload} />}
       {voiding && <VoidDialog m={voiding} onClose={() => setVoiding(null)} onSaved={reload} />}
+      {paying && <ClaimDialog requestId={paying.requestId} initial={paying.amount} requests={s.requests.filter((r) => r.open > 0)} onClose={() => setPaying(null)} onSaved={reload} />}
+      {rejecting && <ReasonDialog title={`Not received: ${inr(rejecting.amount)}?`} required onClose={() => setRejecting(null)}
+        onSave={async (r) => { await mkApi.decideClaim(rejecting.id, 'reject', r); notify('The client has been told.', 'success'); await reload(); }} />}
     </div>
   );
 }
@@ -696,6 +757,40 @@ function ReasonDialog({ title, required, onClose, onSave }: { title: string; req
       <div className="space-y-4">
         <Field label="Reason" hint={required ? undefined : 'optional'}><input className="input" value={reason} maxLength={400} onChange={(e) => setReason(e.target.value)} /></Field>
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Back</Button><Button loading={busy} disabled={!!required && reason.trim().length < 3} className="!bg-rose-600" onClick={() => void go()}>Confirm</Button></div>
+      </div>
+    </Modal>
+  );
+}
+
+function ClaimDialog({ requestId, initial, requests, onClose, onSaved }: {
+  requestId: string | null; initial?: number; requests: { id: string; open: number; entry_date: string }[]; onClose: () => void; onSaved: () => Promise<void>;
+}) {
+  const [f, setF] = useState({ request_id: requestId ?? '', amount: initial ? String(initial) : '', paid_on: todayIST(), method: 'upi', reference: '', note: '' });
+  const [busy, setBusy] = useState(false);
+  const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const needRef = !['cash', 'other'].includes(f.method);
+  const go = async () => {
+    setBusy(true);
+    try {
+      await mkApi.submitClaim(f.request_id || null, Number(f.amount), f.paid_on, f.method, f.reference.trim(), f.note.trim());
+      notify('Thanks! We’ll confirm it once it shows in our bank.', 'success'); await onSaved(); onClose();
+    } catch (e) { notify(errText(e, 'Could not send.'), 'error', 9000); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title="I’ve paid the ad budget" onClose={onClose} closeDisabled={busy}>
+      <div className="space-y-4">
+        {requests.length > 0 && <Field label="For"><select className="input" value={f.request_id} onChange={(e) => set('request_id', e.target.value)}>
+          <option value="">General ad budget</option>{requests.map((r) => <option key={r.id} value={r.id}>Request of {fmtDay(r.entry_date)} · {inr(r.open)} to pay</option>)}</select></Field>}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Amount ₹"><input className="input text-right" type="number" min="1" step="0.01" value={f.amount} onChange={(e) => set('amount', e.target.value)} /></Field>
+          <Field label="Paid on"><input className="input" type="date" max={todayIST()} value={f.paid_on} onChange={(e) => set('paid_on', e.target.value)} /></Field>
+          <Field label="How"><select className="input" value={f.method} onChange={(e) => set('method', e.target.value)}>
+            {[['upi', 'UPI'], ['bank_transfer', 'Bank transfer'], ['cheque', 'Cheque'], ['card', 'Card'], ['cash', 'Cash'], ['other', 'Other']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          <Field label={needRef ? 'UTR / reference' : 'Reference'} hint={needRef ? undefined : 'optional'}><input className="input font-mono" value={f.reference} maxLength={120} onChange={(e) => set('reference', e.target.value)} /></Field>
+        </div>
+        <Field label="Note" hint="optional"><input className="input" value={f.note} maxLength={600} onChange={(e) => set('note', e.target.value)} /></Field>
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button loading={busy} disabled={!Number(f.amount) || (needRef && !f.reference.trim())} onClick={() => void go()}>Send</Button></div>
       </div>
     </Modal>
   );

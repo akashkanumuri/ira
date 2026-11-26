@@ -109,6 +109,11 @@ export function MarketingDashboard({ data, audience }: { data: MkData; audience:
             <MoneyStat label={audience === 'client' ? 'To pay' : 'Pending from client'} value={money.pending} tone={money.pending > 0 ? 'amber' : 'ink'} />
           </div>
           <BudgetMeter received={money.received} spent={money.spent} />
+          {data.claims.some((c) => c.status === 'pending') && (
+            <p className="rounded-xl bg-sky-50 border border-sky-100 px-3 py-2 text-[12.5px] text-sky-900">
+              {inr(data.claims.filter((c) => c.status === 'pending').reduce((a, c) => a + Number(c.amount), 0))} paid by {audience === 'client' ? 'you' : 'the client'} — waiting for confirmation
+            </p>
+          )}
           {money.requests.filter((r) => r.open > 0).slice(0, 3).map((r) => (
             <div key={r.id} className="flex items-center justify-between rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-[12.5px]">
               <span className="text-amber-900">Requested {fmtDay(r.entry_date)}{r.due_date ? ` · due ${fmtDay(r.due_date)}` : ''}</span>

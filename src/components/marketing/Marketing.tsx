@@ -15,7 +15,7 @@ type Tab = 'overview' | 'posts' | 'ads' | 'reports' | 'money' | 'settings';
 
 /** Admin and marketing team: marketing clients, then one client's dashboard, posts, ads, reports and ad money. */
 export function MarketingWorkspace({ admin, employees, myEmployeeId }: { admin: boolean; employees: Employee[]; myEmployeeId?: string | null }) {
-  const [rows, setRows] = useState<{ settings: MkClient; name: string; money: MkMoney[]; results: Pick<MkResult, 'spend' | 'day'>[]; team: string[] }[]>([]);
+  const [rows, setRows] = useState<{ settings: MkClient; name: string; money: MkMoney[]; results: Pick<MkResult, 'spend' | 'day'>[]; team: string[]; toConfirm: number }[]>([]);
   const [clients, setClients] = useState<{ id: string; company_name: string }[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -25,20 +25,22 @@ export function MarketingWorkspace({ admin, employees, myEmployeeId }: { admin: 
 
   const load = useCallback(async () => {
     try {
-      const [s, c, m, r, t] = await Promise.all([
+      const [s, c, m, r, t, pc] = await Promise.all([
         db().from('mk_clients').select('*'),
         db().from('clients').select('id, company_name').is('deleted_at', null).order('company_name'),
         db().from('mk_money').select('client_id, kind, amount, request_id, id, voided_at, entry_date, due_date, method, reference, note, void_reason, created_at').limit(10000),
         db().from('mk_results').select('client_id, spend, day').limit(50000),
         db().from('mk_team').select('client_id, employee_id'),
+        db().from('mk_payment_claims').select('client_id').eq('status', 'pending'),
       ]);
-      for (const x of [s, c, m, r, t]) if (x.error) throw x.error;
+      for (const x of [s, c, m, r, t, pc]) if (x.error) throw x.error;
       const names = new Map((c.data ?? []).map((x: any) => [x.id, x.company_name]));
       setClients(c.data ?? []);
       setRows((s.data ?? []).map((st: MkClient) => ({
         settings: st, name: String(names.get(st.client_id) ?? 'Client'),
         money: (m.data ?? []).filter((x: any) => x.client_id === st.client_id), results: (r.data ?? []).filter((x: any) => x.client_id === st.client_id),
         team: (t.data ?? []).filter((x: any) => x.client_id === st.client_id).map((x: any) => x.employee_id),
+        toConfirm: (pc.data ?? []).filter((x: any) => x.client_id === st.client_id).length,
       })).sort((a: any, b: any) => a.name.localeCompare(b.name)));
       setState('ready');
     } catch (e) { setError(errText(e, 'Unable to load marketing.')); setState('error'); }
@@ -82,6 +84,7 @@ export function MarketingWorkspace({ admin, employees, myEmployeeId }: { admin: 
               <div className="flex items-start gap-2">
                 <p className="font-display font-bold text-[17px] text-ink-950 flex-1 truncate">{r.name}</p>
                 {!r.settings.enabled && <Badge tone="ink">Paused</Badge>}
+                {r.toConfirm > 0 && <Badge tone="amber">{r.toConfirm} payment{r.toConfirm === 1 ? '' : 's'} to confirm</Badge>}
                 {r.settings.client_access && <Badge tone="sky">Client sees</Badge>}
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2">
@@ -137,7 +140,7 @@ function ClientWorkspace({ clientId, name, mode, employees, team, myEmployeeId, 
   const waiting = data?.posts.filter((p) => p.status === 'changes_requested').length ?? 0;
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' }, { id: 'posts', label: 'Posts', count: waiting || undefined }, { id: 'ads', label: 'Ads' },
-    { id: 'reports', label: 'Reports' }, { id: 'money', label: 'Ad money' }, ...(mode === 'admin' ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
+    { id: 'reports', label: 'Reports' }, { id: 'money', label: 'Ad money', count: data?.claims.filter((c) => c.status === 'pending').length || undefined }, ...(mode === 'admin' ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
   ];
   return (
     <div className="mx-auto w-full max-w-[1320px] space-y-5">

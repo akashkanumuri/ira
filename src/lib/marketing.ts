@@ -37,7 +37,11 @@ export interface MkBudget {
   id: string; client_id: string; employee_id: string; kind: 'given' | 'returned' | 'request'; amount: number; entry_date: string;
   request_id: string | null; status: 'open' | 'approved' | 'declined' | null; note: string | null; voided_at: string | null; void_reason: string | null; created_at: string;
 }
-export interface MkData { settings: MkClient | null; posts: MkPost[]; campaigns: MkCampaign[]; results: MkResult[]; reports: MkReport[]; money: MkMoney[]; budget: MkBudget[] }
+export interface MkClaim {
+  id: string; client_id: string; request_id: string | null; amount: number; paid_on: string; method: string; reference: string | null; note: string | null;
+  status: 'pending' | 'confirmed' | 'rejected'; reject_reason: string | null; created_at: string; decided_at: string | null;
+}
+export interface MkData { settings: MkClient | null; posts: MkPost[]; campaigns: MkCampaign[]; results: MkResult[]; reports: MkReport[]; money: MkMoney[]; budget: MkBudget[]; claims: MkClaim[] }
 
 /** Per marketer: budget given (minus returned), spent on the campaigns they run, and what is left with them. */
 export function budgetByPerson(budget: MkBudget[], campaigns: MkCampaign[], results: MkResult[]) {
@@ -124,7 +128,7 @@ export const resultsOf = (t: Totals) => t.leads + t.messages + t.sales;
 
 export async function loadMarketing(clientId: string): Promise<MkData> {
   const must = async (q: PromiseLike<{ data: any; error: any }>) => { const { data, error } = await q; if (error) throw error; return data; };
-  const [settings, posts, campaigns, results, reports, money, budget] = await Promise.all([
+  const [settings, posts, campaigns, results, reports, money, budget, claims] = await Promise.all([
     must(db().from('mk_clients').select('*').eq('client_id', clientId).maybeSingle()),
     must(db().from('mk_posts').select('*').eq('client_id', clientId).order('scheduled_for', { ascending: false }).limit(1000)),
     must(db().from('mk_campaigns').select('*').eq('client_id', clientId).order('start_date', { ascending: false }).limit(500)),
@@ -132,8 +136,9 @@ export async function loadMarketing(clientId: string): Promise<MkData> {
     must(db().from('mk_reports').select('*').eq('client_id', clientId).is('archived_at', null).order('created_at', { ascending: false }).limit(500)),
     must(db().from('mk_money').select('*').eq('client_id', clientId).order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(2000)),
     must(db().from('mk_budget').select('*').eq('client_id', clientId).order('created_at', { ascending: false }).limit(2000)),
+    must(db().from('mk_payment_claims').select('*').eq('client_id', clientId).order('created_at', { ascending: false }).limit(500)),
   ]);
-  return { settings, posts, campaigns, results, reports, money, budget };
+  return { settings, posts, campaigns, results, reports, money, budget, claims };
 }
 
 export const mkApi = {
@@ -153,6 +158,9 @@ export const mkApi = {
   returnBudget: (clientId: string, employeeId: string, amount: number, note: string) =>
     db().rpc('mk_budget_return', { p_client: clientId, p_employee: employeeId, p_amount: amount, p_note: note || null }).then(ok),
   requestBudget: (clientId: string, amount: number, note: string) => db().rpc('mk_budget_request', { p_client: clientId, p_amount: amount, p_note: note || null }).then(ok),
+  submitClaim: (requestId: string | null, amount: number, paidOn: string, method: string, reference: string, note: string) =>
+    db().rpc('mk_claim_submit', { p_request: requestId, p_amount: amount, p_paid_on: paidOn, p_method: method, p_reference: reference || null, p_note: note || null }).then(ok),
+  decideClaim: (id: string, action: 'confirm' | 'reject', reason: string) => db().rpc('mk_claim_decide', { p_id: id, p_action: action, p_reason: reason || null }).then(ok),
   decideBudget: (id: string, action: 'decline' | 'void', reason: string) => db().rpc('mk_budget_decide', { p_id: id, p_action: action, p_reason: reason || null }).then(ok),
 };
 function ok({ data, error }: { data: any; error: any }) { if (error) throw error; return data; }
