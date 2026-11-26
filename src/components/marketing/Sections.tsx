@@ -46,7 +46,7 @@ function Thumb({ f }: { f: FileLite }) {
     return () => { alive = false; };
   }, [f.storage_path, f.storage_bucket, isImg]);
   return (
-    <button type="button" title={f.name} onClick={() => openFile(f, false).catch((e) => notify(errText(e, 'File not available.'), 'error'))}
+    <button type="button" title={f.name} onClick={() => openFile(f, false).catch((e: unknown) => notify(errText(e, 'File not available.'), 'error'))}
       className="w-16 h-16 rounded-xl overflow-hidden border border-ink-100 bg-ink-50 grid place-items-center shrink-0 hover:ring-2 hover:ring-brand-200">
       {isImg && url ? <img src={url} alt={f.name} className="w-full h-full object-cover" /> : <span className="text-[10px] font-bold text-ink-500 uppercase px-1 truncate">{f.name.split('.').pop()}</span>}
     </button>
@@ -277,7 +277,7 @@ export function AdsSection({ clientId, data, mode, reload }: { clientId: string;
                     <tr key={d.id}>
                       <td className="whitespace-nowrap">{fmtDay(d.day, true)}</td><td className="text-right tnum">{inr(d.spend)}</td><td className="text-right tnum">{num(d.reach)}</td>
                       <td className="text-right tnum">{num(d.clicks)}</td><td className="text-right tnum">{num(d.leads)}</td><td className="text-right tnum">{num(d.messages)}</td><td className="text-right tnum">{num(d.sales)}</td>
-                      {team && <td><button type="button" className="icon-btn text-rose-700" title="Remove this day" onClick={() => void mkApi.removeResult(c.id, d.day).then(reload).then(() => notify('Day removed.', 'success')).catch((e) => notify(errText(e, 'Could not remove.'), 'error'))}><Trash2 className="w-3.5 h-3.5" /></button></td>}
+                      {team && <td><button type="button" className="icon-btn text-rose-700" title="Remove this day" onClick={() => void mkApi.removeResult(c.id, d.day).then(reload).then(() => notify('Day removed.', 'success')).catch((e: unknown) => notify(errText(e, 'Could not remove.'), 'error'))}><Trash2 className="w-3.5 h-3.5" /></button></td>}
                     </tr>
                   ))}</tbody>
                 </table>
@@ -404,8 +404,8 @@ export function ReportsSection({ clientId, data, mode, reload }: { clientId: str
                   <p className="font-semibold text-[14px] text-ink-900">{r.title}</p>
                   <p className="text-[12px] text-ink-500">{r.period_start ? `${fmtDay(r.period_start)} – ${fmtDay(r.period_end, true)} · ` : ''}uploaded {fmtDay(r.created_at.slice(0, 10), true)}{team && !r.visible_to_client ? ' · hidden from client' : ''}</p>
                 </div>
-                {rf.map((f) => <button key={f.id} type="button" className="btn-secondary btn-sm" onClick={() => openFile(f).catch((e) => notify(errText(e, 'File not available.'), 'error'))}>Download</button>)}
-                {team && <button type="button" className="icon-btn text-ink-500" title="Remove report" onClick={() => void mkApi.saveReport(r.id, null, { archive: true }).then(reload).then(() => notify('Report removed.', 'success')).catch((e) => notify(errText(e, 'Could not remove.'), 'error'))}><Trash2 className="w-4 h-4" /></button>}
+                {rf.map((f) => <button key={f.id} type="button" className="btn-secondary btn-sm" onClick={() => openFile(f).catch((e: unknown) => notify(errText(e, 'File not available.'), 'error'))}>Download</button>)}
+                {team && <button type="button" className="icon-btn text-ink-500" title="Remove report" onClick={() => void mkApi.saveReport(r.id, null, { archive: true }).then(reload).then(() => notify('Report removed.', 'success')).catch((e: unknown) => notify(errText(e, 'Could not remove.'), 'error'))}><Trash2 className="w-4 h-4" /></button>}
               </li>
             );
           })}
